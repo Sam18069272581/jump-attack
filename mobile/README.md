@@ -19,10 +19,10 @@ Expo（SDK 57）+ React Native，iOS 优先。数据存在手机本地 SQLite。
 
 1. iPhone 上从 App Store 安装 **Expo Go**。
 2. 电脑上安装 **Node.js**：[nodejs.org](https://nodejs.org) 下载 LTS 安装包。Mac 系统版本较旧、装不上时，改装 22 版本。
-3. 下载代码：在 GitHub 打开本仓库，切到 `feat/mobile-mvp` 分支，点 Code → Download ZIP 并解压。会用 git 的话：
+3. 下载代码：打开 https://github.com/Sam18069272581/jump-attack/archive/refs/heads/main.zip ，Safari 会自动解压到「下载」里的 `jump-attack-main` 文件夹。会用 git 的话：
 
    ```sh
-   git clone -b feat/mobile-mvp https://github.com/Sam18069272581/jump-attack.git
+   git clone https://github.com/Sam18069272581/jump-attack.git
    ```
 
 4. 打开「终端」（Windows 用 PowerShell），输入 `cd `（后面带一个空格），把代码里的 `mobile` 文件夹拖进窗口，回车。然后：
