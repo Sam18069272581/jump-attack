@@ -1,8 +1,8 @@
 # Jump Attack · 手机端
 
-Expo（SDK 54）+ React Native，iOS 优先。数据存在手机本地 SQLite。
+Expo（SDK 57）+ React Native，iOS 优先。数据存在手机本地 SQLite。
 
-停在 SDK 54 是因为 App Store 上的 Expo Go 只支持到这个版本（[Expo 说明](https://docs.expo.dev/troubleshooting/expo-go-version-mismatch/)）。以后改用开发版 App 时可以再升级。
+用 SDK 57 是为了和 iPhone 上 Expo Go 支持的版本一致（2026-10 实测）。Expo Go 每个版本只支持一个 SDK；它更新后如果提示版本不匹配，要把项目一起升级。
 
 ## 现在能做什么
 
