@@ -10,7 +10,7 @@
     "backgroundColor": "#0F1115",
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.jumpattack.app",
+      "bundleIdentifier": "com.sam18069272581.jumpattack",
       "infoPlist": {
         "NSCameraUsageDescription": "用于录制跳跃视频，计算滞空时间和跳高。",
         "NSMicrophoneUsageDescription": "录像时可选录制声音。",
@@ -18,7 +18,7 @@
       }
     },
     "android": {
-      "package": "com.jumpattack.app",
+      "package": "com.sam18069272581.jumpattack",
       "adaptiveIcon": {
         "backgroundColor": "#0F1115",
         "foregroundImage": "./assets/android-icon-foreground.png",

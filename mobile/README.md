@@ -15,16 +15,32 @@ Expo（SDK 58）+ React Native，iOS 优先。数据存在手机本地 SQLite。
 
 相机和高帧率录像用到原生模块（react-native-vision-camera），**不能用 Expo Go**，需要开发版 App：
 
+### 用 Mac 装到 iPhone 上
+
+1. 装好 Xcode（App Store），打开一次让它装完组件；装 Node.js 20 以上。
+2. 在 Xcode → Settings → Accounts 登录你的 Apple ID（免费账号就行，装到手机上的 App 7 天后要重新装一次）。
+3. iPhone 用数据线连 Mac，在手机上点「信任此电脑」；然后打开 设置 → 隐私与安全性 → 开发者模式。
+4. 拉代码并运行：
+
+   ```sh
+   git clone https://github.com/Sam18069272581/jump-attack.git
+   cd jump-attack/mobile
+   npm install
+   npx expo run:ios --device
+   ```
+
+   选你的 iPhone。第一次编译要几分钟；如果提示安装 CocoaPods，按提示装（或 `brew install cocoapods`）。
+5. 如果报签名错误：打开 `ios/` 里的 `.xcworkspace`，选中 App 目标 → Signing & Capabilities → Team 选你的 Apple ID，再运行一次第 4 步最后一条命令。
+6. 手机上第一次打开前：设置 → 通用 → VPN 与设备管理 → 信任你的开发者账号。
+
+装好之后改 JS 代码只需 `npx expo start`，手机上打开 App 会自动连上。模拟器没有摄像头，只能测导入视频之后的流程。
+
+### 没有 Mac
+
 ```sh
-cd mobile
-npm install
-# 方式一：本地 Mac + Xcode，接上 iPhone（模拟器没有摄像头）
-npx expo run:ios --device
-# 方式二：EAS 云端构建，不需要 Mac
 npx eas-cli@latest build --profile development --platform ios
 ```
 
-装好开发版后，之后改 JS 代码只需 `npx expo start`。
 
 ## 开发
 
