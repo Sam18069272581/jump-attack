@@ -10,7 +10,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Chip } from '@/components/ui';
 import { addTrial, ensureSession } from '@/db/repo';
-import { frameCount, frameToSeconds, measureFromMarks, type MarkProblem } from '@/domain/jump';
+import { frameCount, frameToSeconds, markingRates, measureFromMarks, type MarkProblem } from '@/domain/jump';
 import { persistVideo } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
@@ -26,7 +26,7 @@ const PROBLEM_TEXT: Record<MarkProblem, string> = {
   missing: '标记起跳帧和落地帧后显示结果',
   order: '落地帧要在起跳帧之后',
   'too-short': '滞空不到 150 ms，检查是否标错帧',
-  'too-long': '滞空超过 1.2 s，检查是否标错帧或帧率',
+  'too-long': '滞空超过 1.2 s：检查是否标错帧；慢动作视频要把拍摄帧率选成 240',
 };
 
 export default function Mark() {
@@ -40,7 +40,7 @@ export default function Mark() {
 
   const [duration, setDuration] = useState(0);
   const [detectedFps, setDetectedFps] = useState<number | null>(null);
-  const [fpsOverride, setFpsOverride] = useState<number | null>(null);
+  const [captureOverride, setCaptureOverride] = useState<number | null>(null);
   const [frame, setFrame] = useState(0);
   const [takeoff, setTakeoff] = useState<number | null>(null);
   const [landing, setLanding] = useState<number | null>(null);
@@ -52,13 +52,14 @@ export default function Mark() {
     if (rate && rate > 0) setDetectedFps(Math.round(rate));
   });
 
-  // The file's own frame rate wins; the camera's reported rate is the fallback.
-  const paramFps = Number(params.fps) || 0;
-  const fps = fpsOverride ?? detectedFps ?? (paramFps > 0 ? paramFps : 240);
-  const total = frameCount(duration, fps);
+  // Frames are stepped at the file's own rate and measured at the rate they were captured.
+  const { file: fileFps, capture: fps } = markingRates({ detected: detectedFps, chosen: captureOverride, reported: Number(params.fps) || 0 });
+  const looksSlowMo = detectedFps != null && detectedFps < 100;
+  const fpsChoices = detectedFps == null ? FPS_CHOICES : [fileFps, ...FPS_CHOICES.filter((f) => f > fileFps)];
+  const total = frameCount(duration, fileFps);
   const last = Math.max(0, total - 1);
 
-  function show(f: number, rate = fps) {
+  function show(f: number, rate = fileFps) {
     setFrame(f);
     seekToFrame(player, f, rate);
   }
@@ -66,10 +67,10 @@ export default function Mark() {
   const go = (n: number) => show(Math.max(0, Math.min(last, Math.round(n))));
 
   function changeFps(next: number) {
-    // Keep the same moment in the video when the frame rate is corrected.
-    const t = frame / fps;
-    setFpsOverride(next);
-    show(Math.round(t * next), next);
+    setCaptureOverride(next);
+    if (detectedFps != null) return;
+    // Without a detected file rate the choice also sets the frame step: keep the same moment.
+    show(Math.round((frame / fileFps) * next), next);
     setTakeoff(null);
     setLanding(null);
   }
@@ -122,13 +123,20 @@ export default function Mark() {
         </View>
 
         <View style={styles.fpsRow}>
-          <Text style={styles.label}>帧率{detectedFps ? `（检测到 ${detectedFps}）` : ''}</Text>
+          <Text style={styles.label}>拍摄帧率{detectedFps ? `（视频 ${detectedFps} fps）` : ''}</Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
-            {FPS_CHOICES.map((f) => (
+            {fpsChoices.map((f) => (
               <Chip key={f} label={String(f)} selected={f === fps} onPress={() => changeFps(f)} />
             ))}
           </View>
         </View>
+        {looksSlowMo && (
+          <Text style={[styles.slowMoHint, fps > fileFps && { color: colors.accent }]}>
+            {fps > fileFps
+              ? `按慢动作计算：每帧 = 1/${fps} 秒`
+              : `这个视频是 ${detectedFps} fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。`}
+          </Text>
+        )}
 
         <Slider
           accessibilityLabel="逐帧拖动"
@@ -204,6 +212,7 @@ const styles = StyleSheet.create({
   phaseText: { fontSize: 12, fontWeight: '700' },
   fpsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   label: { color: colors.textMuted, fontSize: 12 },
+  slowMoHint: { color: colors.warn, fontSize: 12, lineHeight: 18 },
   stepRow: { flexDirection: 'row', gap: 8 },
   step: { flex: 1, height: 44, borderRadius: 12, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
   stepText: { color: colors.text, fontFamily: fonts.numeric, fontSize: 18 },

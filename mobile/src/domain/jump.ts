@@ -61,3 +61,18 @@ export function frameToSeconds(frame: number, fps: number): number {
 export function frameCount(durationS: number, fps: number): number {
   return Math.max(0, Math.floor(durationS * fps));
 }
+
+/** Assumed when neither the file nor the camera reports a frame rate. */
+export const DEFAULT_FPS = 240;
+
+/**
+ * Frame rates for marking a clip. `file` is the clip's own rate and sets the frame step; `capture` is the
+ * real-time rate used to measure. They differ for an iPhone slow-motion clip exported at normal speed:
+ * a 30 fps file whose frames were captured at 240 fps, so each frame is 1/240 s of the jump.
+ */
+export function markingRates({ detected, chosen, reported }: { detected: number | null; chosen: number | null; reported: number }) {
+  const file = detected ?? chosen ?? (reported > 0 ? reported : DEFAULT_FPS);
+  // A clip can be slowed down but never holds more frames than were captured.
+  const capture = Math.max(chosen ?? file, file);
+  return { file, capture };
+}

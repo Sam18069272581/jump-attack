@@ -1,4 +1,4 @@
-import { flightTimeFromFrames, frameCount, frameToSeconds, heightFromFlightTime, measureFromMarks, rsi } from '../jump';
+import { flightTimeFromFrames, frameCount, frameToSeconds, heightFromFlightTime, markingRates, measureFromMarks, rsi } from '../jump';
 
 describe('heightFromFlightTime', () => {
   it('uses h = g·t²/8', () => {
@@ -61,5 +61,29 @@ describe('frame helpers', () => {
   it('counts whole frames', () => {
     expect(frameCount(1.5, 240)).toBe(360);
     expect(frameCount(-1, 240)).toBe(0);
+  });
+});
+
+describe('markingRates', () => {
+  it('uses the file rate for both when nothing is chosen', () => {
+    expect(markingRates({ detected: 240, chosen: null, reported: 0 })).toEqual({ file: 240, capture: 240 });
+  });
+
+  it('measures a slowed-down slow-motion clip at its capture rate', () => {
+    const { file, capture } = markingRates({ detected: 30, chosen: 240, reported: 0 });
+    expect(file).toBe(30);
+    // 132 frames of a 240 fps capture played back at 30 fps is still 0.55 s of real flight.
+    const r = measureFromMarks({ takeoffFrame: 100, landingFrame: 232, fps: capture });
+    expect(r.ok && r.value.flightS).toBeCloseTo(0.55);
+  });
+
+  it('never measures slower than the file', () => {
+    expect(markingRates({ detected: 240, chosen: 60, reported: 0 }).capture).toBe(240);
+  });
+
+  it('falls back to the chosen, then the camera, then the default rate', () => {
+    expect(markingRates({ detected: null, chosen: 120, reported: 240 })).toEqual({ file: 120, capture: 120 });
+    expect(markingRates({ detected: null, chosen: null, reported: 120 })).toEqual({ file: 120, capture: 120 });
+    expect(markingRates({ detected: null, chosen: null, reported: 0 })).toEqual({ file: 240, capture: 240 });
   });
 });

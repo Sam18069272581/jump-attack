@@ -15,4 +15,4 @@
 
 ## 状态
 
-MVP 开发中：跳跃测试（录像 → 逐帧标记 → 结果与评估）和历史趋势已完成。技术栈：React Native + Expo，iOS 优先，本地 SQLite。
+MVP 开发中：跳跃测试（录像 → 逐帧标记 → 结果与评估）和历史趋势已完成。技术栈：React Native + Expo，iOS 优先，本地 SQLite。不用 Xcode 也能装到 iPhone 上试（Expo Go），步骤见 [mobile/README.md](mobile/README.md)。
