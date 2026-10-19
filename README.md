@@ -11,7 +11,8 @@
 |---|---|
 | `docs/` | 系统设计、数据模型、开源选型 |
 | `design/` | UI 设计稿源文件（13 个页面） |
+| `mobile/` | 手机 App（Expo + React Native），运行方法见 [mobile/README.md](mobile/README.md) |
 
 ## 状态
 
-方案阶段。默认技术栈（待确认）：React Native + Expo，iOS 优先，本地 SQLite。
+MVP 开发中：跳跃测试（录像 → 逐帧标记 → 结果与评估）和历史趋势已完成。技术栈：React Native + Expo，iOS 优先，本地 SQLite。
