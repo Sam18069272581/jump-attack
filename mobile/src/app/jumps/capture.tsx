@@ -16,7 +16,8 @@ const NativeCapture: ComponentType<CaptureProps> | null = isExpoGo
     require('@/components/capture/NativeCapture').default;
 
 export default function Capture() {
-  const { metric, session } = useLocalSearchParams<{ metric: string; session: string }>();
+  // `from` is passed through to the result screen so 完成 returns to where the test was started.
+  const { metric, session, from } = useLocalSearchParams<{ metric: string; session: string; from?: string }>();
   const def = getMetric(metric);
   const db = useSQLiteContext();
   const [attempt, setAttempt] = useState(1);
@@ -39,7 +40,7 @@ export default function Capture() {
   }
 
   function goMark(uri: string, recordedFps: number) {
-    router.push({ pathname: '/jumps/mark', params: { metric, session, uri, fps: String(recordedFps) } });
+    router.push({ pathname: '/jumps/mark', params: { metric, session, uri, fps: String(recordedFps), ...(from ? { from } : {}) } });
   }
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/jumps'));

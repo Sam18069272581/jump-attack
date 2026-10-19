@@ -39,6 +39,45 @@ const MIGRATIONS: string[] = [
 
   INSERT INTO athlete (name) VALUES ('我自己');
   `,
+  `
+  -- A training plan built from a template in src/domain/templates.ts. An athlete has at most one without ended_at.
+  CREATE TABLE plan (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    athlete_id INTEGER NOT NULL REFERENCES athlete(id) ON DELETE CASCADE,
+    template_code TEXT NOT NULL,
+    start_date TEXT NOT NULL,
+    weekdays TEXT NOT NULL, -- JSON array, 1 = Monday
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    ended_at TEXT
+  );
+  CREATE INDEX plan_athlete ON plan(athlete_id, ended_at);
+
+  -- A planned day the athlete started. Readiness and the adjustments it caused are frozen at the start.
+  CREATE TABLE workout (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    plan_id INTEGER NOT NULL REFERENCES plan(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    session_code TEXT NOT NULL,
+    readiness TEXT NOT NULL DEFAULT 'unknown',
+    cmj_drop REAL,
+    adjustments TEXT NOT NULL DEFAULT '[]', -- JSON array of {code, name, change}
+    started_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    finished_at TEXT,
+    UNIQUE (plan_id, date)
+  );
+
+  CREATE TABLE set_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workout_id INTEGER NOT NULL REFERENCES workout(id) ON DELETE CASCADE,
+    exercise_code TEXT NOT NULL,
+    set_no INTEGER NOT NULL,
+    reps INTEGER NOT NULL,
+    load_kg REAL,
+    rpe REAL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    UNIQUE (workout_id, exercise_code, set_no)
+  );
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

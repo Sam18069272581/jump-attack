@@ -19,6 +19,7 @@ const PATHS = {
   check: ['M5 12l5 5L20 7'],
   plus: ['M12 5v14M5 12h14'],
   trash: ['M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'],
+  plan: ['M3 10h18M8 3v4M16 3v4M8 14h2M14 14h2M8 18h2'],
 } as const;
 
 export type IconName = keyof typeof PATHS | 'gallery';
@@ -30,6 +31,7 @@ export function Icon({ name, size = 22, color = '#F2F3F5', strokeWidth = 2 }: { 
       {name === 'mobility' && <Circle cx={12} cy={4} r={2} />}
       {name === 'user' && <Circle cx={12} cy={8} r={4} />}
       {name === 'info' && <Circle cx={12} cy={12} r={9} />}
+      {name === 'plan' && <Rect x={3} y={5} width={18} height={16} rx={3} />}
       {name === 'gallery' ? (
         <>
           <Rect x={3} y={3} width={18} height={18} rx={3} />

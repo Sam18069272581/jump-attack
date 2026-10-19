@@ -13,7 +13,7 @@ import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
 export default function Result() {
-  const { metric, session } = useLocalSearchParams<{ metric: string; session: string }>();
+  const { metric, session, from } = useLocalSearchParams<{ metric: string; session: string; from?: string }>();
   const def = getMetric(metric);
   const db = useSQLiteContext();
   const { current } = useAthlete();
@@ -98,7 +98,7 @@ export default function Result() {
 
       <View style={styles.footer}>
         <Button label="再测一次" variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} />
-        <Button label="完成" onPress={() => router.dismissTo('/jumps')} style={{ flex: 1 }} />
+        <Button label="完成" onPress={() => (from === 'train' ? router.dismissAll() : router.dismissTo('/jumps'))} style={{ flex: 1 }} />
       </View>
     </SafeAreaView>
   );

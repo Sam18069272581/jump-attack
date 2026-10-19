@@ -38,6 +38,9 @@ export default function RootLayout() {
             <Stack.Screen name="jumps/mark" options={{ title: '逐帧标记' }} />
             <Stack.Screen name="jumps/result" options={{ title: '测试结果', headerBackVisible: false, gestureEnabled: false }} />
             <Stack.Screen name="history/[metric]" options={{ title: '' }} />
+            <Stack.Screen name="plan/index" options={{ title: '训练计划' }} />
+            <Stack.Screen name="plan/new" options={{ title: '选择训练计划' }} />
+            <Stack.Screen name="workout/[date]" options={{ title: '' }} />
           </Stack>
         </AthleteProvider>
       </SQLiteProvider>

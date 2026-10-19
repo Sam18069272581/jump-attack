@@ -1,3 +1,5 @@
+import { toISODate, type ISODate } from './dates';
+
 export function mean(xs: number[]): number {
   if (xs.length === 0) throw new Error('mean of empty list');
   return xs.reduce((s, x) => s + x, 0) / xs.length;
@@ -47,4 +49,17 @@ export function cmjReadiness(previous: number[], today: number, window = 7): { r
   const baseline = mean(recent);
   const dropPct = (baseline - today) / baseline;
   return { readiness: dropPct > FATIGUE_DROP ? 'fatigued' : 'ready', dropPct };
+}
+
+/**
+ * Readiness on `date` from CMJ session results: the day's best against the sessions on earlier days.
+ * `today` is null when CMJ hasn't been tested that day.
+ */
+export function readinessOn(results: { started_at: string; best: number }[], date: ISODate): { today: number | null; readiness: Readiness; dropPct: number } {
+  const dayOf = (r: { started_at: string }) => toISODate(new Date(r.started_at));
+  const todays = results.filter((r) => dayOf(r) === date).map((r) => r.best);
+  if (todays.length === 0) return { today: null, readiness: 'unknown', dropPct: 0 };
+  const before = results.filter((r) => dayOf(r) < date).map((r) => r.best);
+  const today = Math.max(...todays);
+  return { today, ...cmjReadiness(before, today) };
 }

@@ -30,7 +30,7 @@ const PROBLEM_TEXT: Record<MarkProblem, string> = {
 };
 
 export default function Mark() {
-  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string }>();
+  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string }>();
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const player = useVideoPlayer(params.uri, (p) => {
@@ -98,7 +98,7 @@ export default function Mark() {
         landing_frame: landing,
         video_uri: videoUri,
       });
-      router.replace({ pathname: '/jumps/result', params: { metric: params.metric, session: params.session } });
+      router.replace({ pathname: '/jumps/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
     } catch (e) {
       Alert.alert('保存失败', String(e));
       setSaving(false);
