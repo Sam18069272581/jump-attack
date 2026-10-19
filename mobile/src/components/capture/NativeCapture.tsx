@@ -1,4 +1,5 @@
-import { useFocusEffect, useIsFocused } from 'expo-router';
+import { useIsFocused } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
