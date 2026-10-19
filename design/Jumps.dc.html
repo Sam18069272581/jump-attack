@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>跳跃测试</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1115}
+a{color:#D4FF3F}a:hover{color:#E6FF8A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0F1115; color: #F2F3F5; font-family: 'Noto Sans SC', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 64px; padding: 0 12px; display: flex; align-items: center; gap: 4px">
+    <a href="Main.dc.html" aria-label="返回首页" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #F2F3F5">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 20px; font-weight: 700">跳跃测试</span>
+  </div>
+
+  <div style="flex: 1; padding: 8px 20px 0; display: flex; flex-direction: column; gap: 10px">
+    <sc-for list="{{tests}}" as="t" hint-placeholder-count="5">
+      <a href="{{t.href}}" style="text-decoration: none; color: #F2F3F5; background: #191C22; border-radius: 18px; padding: 0 16px; height: 68px; display: flex; align-items: center; gap: 14px">
+        <span style="width: 64px; font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 700; color: {{t.color}}">{{t.code}}</span>
+        <span style="flex: 1; font-size: 15px; font-weight: 500">{{t.name}}</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9AA1AD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+      </a>
+    </sc-for>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      tests: [
+        { code: 'CMJ', name: '反向跳', color: '#D4FF3F', href: 'Capture.dc.html' },
+        { code: 'SJ', name: '蹲跳', color: '#4FD1FF', href: 'Capture.dc.html' },
+        { code: 'DJ', name: '跳深 · RSI', color: '#FF9F43', href: 'Capture.dc.html' },
+        { code: 'Pogo', name: 'Pogo 连跳 · RSI', color: '#C9A7FF', href: 'Pogo.dc.html' },
+        { code: 'SL', name: '单腿 CMJ', color: '#6EE7B7', href: 'Capture.dc.html' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

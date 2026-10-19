@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>弹跳测试 · 逐帧标记</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1115}
+a{color:#D4FF3F}a:hover{color:#E6FF8A}
+input[type=range]{accent-color:#D4FF3F}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0F1115; color: #F2F3F5; font-family: 'Noto Sans SC', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 64px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between">
+    <a href="Capture.dc.html" aria-label="返回录像" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #F2F3F5">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; align-items: center">
+      <span style="font-size: 15px; font-weight: 700">CMJ · 第 2 次</span>
+      <span style="font-size: 11px; color: #9AA1AD">240 fps 慢动作 · 标记起跳与落地</span>
+    </div>
+    <button aria-label="帮助" style="width: 44px; height: 44px; border: 0; background: transparent; color: #9AA1AD; cursor: pointer">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5v.01"></path></svg>
+    </button>
+  </div>
+
+  <div style="position: relative; height: 400px; margin: 0 12px; border-radius: 18px; background: #1A1D23; overflow: hidden">
+    <div style="position: absolute; inset: 0; background-image: linear-gradient(#232731 1px, transparent 1px), linear-gradient(90deg, #232731 1px, transparent 1px); background-size: 40px 40px"></div>
+    <div style="position: absolute; left: 0; right: 0; bottom: 70px; height: 2px; background: #3A404B"></div>
+    <div style="position: absolute; left: 50%; bottom: 72px; margin-left: -40px; width: 80px; height: 180px; transform: translateY({{lift}}px); display: flex; justify-content: center">
+      <svg width="80" height="180" viewBox="0 0 80 180" fill="none" stroke="#F2F3F5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="跳跃者剪影">
+        <circle cx="40" cy="20" r="13"></circle>
+        <path d="M40 34v62M40 50l-22 26M40 50l22 26M40 96l-16 40 4 40M40 96l16 40-4 40"></path>
+      </svg>
+    </div>
+    <div style="position: absolute; left: 14px; top: 14px; padding: 6px 10px; border-radius: 10px; background: rgba(15,17,21,0.8); font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 600">帧 {{frame}} / 359</div>
+    <div style="position: absolute; right: 14px; top: 14px; padding: 6px 10px; border-radius: 10px; background: rgba(15,17,21,0.8); font-size: 12px; color: {{phaseColor}}; font-weight: 700">{{phase}}</div>
+    <div style="position: absolute; left: 14px; bottom: 18px; right: 14px; font-size: 11px; color: #9AA1AD; text-align: center">[示意画面 · 实际为手机录制的视频帧]</div>
+  </div>
+
+  <div style="padding: 16px 20px 0; display: flex; flex-direction: column; gap: 12px">
+    <div style="position: relative; height: 32px; display: flex; align-items: center">
+      <label for="scrub" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0)">拖动选择视频帧</label>
+      <input id="scrub" type="range" min="0" max="359" step="1" value="{{frame}}" onChange="{{onScrub}}" style="width: 100%; margin: 0">
+      <sc-if value="{{hasT}}" hint-placeholder-val="{{ true }}">
+        <div style="position: absolute; top: -4px; width: 3px; height: 8px; border-radius: 2px; background: #D4FF3F; left: {{tPos}}%"></div>
+      </sc-if>
+      <sc-if value="{{hasL}}" hint-placeholder-val="{{ true }}">
+        <div style="position: absolute; top: -4px; width: 3px; height: 8px; border-radius: 2px; background: #FF9F43; left: {{lPos}}%"></div>
+      </sc-if>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+      <button onClick="{{back10}}" style="height: 44px; border-radius: 12px; border: 1px solid #2E333C; background: #191C22; color: #F2F3F5; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; cursor: pointer">−10</button>
+      <button onClick="{{back1}}" style="height: 44px; border-radius: 12px; border: 1px solid #2E333C; background: #191C22; color: #F2F3F5; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; cursor: pointer">−1</button>
+      <button onClick="{{fwd1}}" style="height: 44px; border-radius: 12px; border: 1px solid #2E333C; background: #191C22; color: #F2F3F5; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; cursor: pointer">+1</button>
+      <button onClick="{{fwd10}}" style="height: 44px; border-radius: 12px; border: 1px solid #2E333C; background: #191C22; color: #F2F3F5; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; cursor: pointer">+10</button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+      <button onClick="{{setT}}" style="height: 48px; border-radius: 14px; border: 0; background: #D4FF3F; color: #0F1115; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer">设为起跳帧 · {{tLabel}}</button>
+      <button onClick="{{setL}}" style="height: 48px; border-radius: 14px; border: 0; background: #FF9F43; color: #0F1115; font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer">设为落地帧 · {{lLabel}}</button>
+    </div>
+
+    <div style="background: #191C22; border-radius: 16px; padding: 14px 16px; display: flex; align-items: center; justify-content: space-between">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 12px; color: #9AA1AD">滞空时间</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 26px; font-weight: 600">{{flight}}</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px; align-items: flex-end">
+        <span style="font-size: 12px; color: #9AA1AD">跳高 h = g·t² / 8</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 34px; font-weight: 700; color: #D4FF3F">{{height}}</span>
+      </div>
+    </div>
+
+    <a href="Result.dc.html" style="height: 52px; border-radius: 16px; background: #F2F3F5; color: #0F1115; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700">查看结果</a>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { frame: 140, t: 120, l: null };
+  }
+  go(n) {
+    const f = Math.max(0, Math.min(359, n));
+    this.setState({ frame: f });
+  }
+  renderVals() {
+    const fps = 240, TO = 120, LD = 252;
+    const f = this.state.frame;
+    const t = this.state.t, l = this.state.l;
+    let lift = 0;
+    if (f > TO && f < LD) {
+      lift = -Math.round(4 * 150 * (f - TO) * (LD - f) / ((LD - TO) * (LD - TO)));
+    } else if (f > TO - 40 && f <= TO) {
+      lift = Math.round(18 * Math.sin(Math.PI * (f - (TO - 40)) / 40));
+    }
+    let phase = '准备', phaseColor = '#9AA1AD';
+    if (f > TO - 40 && f <= TO) { phase = '下蹲发力'; phaseColor = '#4FD1FF'; }
+    if (f > TO && f < LD) { phase = '腾空'; phaseColor = '#D4FF3F'; }
+    if (f >= LD) { phase = '落地'; phaseColor = '#FF9F43'; }
+    const ok = t != null && l != null && l > t;
+    const secs = ok ? (l - t) / fps : 0;
+    const h = ok ? 9.81 * secs * secs / 8 * 100 : 0;
+    return {
+      frame: f,
+      lift,
+      phase,
+      phaseColor,
+      hasT: t != null,
+      hasL: l != null,
+      tPos: t != null ? (t / 359 * 100).toFixed(1) : 0,
+      lPos: l != null ? (l / 359 * 100).toFixed(1) : 0,
+      tLabel: t != null ? '#' + t : '未设',
+      lLabel: l != null ? '#' + l : '未设',
+      flight: ok ? Math.round(secs * 1000) + ' ms' : '— ms',
+      height: ok ? h.toFixed(1) + ' cm' : '— cm',
+      onScrub: (e) => this.go(Number(e.target.value)),
+      back10: () => this.go(f - 10),
+      back1: () => this.go(f - 1),
+      fwd1: () => this.go(f + 1),
+      fwd10: () => this.go(f + 10),
+      setT: () => this.setState({ t: f }),
+      setL: () => this.setState({ l: f })
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>VBT 训练</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1115}
+a{color:#FF9F43}a:hover{color:#FFC48A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0F1115; color: #F2F3F5; font-family: 'Noto Sans SC', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 64px; padding: 0 12px; display: flex; align-items: center; gap: 4px">
+    <a href="Main.dc.html" aria-label="返回首页" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #F2F3F5">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 20px; font-weight: 700">VBT 训练</span>
+  </div>
+
+  <div style="flex: 1; padding: 4px 20px 0; display: flex; flex-direction: column; gap: 10px">
+    <span style="font-size: 13px; color: #9AA1AD; margin-bottom: 2px">追踪杠铃速度，按速度区间控制训练强度</span>
+    <sc-for list="{{lifts}}" as="l" hint-placeholder-count="4">
+      <div style="background: #191C22; border-radius: 18px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <span style="font-size: 16px; font-weight: 700">{{l.name}}</span>
+          <span style="display: flex; align-items: baseline; gap: 4px">
+            <span style="font-size: 11px; color: #9AA1AD">上次平均</span>
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 600; color: #FF9F43">{{l.v}}</span>
+          </span>
+        </div>
+        <sc-if value="{{l.hasVariants}}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; gap: 6px">
+            <sc-for list="{{l.variants}}" as="vr" hint-placeholder-count="3">
+              <button onClick="{{vr.pick}}" aria-pressed="{{vr.pressed}}" style="height: 36px; padding: 0 12px; border-radius: 18px; border: 1px solid {{vr.border}}; background: {{vr.bg}}; color: {{vr.fg}}; font-family: inherit; font-size: 13px; cursor: pointer">{{vr.label}}</button>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="display: flex; justify-content: space-between; align-items: center">
+          <span style="font-size: 11px; color: #9AA1AD">{{l.zone}}</span>
+          <button style="height: 36px; padding: 0 14px; border-radius: 12px; border: 0; background: #FF9F43; color: #0F1115; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">开始</button>
+        </div>
+      </div>
+    </sc-for>
+
+    <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 4px">
+      <span style="font-size: 12px; color: #9AA1AD">速度区间（平均速度 m/s）</span>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px">
+        <span style="height: 6px; border-radius: 3px; background: #7A3E10"></span>
+        <span style="height: 6px; border-radius: 3px; background: #B85E17"></span>
+        <span style="height: 6px; border-radius: 3px; background: #FF9F43"></span>
+        <span style="height: 6px; border-radius: 3px; background: #FFC48A"></span>
+        <span style="height: 6px; border-radius: 3px; background: #FFE4C8"></span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 3px; font-size: 9px; color: #9AA1AD; text-align: center">
+        <span>绝对力量 &lt;0.5</span><span>加速力量 0.5–0.75</span><span>力量-速度 0.75–1.0</span><span>速度-力量 1.0–1.3</span><span>速度 &gt;1.3</span>
+      </div>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { clean: '悬垂', pull: '地面' };
+  }
+  chips(key, opts) {
+    const cur = this.state[key];
+    return opts.map((o) => ({
+      label: o,
+      pressed: o === cur ? 'true' : 'false',
+      bg: o === cur ? '#3A2512' : 'transparent',
+      border: o === cur ? '#FF9F43' : '#2E333C',
+      fg: o === cur ? '#FF9F43' : '#F2F3F5',
+      pick: () => this.setState({ [key]: o })
+    }));
+  }
+  renderVals() {
+    const pos = ['地面', '悬垂', '发力位'];
+    const CLEAN = { '地面': '1.42 m/s', '悬垂': '1.55 m/s', '发力位': '1.63 m/s' };
+    const PULL = { '地面': '1.68 m/s', '悬垂': '1.79 m/s', '发力位': '1.86 m/s' };
+    return {
+      lifts: [
+        { name: '深蹲', v: '0.62 m/s', hasVariants: false, variants: [], zone: '常用区间：绝对力量 / 加速力量' },
+        { name: '高翻 · ' + this.state.clean, v: CLEAN[this.state.clean], hasVariants: true, variants: this.chips('clean', pos), zone: '看峰值速度 · 速度-力量' },
+        { name: '高拉 · ' + this.state.pull, v: PULL[this.state.pull], hasVariants: true, variants: this.chips('pull', pos), zone: '看峰值速度 · 速度区间' },
+        { name: '深蹲跳', v: '1.38 m/s', hasVariants: false, variants: [], zone: '轻负荷 · 速度 / 速度-力量' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>弹跳测试 · Pogo 连跳 RSI</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1115}
+a{color:#D4FF3F}a:hover{color:#E6FF8A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0F1115; color: #F2F3F5; font-family: 'Noto Sans SC', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 64px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between">
+    <a href="Jumps.dc.html" aria-label="返回跳跃测试" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #F2F3F5">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; align-items: center">
+      <span style="font-size: 15px; font-weight: 700">Pogo 连跳 · RSI</span>
+      <span style="font-size: 11px; color: #9AA1AD">10 次连续弹跳 · 240 fps 自动识别触地</span>
+    </div>
+    <span style="width: 44px"></span>
+  </div>
+
+  <div style="flex: 1; padding: 0 20px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; align-items: flex-end; justify-content: space-between">
+      <div style="display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 12px; color: #9AA1AD">RSI · 最佳 5 跳平均</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 84px; font-weight: 700; line-height: 0.9; color: #C9A7FF; letter-spacing: -1px">{{rsiAvg}}</span>
+      </div>
+      <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding-bottom: 6px">
+        <span style="font-size: 12px; color: #9AA1AD">计算方式</span>
+        <span style="font-size: 13px; padding: 4px 10px; border-radius: 8px; background: #22262E">{{formula}}</span>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+      <div style="background: #191C22; border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 11px; color: #9AA1AD">平均触地</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 600; color: #FF9F43">{{ctAvg}} <span style="font-size: 13px; color: #9AA1AD">ms</span></span>
+      </div>
+      <div style="background: #191C22; border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 11px; color: #9AA1AD">平均滞空</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 600; color: #D4FF3F">{{ftAvg}} <span style="font-size: 13px; color: #9AA1AD">ms</span></span>
+      </div>
+      <div style="background: #191C22; border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 11px; color: #9AA1AD">平均跳高</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 600">{{hAvg}} <span style="font-size: 13px; color: #9AA1AD">cm</span></span>
+      </div>
+    </div>
+
+    <div style="background: #191C22; border-radius: 18px; padding: 14px 12px 10px; display: flex; flex-direction: column; gap: 8px">
+      <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #9AA1AD">
+        <span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 3px; background: #D4FF3F"></span>滞空</span>
+        <span>点击柱子查看每一跳</span>
+        <span style="display: flex; align-items: center; gap: 6px"><span style="width: 10px; height: 10px; border-radius: 3px; background: #FF9F43"></span>触地</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 5px">
+        <sc-for list="{{hops}}" as="hp" hint-placeholder-count="10">
+          <button onClick="{{hp.pick}}" aria-label="{{hp.aria}}" aria-pressed="{{hp.pressed}}" style="height: 150px; padding: 4px 0; border: 0; border-radius: 8px; background: {{hp.bg}}; display: flex; flex-direction: column; align-items: center; cursor: pointer; opacity: {{hp.opacity}}">
+            <span style="height: 70px; width: 100%; display: flex; align-items: flex-end; justify-content: center">
+              <span style="width: 14px; height: {{hp.ftH}}px; border-radius: 4px 4px 0 0; background: #D4FF3F"></span>
+            </span>
+            <span style="width: 100%; height: 2px; background: #3A404B"></span>
+            <span style="height: 50px; width: 100%; display: flex; align-items: flex-start; justify-content: center">
+              <span style="width: 14px; height: {{hp.ctH}}px; border-radius: 0 0 4px 4px; background: #FF9F43"></span>
+            </span>
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 13px; color: {{hp.numColor}}; margin-top: 2px">{{hp.n}}</span>
+          </button>
+        </sc-for>
+      </div>
+      <span style="font-size: 11px; color: #9AA1AD; text-align: center">灰色 = 未计入：第 1 跳含预跳下蹲，取 RSI 最高的 5 跳</span>
+    </div>
+
+    <div style="background: #191C22; border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; border: 1px solid #C9A7FF">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <span style="font-size: 14px; font-weight: 700">第 {{sel.n}} 跳</span>
+        <span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: {{sel.tagBg}}; color: #0F1115; font-weight: 700">{{sel.tag}}</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px">
+        <div style="display: flex; flex-direction: column"><span style="font-size: 10px; color: #9AA1AD">触地</span><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 600">{{sel.ct}} ms</span></div>
+        <div style="display: flex; flex-direction: column"><span style="font-size: 10px; color: #9AA1AD">滞空</span><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 600">{{sel.ft}} ms</span></div>
+        <div style="display: flex; flex-direction: column"><span style="font-size: 10px; color: #9AA1AD">跳高</span><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 600">{{sel.h}} cm</span></div>
+        <div style="display: flex; flex-direction: column"><span style="font-size: 10px; color: #9AA1AD">RSI</span><span style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 700; color: #C9A7FF">{{sel.rsi}}</span></div>
+      </div>
+    </div>
+
+    <div style="display: flex; justify-content: space-between; font-size: 12px; color: #9AA1AD">
+      <span>触地稳定性 CV {{ctCv}}%</span>
+      <span>后程疲劳 {{fatigue}}</span>
+    </div>
+  </div>
+
+  <div style="padding: 12px 20px 28px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+    <a href="Capture.dc.html" style="height: 52px; border-radius: 16px; border: 1px solid #2E333C; color: #F2F3F5; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 500">重新录制</a>
+    <button onClick="{{save}}" style="height: 52px; border-radius: 16px; border: 0; background: {{saveBg}}; color: #0F1115; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer">{{saveLabel}}</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"method":{"editor":"enum","options":["跳高/触地","滞空/触地"],"default":"跳高/触地"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: 3, saved: false };
+  }
+  renderVals() {
+    const method = this.props.method ?? '跳高/触地';
+    const raw = [[240, 360], [185, 392], [172, 401], [168, 405], [170, 398], [175, 396], [171, 400], [178, 389], [182, 384], [190, 372]];
+    const hops = raw.map(([ct, ft], i) => {
+      const h = 9.81 * Math.pow(ft / 1000, 2) / 8;
+      const rsi = method === '滞空/触地' ? ft / ct : h / (ct / 1000);
+      return { i, ct, ft, h, rsi };
+    });
+    const pool = hops.slice(1).slice().sort((a, b) => b.rsi - a.rsi).slice(0, 5);
+    const used = {};
+    pool.forEach((p) => { used[p.i] = true; });
+    const avg = (arr, k) => arr.reduce((s, x) => s + x[k], 0) / arr.length;
+    const cts = hops.slice(1).map((x) => x.ct);
+    const ctMean = cts.reduce((a, b) => a + b, 0) / cts.length;
+    const ctSd = Math.sqrt(cts.reduce((s, c) => s + (c - ctMean) * (c - ctMean), 0) / cts.length);
+    const early = (hops[2].rsi + hops[3].rsi + hops[4].rsi) / 3;
+    const late = (hops[7].rsi + hops[8].rsi + hops[9].rsi) / 3;
+    const drop = (1 - late / early) * 100;
+    const s = hops[this.state.sel];
+    return {
+      formula: method === '滞空/触地' ? 'RSI = 滞空 ÷ 触地' : 'RSI = 跳高(m) ÷ 触地(s)',
+      rsiAvg: avg(pool, 'rsi').toFixed(2),
+      ctAvg: Math.round(avg(pool, 'ct')),
+      ftAvg: Math.round(avg(pool, 'ft')),
+      hAvg: (avg(pool, 'h') * 100).toFixed(1),
+      ctCv: (ctSd / ctMean * 100).toFixed(1),
+      fatigue: (drop > 0 ? '−' : '+') + Math.abs(drop).toFixed(0) + '% RSI',
+      hops: hops.map((x) => {
+        const on = x.i === this.state.sel;
+        return {
+          n: x.i + 1,
+          ftH: Math.round(x.ft / 420 * 66),
+          ctH: Math.round(x.ct / 250 * 46),
+          bg: on ? '#2A2F38' : 'transparent',
+          opacity: used[x.i] ? 1 : 0.35,
+          numColor: on ? '#C9A7FF' : '#9AA1AD',
+          pressed: on ? 'true' : 'false',
+          aria: '第 ' + (x.i + 1) + ' 跳，触地 ' + x.ct + ' 毫秒，滞空 ' + x.ft + ' 毫秒',
+          pick: () => this.setState({ sel: x.i })
+        };
+      }),
+      sel: {
+        n: s.i + 1,
+        ct: s.ct,
+        ft: s.ft,
+        h: (s.h * 100).toFixed(1),
+        rsi: s.rsi.toFixed(2),
+        tag: used[s.i] ? '已计入' : '未计入',
+        tagBg: used[s.i] ? '#C9A7FF' : '#9AA1AD'
+      },
+      saveLabel: this.state.saved ? '已保存 ✓' : '保存记录',
+      saveBg: this.state.saved ? '#9AA1AD' : '#F2F3F5',
+      save: () => this.setState({ saved: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

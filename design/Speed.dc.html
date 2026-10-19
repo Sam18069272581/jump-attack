@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>速度训练</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1115}
+a{color:#4FD1FF}a:hover{color:#8FE3FF}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0F1115; color: #F2F3F5; font-family: 'Noto Sans SC', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 64px; padding: 0 12px; display: flex; align-items: center; gap: 4px">
+    <a href="Main.dc.html" aria-label="返回首页" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #F2F3F5">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 20px; font-weight: 700">速度训练</span>
+  </div>
+
+  <div style="flex: 1; padding: 8px 20px 0; display: flex; flex-direction: column; gap: 10px">
+    <sc-for list="{{dists}}" as="d" hint-placeholder-count="4">
+      <button style="text-align: left; border: 0; background: #191C22; color: #F2F3F5; border-radius: 18px; padding: 0 16px; height: 68px; display: flex; align-items: center; gap: 14px; font-family: inherit; cursor: pointer">
+        <span style="flex: 1; font-family: 'Barlow Condensed', sans-serif; font-size: 30px; font-weight: 700; color: #4FD1FF">{{d.m}} <span style="font-size: 18px">m</span></span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9AA1AD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+      </button>
+    </sc-for>
+    <button style="height: 56px; border-radius: 18px; border: 1px dashed #3A404B; background: transparent; color: #F2F3F5; font-family: inherit; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+      自定义距离
+    </button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { dists: [10, 30, 50, 100].map((m) => ({ m })) };
+  }
+}
+</script>
+</body>
+</html>

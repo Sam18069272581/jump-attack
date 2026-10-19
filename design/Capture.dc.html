@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>弹跳测试 · 录像</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1115}
+a{color:#D4FF3F}a:hover{color:#E6FF8A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0F1115; color: #F2F3F5; font-family: 'Noto Sans SC', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 64px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between">
+    <a href="Jumps.dc.html" aria-label="返回跳跃测试" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #F2F3F5">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6L6 18M6 6l12 12"></path></svg>
+    </a>
+    <div style="display: flex; flex-direction: column; align-items: center">
+      <span style="font-size: 15px; font-weight: 700">录制 · CMJ 反向跳</span>
+      <span style="font-size: 11px; color: #9AA1AD">第 2 次 / 共 3 次</span>
+    </div>
+    <div style="display: flex; height: 32px; border-radius: 16px; background: #191C22; border: 1px solid #2E333C; overflow: hidden">
+      <sc-for list="{{fpsOpts}}" as="o" hint-placeholder-count="2">
+        <button onClick="{{o.pick}}" aria-pressed="{{o.pressed}}" style="min-width: 44px; height: 32px; padding: 0 8px; border: 0; background: {{o.bg}}; color: {{o.fg}}; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer">{{o.label}}</button>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="position: relative; height: 520px; margin: 0 12px; border-radius: 20px; background: #16191E; overflow: hidden; border: 2px solid {{frameBorder}}">
+    <div style="position: absolute; inset: 0; background: linear-gradient(180deg, #1C2027 0%, #16191E 70%, #20242B 70%, #1A1D22 100%)"></div>
+
+    <div style="position: absolute; left: 16px; top: 16px; width: 26px; height: 26px; border-left: 3px solid #F2F3F5; border-top: 3px solid #F2F3F5"></div>
+    <div style="position: absolute; right: 16px; top: 16px; width: 26px; height: 26px; border-right: 3px solid #F2F3F5; border-top: 3px solid #F2F3F5"></div>
+    <div style="position: absolute; left: 16px; bottom: 16px; width: 26px; height: 26px; border-left: 3px solid #F2F3F5; border-bottom: 3px solid #F2F3F5"></div>
+    <div style="position: absolute; right: 16px; bottom: 16px; width: 26px; height: 26px; border-right: 3px solid #F2F3F5; border-bottom: 3px solid #F2F3F5"></div>
+
+    <div style="position: absolute; left: 50%; bottom: 150px; margin-left: -45px; width: 90px; height: 210px; display: flex; justify-content: center; opacity: 0.85">
+      <svg width="90" height="210" viewBox="0 0 90 210" fill="none" stroke="#F2F3F5" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="取景中的运动员">
+        <circle cx="45" cy="22" r="14"></circle>
+        <path d="M45 37v68M45 55l-20 34M45 55l20 34M45 105l-14 50 2 52M45 105l14 50-2 52"></path>
+      </svg>
+    </div>
+
+    <div style="position: absolute; left: 50%; bottom: 120px; margin-left: -95px; width: 190px; height: 70px; border: 2px dashed #D4FF3F; border-radius: 12px"></div>
+    <div style="position: absolute; left: 0; right: 0; bottom: 136px; height: 0; border-top: 2px dashed #D4FF3F; opacity: 0.6"></div>
+    <div style="position: absolute; left: 50%; bottom: 92px; transform: translateX(-50%); font-size: 11px; color: #D4FF3F; white-space: nowrap">双脚放进框内 · 地面对齐虚线</div>
+
+    <sc-if value="{{idle}}" hint-placeholder-val="{{ true }}">
+      <div style="position: absolute; left: 16px; right: 16px; top: 56px; display: flex; flex-direction: column; gap: 6px">
+        <sc-for list="{{checks}}" as="c" hint-placeholder-count="3">
+          <div style="align-self: flex-start; display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: 10px; background: rgba(15,17,21,0.82); font-size: 12px">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{c.color}}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{c.icon}}"></path></svg>
+            <span>{{c.text}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{recording}}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 12px; background: rgba(15,17,21,0.85)">
+        <span style="width: 10px; height: 10px; border-radius: 5px; background: #FF5A4E"></span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 600">REC {{elapsed}}</span>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+      <div style="position: absolute; left: 16px; right: 16px; top: 56px; padding: 14px; border-radius: 14px; background: rgba(15,17,21,0.9); display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 14px; font-weight: 700; color: #D4FF3F">录制完成</span>
+        <span style="font-size: 12px; color: #D5D8DE">{{summary}}</span>
+      </div>
+    </sc-if>
+
+    <div style="position: absolute; left: 0; right: 0; bottom: 34px; text-align: center; font-size: 11px; color: #9AA1AD">[示意取景 · 实际为相机实时画面]</div>
+  </div>
+
+  <div style="flex: 1; padding: 0 20px 28px; display: flex; flex-direction: column; justify-content: center; gap: 14px">
+    <sc-if value="{{notDone}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; align-items: center; justify-content: space-between">
+        <button aria-label="从相册导入视频" style="width: 52px; height: 52px; border-radius: 14px; border: 1px solid #2E333C; background: #191C22; color: #F2F3F5; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="9" cy="9" r="2"></circle><path d="M21 16l-5-5L5 21"></path></svg>
+        </button>
+        <button onClick="{{toggle}}" aria-label="{{recLabel}}" style="width: 84px; height: 84px; border-radius: 42px; border: 4px solid #F2F3F5; background: transparent; display: flex; align-items: center; justify-content: center; cursor: pointer; padding: 0">
+          <span style="width: {{dotSize}}px; height: {{dotSize}}px; border-radius: {{dotRadius}}px; background: #FF5A4E"></span>
+        </button>
+        <button aria-label="拍摄指引" style="width: 52px; height: 52px; border-radius: 14px; border: 1px solid #2E333C; background: #191C22; color: #F2F3F5; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 8v.01M11 12h1v5h1"></path></svg>
+        </button>
+      </div>
+      <span style="text-align: center; font-size: 12px; color: #9AA1AD">{{hint}}</span>
+    </sc-if>
+    <sc-if value="{{done}}" hint-placeholder-val="{{ false }}">
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+        <button onClick="{{retake}}" style="height: 52px; border-radius: 16px; border: 1px solid #2E333C; background: transparent; color: #F2F3F5; font-family: inherit; font-size: 15px; font-weight: 500; cursor: pointer">重拍</button>
+        <a href="Record.dc.html" style="height: 52px; border-radius: 16px; background: #D4FF3F; color: #0F1115; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 700">去标记帧</a>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { mode: 'idle', fps: 240, ms: 0 };
+  }
+  componentWillUnmount() { clearInterval(this.timer); }
+  start() {
+    clearInterval(this.timer);
+    this.setState({ mode: 'rec', ms: 0 });
+    this.timer = setInterval(() => this.setState({ ms: this.state.ms + 100 }), 100);
+  }
+  stop() {
+    clearInterval(this.timer);
+    this.setState({ mode: 'done' });
+  }
+  renderVals() {
+    const { mode, fps, ms } = this.state;
+    const secs = ms / 1000;
+    const ok = '#D4FF3F', warn = '#FF9F43';
+    const check = 'M5 12l5 5L20 7', alert = 'M12 7v6M12 17v.01';
+    return {
+      idle: mode === 'idle',
+      recording: mode === 'rec',
+      done: mode === 'done',
+      notDone: mode !== 'done',
+      frameBorder: mode === 'rec' ? '#FF5A4E' : '#16191E',
+      elapsed: secs.toFixed(1) + ' s',
+      summary: secs.toFixed(1) + ' 秒 · ' + Math.round(secs * fps) + ' 帧 · ' + fps + ' fps。下一步逐帧找到起跳和落地。',
+      recLabel: mode === 'rec' ? '停止录制' : '开始录制',
+      dotSize: mode === 'rec' ? 30 : 64,
+      dotRadius: mode === 'rec' ? 6 : 32,
+      hint: mode === 'rec' ? '完成一次起跳并落地后，点击停止' : '手机平放地面、距离约 1.5 米、镜头对准脚踝',
+      checks: [
+        { text: '光线充足', color: ok, icon: check },
+        { text: '双脚完整入框', color: ok, icon: check },
+        { text: '请保持手机稳定，别手持', color: warn, icon: alert }
+      ],
+      fpsOpts: [120, 240].map((f) => ({
+        label: f,
+        pressed: f === fps ? 'true' : 'false',
+        bg: f === fps ? '#D4FF3F' : 'transparent',
+        fg: f === fps ? '#0F1115' : '#9AA1AD',
+        pick: () => this.setState({ fps: f })
+      })),
+      toggle: () => (mode === 'rec' ? this.stop() : this.start()),
+      retake: () => this.setState({ mode: 'idle', ms: 0 })
+    };
+  }
+}
+</script>
+</body>
+</html>

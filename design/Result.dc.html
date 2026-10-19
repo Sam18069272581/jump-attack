@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>弹跳测试 · 测试结果</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1115}
+a{color:#D4FF3F}a:hover{color:#E6FF8A}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0F1115; color: #F2F3F5; font-family: 'Noto Sans SC', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 64px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between">
+    <a href="Record.dc.html" aria-label="返回标记" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #F2F3F5">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 15px; font-weight: 700">CMJ 测试结果</span>
+    <button aria-label="分享" style="width: 44px; height: 44px; border: 0; background: transparent; color: #F2F3F5; cursor: pointer">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"></path></svg>
+    </button>
+  </div>
+
+  <div style="flex: 1; padding: 4px 20px 0; display: flex; flex-direction: column; gap: 16px">
+    <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0 4px">
+      <span style="font-size: 13px; color: #9AA1AD">本次最佳 · 第 2 次</span>
+      <div style="display: flex; align-items: baseline; gap: 6px">
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 112px; font-weight: 700; line-height: 0.9; color: #D4FF3F; letter-spacing: -2px">37.1</span>
+        <span style="font-size: 22px; color: #9AA1AD">cm</span>
+      </div>
+      <span style="font-size: 13px; color: #F2F3F5">个人最佳的 96.6%</span>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="height: 10px; border-radius: 5px; background: #22262E; overflow: hidden">
+        <div style="width: 96.6%; height: 100%; border-radius: 5px; background: #D4FF3F"></div>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 11px; color: #9AA1AD"><span>0</span><span>个人最佳 38.4 cm</span></div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+      <div style="background: #191C22; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 12px; color: #9AA1AD">滞空时间</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; font-weight: 600">550 <span style="font-size: 15px; color: #9AA1AD">ms</span></span>
+      </div>
+      <div style="background: #191C22; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 12px; color: #9AA1AD">起跳速度</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; font-weight: 600">2.70 <span style="font-size: 15px; color: #9AA1AD">m/s</span></span>
+      </div>
+      <div style="background: #191C22; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 12px; color: #9AA1AD">平均功率</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; font-weight: 600; color: #9AA1AD">—</span>
+        <span style="font-size: 11px; color: #9AA1AD">需填写体重与腿长</span>
+      </div>
+      <div style="background: #191C22; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 12px; color: #9AA1AD">三次变异系数</span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 28px; font-weight: 600">1.9 <span style="font-size: 15px; color: #9AA1AD">%</span></span>
+        <span style="font-size: 11px; color: #9AA1AD">数据稳定</span>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <span style="font-size: 15px; font-weight: 700; margin-bottom: 4px">三次试跳</span>
+      <sc-for list="{{trials}}" as="tr" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid #22262E">
+          <span style="width: 56px; font-size: 13px; color: #9AA1AD">第 {{tr.n}} 次</span>
+          <div style="flex: 1; height: 8px; border-radius: 4px; background: #22262E; overflow: hidden">
+            <div style="height: 100%; border-radius: 4px; width: {{tr.w}}%; background: {{tr.color}}"></div>
+          </div>
+          <span style="width: 64px; text-align: right; font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 600">{{tr.v}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="padding: 16px 20px 28px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+    <a href="Capture.dc.html" style="height: 52px; border-radius: 16px; border: 1px solid #2E333C; color: #F2F3F5; text-decoration: none; display: flex; align-items: center; justify-content: center; font-size: 15px; font-weight: 500">再测一次</a>
+    <button onClick="{{save}}" style="height: 52px; border-radius: 16px; border: 0; background: {{saveBg}}; color: #0F1115; font-family: inherit; font-size: 15px; font-weight: 700; cursor: pointer">{{saveLabel}}</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { saved: false };
+  }
+  renderVals() {
+    const vals = [36.2, 37.1, 35.8];
+    const best = Math.max.apply(null, vals);
+    return {
+      trials: vals.map((v, i) => ({
+        n: i + 1,
+        v: v.toFixed(1) + ' cm',
+        w: (v / 40 * 100).toFixed(1),
+        color: v === best ? '#D4FF3F' : '#5A616D'
+      })),
+      saveLabel: this.state.saved ? '已保存 ✓' : '保存记录',
+      saveBg: this.state.saved ? '#9AA1AD' : '#F2F3F5',
+      save: () => this.setState({ saved: true })
+    };
+  }
+}
+</script>
+</body>
+</html>

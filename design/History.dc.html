@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>历史趋势</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0F1115; color: #F2F3F5; font-family: 'Noto Sans SC', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+
+  <sc-if value="{{isHome}}" hint-placeholder-val="{{ true }}">
+    <div style="flex: 1; min-height: 0; overflow-y: auto; padding: 28px 20px 20px; display: flex; flex-direction: column; gap: 20px">
+      <span style="font-size: 26px; font-weight: 700">历史</span>
+
+      <button onClick="{{openFeatured}}" style="text-align: left; border: 0; background: #191C22; color: #F2F3F5; border-radius: 20px; padding: 18px 16px 14px; display: flex; flex-direction: column; gap: 8px; font-family: inherit; cursor: pointer">
+        <span style="display: flex; justify-content: space-between; align-items: center; width: 100%">
+          <span style="font-size: 13px; color: #9AA1AD">CMJ 反向跳</span>
+          <span style="font-size: 12px; color: {{f.changeColor}}">{{f.changeText}}</span>
+        </span>
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 56px; font-weight: 700; line-height: 1; color: #D4FF3F">{{f.latest}} <span style="font-size: 18px; color: #9AA1AD; font-weight: 500">cm</span></span>
+        <svg width="318" height="90" viewBox="0 0 318 90" role="img" aria-label="{{f.aria}}">
+          <polyline points="{{f.pts}}" fill="none" stroke="#D4FF3F" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+          <circle cx="{{f.lx}}" cy="{{f.ly}}" r="4.5" fill="#D4FF3F"></circle>
+        </svg>
+        <span style="font-size: 11px; color: #9AA1AD">点击查看每次数据</span>
+      </button>
+
+      <div style="display: flex; flex-direction: column; gap: 10px">
+        <span style="font-size: 15px; font-weight: 700">分类</span>
+        <sc-for list="{{groups}}" as="g" hint-placeholder-count="5">
+          <button onClick="{{g.pick}}" style="text-align: left; border: 0; background: #191C22; color: #F2F3F5; border-radius: 18px; padding: 12px 16px; display: flex; align-items: center; gap: 14px; font-family: inherit; cursor: pointer">
+            <span style="width: 44px; height: 44px; border-radius: 14px; background: {{g.tile}}; color: {{g.color}}; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{g.icon}}"></path></svg>
+            </span>
+            <span style="flex: 1; font-size: 15px; font-weight: 500">{{g.name}}</span>
+            <span style="font-size: 12px; color: #9AA1AD">{{g.count}} 项</span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9AA1AD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{isCat}}" hint-placeholder-val="{{ false }}">
+    <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column">
+      <div style="height: 64px; flex-shrink: 0; padding: 0 12px; display: flex; align-items: center; gap: 4px">
+        <button onClick="{{toHome}}" aria-label="返回历史" style="width: 44px; height: 44px; border: 0; background: transparent; color: #F2F3F5; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+        </button>
+        <span style="font-size: 20px; font-weight: 700">{{catName}}</span>
+      </div>
+      <div style="padding: 8px 20px 20px; display: flex; flex-direction: column; gap: 10px">
+        <sc-for list="{{items}}" as="it" hint-placeholder-count="4">
+          <button onClick="{{it.open}}" style="text-align: left; border: 0; background: #191C22; color: #F2F3F5; border-radius: 18px; padding: 0 16px; height: 68px; display: flex; align-items: center; gap: 12px; font-family: inherit; cursor: pointer">
+            <span style="flex: 1; font-size: 15px; font-weight: 500">{{it.name}}</span>
+            <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 20px; font-weight: 600; color: {{it.color}}">{{it.latest}} <span style="font-size: 13px; color: #9AA1AD">{{it.unit}}</span></span>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9AA1AD" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+          </button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{isDetail}}" hint-placeholder-val="{{ false }}">
+    <div style="flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column">
+      <div style="height: 64px; flex-shrink: 0; padding: 0 12px; display: flex; align-items: center; gap: 4px">
+        <button onClick="{{back}}" aria-label="返回" style="width: 44px; height: 44px; border: 0; background: transparent; color: #F2F3F5; display: flex; align-items: center; justify-content: center; cursor: pointer">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+        </button>
+        <span style="display: flex; flex-direction: column">
+          <span style="font-size: 17px; font-weight: 700">{{d.name}}</span>
+          <span style="font-size: 11px; color: #9AA1AD">{{d.cat}} · {{d.count}} 条记录</span>
+        </span>
+      </div>
+
+      <div style="padding: 0 20px; display: flex; align-items: baseline; gap: 10px">
+        <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 56px; font-weight: 700; line-height: 1; color: {{d.color}}">{{d.latest}}</span>
+        <span style="font-size: 15px; color: #9AA1AD">{{d.unit}}</span>
+        <span style="font-size: 12px; color: {{d.changeColor}}; margin-left: auto">{{d.changeText}}</span>
+      </div>
+
+      <div style="margin: 14px 20px 0; position: relative; width: 350px; height: 200px; flex-shrink: 0; background: #191C22; border-radius: 18px">
+        <div style="position: absolute; left: 0; right: 0; top: 38px; border-top: 1px dashed #2E333C"></div>
+        <div style="position: absolute; left: 0; right: 0; top: 150px; border-top: 1px dashed #2E333C"></div>
+        <svg width="350" height="200" viewBox="0 0 350 200" style="position: absolute; left: 0; top: 0" aria-hidden="true">
+          <polyline points="{{d.pts}}" fill="none" stroke="{{d.color}}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"></polyline>
+        </svg>
+        <sc-for list="{{d.points}}" as="p" hint-placeholder-count="8">
+          <div style="position: absolute; left: {{p.vx}}px; top: {{p.vy}}px; width: 40px; text-align: center; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: #D5D8DE">{{p.v}}</div>
+          <div style="position: absolute; left: {{p.dx}}px; top: {{p.dy}}px; width: 9px; height: 9px; border-radius: 5px; background: #0F1115; border: 2px solid {{d.color}}; box-sizing: border-box"></div>
+          <div style="position: absolute; left: {{p.vx}}px; top: 172px; width: 40px; text-align: center; font-family: 'Barlow Condensed', sans-serif; font-size: 12px; color: #9AA1AD">{{p.date}}</div>
+        </sc-for>
+      </div>
+
+      <div style="padding: 18px 20px 24px; display: flex; flex-direction: column">
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 0 4px 8px; font-size: 12px; color: #9AA1AD; border-bottom: 1px solid #22262E">
+          <span>日期</span><span style="text-align: right">数值</span><span style="text-align: right">较上次</span>
+        </div>
+        <sc-for list="{{d.rows}}" as="r" hint-placeholder-count="8">
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 11px 4px; border-bottom: 1px solid #22262E; align-items: center">
+            <span style="font-size: 13px; color: #D5D8DE">{{r.date}}</span>
+            <span style="text-align: right; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; font-weight: 600">{{r.v}}</span>
+            <span style="text-align: right; font-family: 'Barlow Condensed', sans-serif; font-size: 15px; color: {{r.color}}">{{r.delta}}</span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <nav style="height: 76px; flex-shrink: 0; border-top: 1px solid #22262E; background: #13161A; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding-bottom: 12px; box-sizing: border-box">
+    <a href="Main.dc.html" style="text-decoration: none; color: #9AA1AD; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"></path></svg>首页</a>
+    <a href="History.dc.html" style="text-decoration: none; color: #D4FF3F; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l6-6 4 4 8-8M15 7h6v6"></path></svg>历史</a>
+    <a href="Main.dc.html" style="text-decoration: none; color: #9AA1AD; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"></circle><path d="M4 21c0-4 4-6 8-6s8 2 8 6"></path></svg>我的</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"open":{"editor":"enum","options":["none","cmj","sj","dj","pogo","s10","s30","s50","s100","squat","clean","pull","jsq","ankleL","ankleR","hipL","hipR","hrv","rhr","sleep"],"default":"none"},"view":{"editor":"enum","options":["home","跳跃测试","速度训练","VBT 训练","灵活度","恢复"],"default":"home"},"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    const o = props.open;
+    const v = props.view;
+    this.state = { cat: v && v !== 'home' ? v : null, open: o && o !== 'none' ? o : null };
+  }
+  renderVals() {
+    const G = [
+      { name: '跳跃测试', color: '#D4FF3F', tile: '#2A3312', icon: 'M12 3v10M8 7l4-4 4 4M5 21h14M8 17h8' },
+      { name: '速度训练', color: '#4FD1FF', tile: '#0F2D38', icon: 'M13 5a8 8 0 1 0 0 16a8 8 0 1 0 0-16M13 9v4l3 2M10 2h6M3 9h3M2 13h3' },
+      { name: 'VBT 训练', color: '#FF9F43', tile: '#3A2512', icon: 'M2 12h20M5 8v8M8 6v12M16 6v12M19 8v8' },
+      { name: '灵活度', color: '#C9A7FF', tile: '#2C2240', icon: 'M12 2a2 2 0 1 0 0 4a2 2 0 1 0 0-4M12 6v6l-5 4M12 12l6 2M7 16l-2 5M18 14l1 7' },
+      { name: '恢复', color: '#6EE7B7', tile: '#123329', icon: 'M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 21.5l8.8-8.8a5 5 0 0 0 0-7.1z' }
+    ];
+    const COL = {};
+    G.forEach((g) => { COL[g.name] = g.color; });
+    const W = ['2026-08-30', '2026-09-06', '2026-09-13', '2026-09-20', '2026-09-27', '2026-10-04', '2026-10-11', '2026-10-18'];
+    const D = ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18', '2026-10-19'];
+    const M = [
+      { key: 'cmj', name: 'CMJ 反向跳', cat: '跳跃测试', unit: 'cm', dec: 1, dates: W, vals: [34.8, 35.2, 34.5, 36.0, 36.4, 36.1, 37.0, 37.1] },
+      { key: 'sj', name: 'SJ 蹲跳', cat: '跳跃测试', unit: 'cm', dec: 1, dates: W, vals: [31.9, 32.0, 31.6, 32.8, 33.0, 32.9, 33.4, 33.6] },
+      { key: 'dj', name: 'DJ 跳深 · RSI', cat: '跳跃测试', unit: '', dec: 2, dates: W, vals: [1.62, 1.66, 1.60, 1.71, 1.75, 1.72, 1.80, 1.84] },
+      { key: 'pogo', name: 'Pogo 连跳 · RSI', cat: '跳跃测试', unit: '', dec: 2, dates: W, vals: [1.02, 1.05, 1.04, 1.09, 1.12, 1.10, 1.15, 1.17] },
+      { key: 's10', name: '10 m', cat: '速度训练', unit: 's', dec: 2, lower: true, dates: W, vals: [1.92, 1.90, 1.89, 1.88, 1.86, 1.87, 1.85, 1.84] },
+      { key: 's30', name: '30 m', cat: '速度训练', unit: 's', dec: 2, lower: true, dates: W, vals: [4.45, 4.43, 4.40, 4.39, 4.36, 4.35, 4.33, 4.31] },
+      { key: 's50', name: '50 m', cat: '速度训练', unit: 's', dec: 2, lower: true, dates: W, vals: [6.80, 6.78, 6.74, 6.73, 6.70, 6.68, 6.65, 6.62] },
+      { key: 's100', name: '100 m', cat: '速度训练', unit: 's', dec: 2, lower: true, dates: ['2026-09-13', '2026-09-27', '2026-10-11'], vals: [13.42, 13.31, 13.20] },
+      { key: 'squat', name: '深蹲 @80 kg', cat: 'VBT 训练', unit: 'm/s', dec: 2, dates: W, vals: [0.55, 0.56, 0.57, 0.57, 0.59, 0.60, 0.61, 0.62] },
+      { key: 'clean', name: '高翻 · 悬垂', cat: 'VBT 训练', unit: 'm/s', dec: 2, dates: W, vals: [1.45, 1.47, 1.46, 1.50, 1.51, 1.53, 1.54, 1.55] },
+      { key: 'pull', name: '高拉 · 地面', cat: 'VBT 训练', unit: 'm/s', dec: 2, dates: W, vals: [1.58, 1.60, 1.61, 1.63, 1.62, 1.65, 1.66, 1.68] },
+      { key: 'jsq', name: '深蹲跳 @20 kg', cat: 'VBT 训练', unit: 'm/s', dec: 2, dates: W, vals: [1.28, 1.30, 1.29, 1.33, 1.34, 1.33, 1.36, 1.38] },
+      { key: 'ankleL', name: '踝背屈 · 左', cat: '灵活度', unit: 'cm', dec: 1, dates: W, vals: [10.2, 10.5, 10.6, 10.9, 11.0, 11.2, 11.3, 11.5] },
+      { key: 'ankleR', name: '踝背屈 · 右', cat: '灵活度', unit: 'cm', dec: 1, dates: W, vals: [8.6, 8.8, 8.9, 9.1, 9.3, 9.4, 9.6, 9.8] },
+      { key: 'hipL', name: '髋内旋 · 左', cat: '灵活度', unit: '°', dec: 0, dates: W, vals: [33, 34, 34, 35, 36, 36, 37, 38] },
+      { key: 'hipR', name: '髋内旋 · 右', cat: '灵活度', unit: '°', dec: 0, dates: W, vals: [30, 30, 31, 31, 32, 32, 33, 33] },
+      { key: 'hrv', name: 'HRV', cat: '恢复', unit: 'ms', dec: 0, dates: D, vals: [61, 64, 59, 66, 70, 65, 68, 68] },
+      { key: 'rhr', name: '静息心率', cat: '恢复', unit: 'bpm', dec: 0, lower: true, dates: D, vals: [55, 54, 56, 53, 52, 54, 53, 52] },
+      { key: 'sleep', name: '睡眠', cat: '恢复', unit: 'h', dec: 1, dates: D, vals: [6.8, 7.2, 6.5, 7.6, 7.9, 7.0, 7.3, 7.4] }
+    ];
+    const fmt = (m, v) => v.toFixed(m.dec);
+    const delta = (m, a, b) => {
+      const c = b - a;
+      const good = m.lower ? c < 0 : c > 0;
+      return {
+        text: (c >= 0 ? '+' : '−') + Math.abs(c).toFixed(m.dec),
+        color: Math.abs(c) < 1e-9 ? '#9AA1AD' : (good ? '#6EE7B7' : '#FF9F43')
+      };
+    };
+    const coords = (vals, x0, x1, y0, y1) => {
+      const mn = Math.min.apply(null, vals), mx = Math.max.apply(null, vals);
+      const span = mx - mn || 1;
+      return vals.map((v, i) => ({
+        x: x0 + i * (x1 - x0) / (vals.length - 1),
+        y: y0 + (1 - (v - mn) / span) * (y1 - y0)
+      }));
+    };
+    const ptsStr = (cs) => cs.map((c) => c.x.toFixed(1) + ',' + c.y.toFixed(1)).join(' ');
+    const last = (m) => m.vals[m.vals.length - 1];
+
+    const cmj = M[0];
+    const fc = coords(cmj.vals, 6, 312, 8, 82);
+    const fch = delta(cmj, cmj.vals[0], last(cmj));
+    const f = {
+      latest: fmt(cmj, last(cmj)),
+      pts: ptsStr(fc),
+      lx: fc[fc.length - 1].x.toFixed(1),
+      ly: fc[fc.length - 1].y.toFixed(1),
+      aria: 'CMJ 趋势，从 ' + fmt(cmj, cmj.vals[0]) + ' 到 ' + fmt(cmj, last(cmj)) + ' 厘米',
+      changeText: '近 8 次 ' + fch.text + ' cm',
+      changeColor: fch.color
+    };
+
+    const cat = this.state.cat;
+    const dm = M.find((m) => m.key === this.state.open);
+    let d = { name: '', cat: '', count: 0, latest: '', unit: '', color: '#D4FF3F', changeText: '', changeColor: '#9AA1AD', pts: '', points: [], rows: [] };
+    if (dm) {
+      const cs = coords(dm.vals, 25, 325, 42, 146);
+      const ch = delta(dm, dm.vals[0], last(dm));
+      d = {
+        name: dm.name,
+        cat: dm.cat,
+        count: dm.vals.length,
+        latest: fmt(dm, last(dm)),
+        unit: dm.unit,
+        color: COL[dm.cat],
+        changeText: '首次以来 ' + ch.text + (dm.unit ? ' ' + dm.unit : ''),
+        changeColor: ch.color,
+        pts: ptsStr(cs),
+        points: cs.map((c, i) => ({
+          v: fmt(dm, dm.vals[i]),
+          date: dm.dates[i].slice(5),
+          vx: Math.round(c.x - 20),
+          vy: Math.round(c.y - 22),
+          dx: Math.round(c.x - 4.5),
+          dy: Math.round(c.y - 4.5)
+        })),
+        rows: dm.vals.map((v, i) => {
+          const dl = i === 0 ? { text: '—', color: '#9AA1AD' } : delta(dm, dm.vals[i - 1], v);
+          return { date: dm.dates[i], v: fmt(dm, v) + (dm.unit ? ' ' + dm.unit : ''), delta: dl.text, color: dl.color };
+        }).reverse()
+      };
+    }
+    return {
+      isHome: !dm && !cat,
+      isCat: !dm && !!cat,
+      isDetail: !!dm,
+      f,
+      openFeatured: () => this.setState({ open: 'cmj', cat: null }),
+      groups: G.map((g) => ({
+        name: g.name, color: g.color, tile: g.tile, icon: g.icon,
+        count: M.filter((m) => m.cat === g.name).length,
+        pick: () => this.setState({ cat: g.name })
+      })),
+      catName: cat || '',
+      items: M.filter((m) => m.cat === cat).map((m) => ({
+        name: m.name,
+        latest: fmt(m, last(m)),
+        unit: m.unit,
+        color: COL[m.cat],
+        open: () => this.setState({ open: m.key })
+      })),
+      d,
+      toHome: () => this.setState({ cat: null }),
+      back: () => this.setState({ open: null })
+    };
+  }
+}
+</script>
+</body>
+</html>

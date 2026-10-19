@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>恢复</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&amp;family=Noto+Sans+SC:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0F1115}
+a{color:#6EE7B7}a:hover{color:#A7F3D0}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0F1115; color: #F2F3F5; font-family: 'Noto Sans SC', system-ui, sans-serif; display: flex; flex-direction: column; overflow: hidden">
+  <div style="height: 64px; padding: 0 12px; display: flex; align-items: center; gap: 4px">
+    <a href="Main.dc.html" aria-label="返回首页" style="width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; color: #F2F3F5">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"></path></svg>
+    </a>
+    <span style="font-size: 20px; font-weight: 700">恢复</span>
+  </div>
+
+  <div style="flex: 1; padding: 4px 20px 0; display: flex; flex-direction: column; gap: 12px">
+    <div style="background: #191C22; border-radius: 18px; padding: 14px 16px; display: flex; align-items: center; gap: 12px">
+      <span style="width: 40px; height: 40px; border-radius: 12px; background: #3A1A22; color: #FF6B81; display: flex; align-items: center; justify-content: center; flex-shrink: 0">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.8 5.6a5 5 0 0 0-7.1 0L12 7.3l-1.7-1.7a5 5 0 0 0-7.1 7.1L12 21.5l8.8-8.8a5 5 0 0 0 0-7.1z"></path></svg>
+      </span>
+      <span style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 14px; font-weight: 700">Apple 健康</span>
+        <span style="font-size: 11px; color: #9AA1AD">{{syncText}}</span>
+      </span>
+      <button onClick="{{sync}}" style="height: 36px; padding: 0 14px; border-radius: 12px; border: 0; background: {{syncBg}}; color: #0F1115; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer">{{syncLabel}}</button>
+    </div>
+
+    <sc-if value="{{synced}}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column; gap: 12px">
+        <div style="background: #191C22; border-radius: 20px; padding: 18px 16px; display: flex; flex-direction: column; gap: 8px">
+          <span style="font-size: 12px; color: #9AA1AD">今日恢复状态</span>
+          <div style="display: flex; align-items: baseline; gap: 10px">
+            <span style="font-size: 30px; font-weight: 700; color: #6EE7B7">良好</span>
+            <span style="font-size: 13px; color: #D5D8DE">适合高强度训练</span>
+          </div>
+          <span style="font-size: 12px; line-height: 1.6; color: #9AA1AD">HRV 在你 7 天基线范围内，静息心率略低于平时。</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px">
+          <sc-for list="{{metrics}}" as="m" hint-placeholder-count="4">
+            <div style="background: #191C22; border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 4px">
+              <span style="font-size: 12px; color: #9AA1AD">{{m.name}}</span>
+              <span style="font-family: 'Barlow Condensed', sans-serif; font-size: 30px; font-weight: 700">{{m.v}} <span style="font-size: 14px; color: #9AA1AD">{{m.unit}}</span></span>
+              <span style="font-size: 11px; color: {{m.cmpColor}}">{{m.cmp}}</span>
+            </div>
+          </sc-for>
+        </div>
+
+        <a href="History.dc.html" style="font-size: 13px; text-decoration: none; text-align: center; padding: 10px 0">在「历史」查看 HRV 与心率趋势</a>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { synced: true };
+  }
+  renderVals() {
+    const s = this.state.synced;
+    return {
+      synced: s,
+      syncText: s ? '已同步 · 今天 07:12' : '读取 HRV、静息心率、睡眠',
+      syncLabel: s ? '刷新' : '连接',
+      syncBg: s ? '#9AA1AD' : '#6EE7B7',
+      sync: () => this.setState({ synced: true }),
+      metrics: [
+        { name: 'HRV (SDNN)', v: 68, unit: 'ms', cmp: '基线 62–74', cmpColor: '#6EE7B7' },
+        { name: '静息心率', v: 52, unit: 'bpm', cmp: '比 7 天平均 −2', cmpColor: '#6EE7B7' },
+        { name: '睡眠', v: '7.4', unit: 'h', cmp: '深睡 1.3 h', cmpColor: '#9AA1AD' },
+        { name: '呼吸频率', v: '14.2', unit: '次/分', cmp: '正常', cmpColor: '#9AA1AD' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
