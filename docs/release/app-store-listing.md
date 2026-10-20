@@ -77,6 +77,8 @@ iPhone 6.9 英寸（1320×2868 或 1290×2796）至少 1 张、最多 10 张，�
 
 依据：没有服务器和账号，所有数据只存在手机本地。Expo 更新服务下载新代码时只用到版本号等技术信息，不关联用户，不属于 Apple 定义的「收集」。以后如果加了云同步或统计工具，要回来改这一项。
 
+接入 Apple 健康（恢复模块）后仍然选「不收集数据」：健康数据只在手机上读取和计算，不离开设备，按 Apple 的定义不算收集。⏳
+
 ## 审核信息
 
 | 项目 | 内容 |
@@ -91,6 +93,15 @@ No account is needed. To try it: Jump Test > CMJ > import any slow-motion
 video (or record in-app), then step frame by frame to mark take-off and
 landing; the result screen shows jump height and an assessment against
 the athlete's own history. All data stays on the device.
+```
+
+接入 Apple 健康后，在备注末尾加一句 ⏳：
+
+```
+HealthKit access is read-only (HRV, resting heart rate, sleep, respiratory
+rate). It is used only to show today's recovery status and adjust training
+volume, is processed on the device, and is never shared or written back.
+Without HealthKit the recovery screen accepts manual entry.
 ```
 
 ## 出口合规
