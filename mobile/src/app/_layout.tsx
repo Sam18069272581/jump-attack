@@ -33,6 +33,11 @@ export default function RootLayout() {
             }}
           >
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="conditioning/index" options={{ title: '体能耐力' }} />
+            <Stack.Screen name="conditioning/yoyo" options={{ title: 'Yo-Yo IR1' }} />
+            <Stack.Screen name="conditioning/cooper" options={{ title: 'Cooper 12 分钟跑' }} />
+            <Stack.Screen name="conditioning/rsa" options={{ title: 'RSA 反复冲刺' }} />
+            <Stack.Screen name="conditioning/result" options={{ title: '测试结果', headerBackVisible: false, gestureEnabled: false }} />
             <Stack.Screen name="jumps/index" options={{ title: '跳跃测试' }} />
             <Stack.Screen name="jumps/capture" options={{ headerShown: false }} />
             <Stack.Screen name="jumps/mark" options={{ title: '逐帧标记' }} />

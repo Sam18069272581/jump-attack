@@ -1,5 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import type { MetricDef } from '@/domain/metrics';
+
 export type Athlete = {
   id: number;
   name: string;
@@ -93,14 +95,18 @@ export async function listTrials(db: SQLiteDatabase, sessionId: string): Promise
   return db.getAllAsync<Trial>('SELECT * FROM trial WHERE session_id = ? ORDER BY id', sessionId);
 }
 
-/** One row per session, oldest first, valued by its best attempt (max, or min when lower is better). */
+/**
+ * One row per session, oldest first, valued by its best attempt (max, or min when lower is better),
+ * or by the mean of its attempts for tests scored as a set, like repeated sprints.
+ */
 export async function listSessionResults(
   db: SQLiteDatabase,
   athleteId: number,
   metricCode: string,
   lowerIsBetter = false,
+  aggregate: MetricDef['aggregate'] = 'best',
 ): Promise<SessionResult[]> {
-  const agg = lowerIsBetter ? 'MIN' : 'MAX';
+  const agg = aggregate === 'mean' ? 'AVG' : lowerIsBetter ? 'MIN' : 'MAX';
   return db.getAllAsync<SessionResult>(
     `SELECT s.id AS session_id, s.metric_code, s.started_at, ${agg}(t.value) AS best, COUNT(t.id) AS trials
      FROM test_session s JOIN trial t ON t.session_id = s.id
@@ -110,6 +116,34 @@ export async function listSessionResults(
     athleteId,
     metricCode,
   );
+}
+
+export function listMetricResults(db: SQLiteDatabase, athleteId: number, def: MetricDef): Promise<SessionResult[]> {
+  return listSessionResults(db, athleteId, def.code, def.lowerIsBetter, def.aggregate);
+}
+
+/** Every attempt of every session of a metric, in the order they were recorded, keyed by session. */
+export async function listSessionValues(db: SQLiteDatabase, athleteId: number, metricCode: string): Promise<Record<string, number[]>> {
+  const rows = await db.getAllAsync<{ session_id: string; value: number }>(
+    `SELECT t.session_id, t.value FROM trial t JOIN test_session s ON s.id = t.session_id
+     WHERE s.athlete_id = ? AND s.metric_code = ?
+     ORDER BY t.id`,
+    athleteId,
+    metricCode,
+  );
+  const out: Record<string, number[]> = {};
+  for (const r of rows) (out[r.session_id] ??= []).push(r.value);
+  return out;
+}
+
+/** Saves a finished multi-attempt test (e.g. all sprints of a repeated-sprint set) in one transaction. */
+export async function saveSession(db: SQLiteDatabase, sessionId: string, athleteId: number, metricCode: string, values: number[]): Promise<void> {
+  await db.withTransactionAsync(async () => {
+    await ensureSession(db, sessionId, athleteId, metricCode);
+    for (const value of values) {
+      await addTrial(db, { session_id: sessionId, value, flight_ms: null, fps: null, takeoff_frame: null, landing_frame: null, video_uri: null });
+    }
+  });
 }
 
 /** Number of sessions per metric, for the history category list. */
