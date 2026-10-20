@@ -3,6 +3,7 @@ import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState, type ComponentType } from 'react';
 
+import { captureGuide } from '@/components/capture/guides';
 import SlowMoImport from '@/components/capture/SlowMoImport';
 import type { CaptureProps } from '@/components/capture/types';
 import { listTrials } from '@/db/repo';
@@ -16,7 +17,8 @@ const NativeCapture: ComponentType<CaptureProps> | null = isExpoGo
     require('@/components/capture/NativeCapture').default;
 
 export default function Capture() {
-  const { metric, session } = useLocalSearchParams<{ metric: string; session: string }>();
+  // Everything besides the metric and session (`from`, a VBT set's load and bar travel) is passed on to marking and the result.
+  const { metric, session, ...extra } = useLocalSearchParams<{ metric: string; session: string; from?: string; load?: string; reps?: string; rom?: string }>();
   const def = getMetric(metric);
   const db = useSQLiteContext();
   const [attempt, setAttempt] = useState(1);
@@ -27,6 +29,8 @@ export default function Capture() {
       listTrials(db, session).then((t) => setAttempt(t.length + 1));
     }, [db, session]),
   );
+
+  const pass = { metric, session, ...extra };
 
   async function importVideo() {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -39,11 +43,22 @@ export default function Capture() {
   }
 
   function goMark(uri: string, recordedFps: number) {
-    router.push({ pathname: '/jumps/mark', params: { metric, session, uri, fps: String(recordedFps) } });
+    router.push({ pathname: '/measure/mark', params: { ...pass, uri, fps: String(recordedFps) } });
   }
 
-  const close = () => (router.canGoBack() ? router.back() : router.replace('/jumps'));
+  const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
+  const manual = def?.capture.includes('manual') && extra.from !== 'vbt' ? () => router.push({ pathname: '/measure/entry', params: pass }) : undefined;
 
   const Screen = NativeCapture ?? SlowMoImport;
-  return <Screen title={`录制 · ${def?.name ?? metric}`} subtitle={`第 ${attempt} 次`} onClose={close} onImport={importVideo} onRecorded={goMark} />;
+  return (
+    <Screen
+      title={`录制 · ${def?.name ?? metric}`}
+      subtitle={`第 ${attempt} 次`}
+      guide={captureGuide(def?.category ?? 'jump')}
+      onClose={close}
+      onImport={importVideo}
+      onManual={manual}
+      onRecorded={goMark}
+    />
+  );
 }

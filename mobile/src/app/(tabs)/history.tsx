@@ -7,12 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { TrendChart } from '@/components/TrendChart';
 import { Empty } from '@/components/ui';
-import { listSessionResults, type SessionResult } from '@/db/repo';
-import { JUMP_TESTS, formatValue } from '@/domain/metrics';
+import { listMetricResults, sessionCounts, type SessionResult } from '@/db/repo';
+import { CATEGORIES, METRICS, formatValue, getMetric, metricColor, resultNote, type MetricDef } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
-type Row = { code: string; name: string; unit: string; color: string; results: SessionResult[] };
+type Row = { def: MetricDef; color: string; results: SessionResult[] };
+
 
 export default function History() {
   const db = useSQLiteContext();
@@ -22,11 +23,21 @@ export default function History() {
   useFocusEffect(
     useCallback(() => {
       if (!current) return;
-      Promise.all(JUMP_TESTS.map(async (m) => ({ code: m.code, name: m.name, unit: m.unit, color: m.color, results: await listSessionResults(db, current.id, m.code, m.lowerIsBetter) }))).then(setRows);
+      (async () => {
+        // Only metrics with data, in registry order; custom sprint distances aren't in the registry, so they come last.
+        const counts = await sessionCounts(db, current.id);
+        const known = METRICS.filter((m) => counts[m.code]);
+        const extra = Object.keys(counts)
+          .filter((c) => !known.some((m) => m.code === c))
+          .map(getMetric)
+          .filter((m): m is MetricDef => m != null);
+        const defs = [...known, ...extra];
+        setRows(await Promise.all(defs.map(async (m) => ({ def: m, color: metricColor(m), results: await listMetricResults(db, current.id, m) }))));
+      })();
     }, [db, current]),
   );
 
-  const featured = rows.find((r) => r.code === 'cmj');
+  const featured = rows.find((r) => r.def.code === 'cmj');
   const recentCmj = featured?.results.slice(-8) ?? [];
   const latest = recentCmj.at(-1);
   const change = recentCmj.length > 1 ? latest!.best - recentCmj[0].best : null;
@@ -54,31 +65,37 @@ export default function History() {
             <TrendChart points={recentCmj.map((r) => ({ label: '', value: r.best, display: '' }))} height={90} showLabels={false} />
             <Text style={text.caption}>点击查看每次数据</Text>
           </Pressable>
-        ) : (
-          <Empty title="还没有记录" hint="去首页做一次跳跃测试，成绩会出现在这里。" />
-        )}
+        ) : withData.length === 0 ? (
+          <Empty title="还没有记录" hint="去首页做一次测试，成绩会出现在这里。" />
+        ) : null}
 
-        {withData.length > 0 && (
-          <View style={{ gap: 10 }}>
-            <Text style={text.section}>跳跃测试</Text>
-            {withData.map((r) => {
-              const last = r.results.at(-1)!;
-              const def = JUMP_TESTS.find((m) => m.code === r.code)!;
-              return (
-                <Pressable key={r.code} accessibilityRole="button" onPress={() => router.push({ pathname: '/history/[metric]', params: { metric: r.code } })} style={styles.row}>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={styles.rowName}>{r.name}</Text>
-                    <Text style={text.caption}>{r.results.length} 次测试</Text>
-                  </View>
-                  <Text style={[styles.rowValue, { color: r.color }]}>
-                    {formatValue(def, last.best)} <Text style={styles.rowUnit}>{r.unit}</Text>
-                  </Text>
-                  <Icon name="chevronRight" size={18} color={colors.textMuted} />
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
+        {CATEGORIES.map((g) => {
+          const groupRows = withData.filter((r) => r.def.category === g.key);
+          if (groupRows.length === 0) return null;
+          return (
+            <View key={g.key} style={{ gap: 10 }}>
+              <Text style={text.section}>{g.name}</Text>
+              {groupRows.map(({ def, color, results }) => {
+                const last = results.at(-1)!;
+                const note = def.estimate ? resultNote(def, last.best) : def.aggregate === 'mean' ? '6 趟平均' : null;
+                return (
+                  <Pressable key={def.code} accessibilityRole="button" onPress={() => router.push({ pathname: '/history/[metric]', params: { metric: def.code } })} style={styles.row}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={styles.rowName}>{def.name}</Text>
+                      <Text style={text.caption}>
+                        {results.length} 次测试{note ? ` · ${note}` : ''}
+                      </Text>
+                    </View>
+                    <Text style={[styles.rowValue, { color }]}>
+                      {formatValue(def, last.best)} <Text style={styles.rowUnit}>{def.unit}</Text>
+                    </Text>
+                    <Icon name="chevronRight" size={18} color={colors.textMuted} />
+                  </Pressable>
+                );
+              })}
+            </View>
+          );
+        })}
       </ScrollView>
     </SafeAreaView>
   );

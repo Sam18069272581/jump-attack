@@ -8,9 +8,11 @@ import { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Button, Chip } from '@/components/ui';
+import { Button, Chip, Empty } from '@/components/ui';
 import { addTrial, ensureSession } from '@/db/repo';
-import { frameCount, frameToSeconds, markingRates, measureFromMarks, type MarkProblem } from '@/domain/jump';
+import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
+import { markProfile } from '@/domain/marking';
+import { getMetric } from '@/domain/metrics';
 import { persistVideo } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
@@ -22,17 +24,12 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
   player.currentTime = frameToSeconds(frame, fps);
 }
 
-const PROBLEM_TEXT: Record<MarkProblem, string> = {
-  missing: '标记起跳帧和落地帧后显示结果',
-  order: '落地帧要在起跳帧之后',
-  'too-short': '滞空不到 150 ms，检查是否标错帧',
-  'too-long': '滞空超过 1.2 s：检查是否标错帧；慢动作视频要把拍摄帧率选成 240',
-};
-
 export default function Mark() {
-  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string }>();
+  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; reps?: string; rom?: string }>();
   const db = useSQLiteContext();
   const { current } = useAthlete();
+  const def = getMetric(params.metric);
+  const profile = def ? markProfile(def, { romCm: Number(params.rom) || undefined }) : null;
   const player = useVideoPlayer(params.uri, (p) => {
     p.muted = true;
     p.pause();
@@ -42,8 +39,9 @@ export default function Mark() {
   const [detectedFps, setDetectedFps] = useState<number | null>(null);
   const [captureOverride, setCaptureOverride] = useState<number | null>(null);
   const [frame, setFrame] = useState(0);
-  const [takeoff, setTakeoff] = useState<number | null>(null);
-  const [landing, setLanding] = useState<number | null>(null);
+  // The two marks: take-off/landing for a jump, start/finish for a sprint.
+  const [first, setFirst] = useState<number | null>(null);
+  const [second, setSecond] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEventListener(player, 'sourceLoad', ({ duration: d, availableVideoTracks }) => {
@@ -71,17 +69,18 @@ export default function Mark() {
     if (detectedFps != null) return;
     // Without a detected file rate the choice also sets the frame step: keep the same moment.
     show(Math.round((frame / fileFps) * next), next);
-    setTakeoff(null);
-    setLanding(null);
+    setFirst(null);
+    setSecond(null);
   }
 
-  function mark(kind: 'takeoff' | 'landing') {
+  function mark(which: 'first' | 'second') {
     Haptics.selectionAsync();
-    if (kind === 'takeoff') setTakeoff(frame);
-    else setLanding(frame);
+    if (which === 'first') setFirst(frame);
+    else setSecond(frame);
   }
 
-  const result = measureFromMarks({ takeoffFrame: takeoff, landingFrame: landing, fps });
+  if (!profile) return <Empty title="这个项目不能用录像测量" />;
+  const result = profile.measure(first, second, fps);
 
   async function save() {
     if (!result.ok || !current) return;
@@ -91,22 +90,28 @@ export default function Mark() {
       await ensureSession(db, params.session, current.id, params.metric);
       await addTrial(db, {
         session_id: params.session,
-        value: Math.round(result.value.heightCm * 10) / 10,
-        flight_ms: result.value.flightS * 1000,
+        value: result.value,
+        flight_ms: result.elapsedS * 1000,
         fps,
-        takeoff_frame: takeoff,
-        landing_frame: landing,
+        takeoff_frame: first,
+        landing_frame: second,
         video_uri: videoUri,
+        ...(params.from === 'vbt'
+          ? { load_kg: Number(params.load) || 0, detail: { source: 'video', rom_cm: Number(params.rom), ...(Number(params.reps) ? { reps: Number(params.reps) } : {}) } }
+          : {}),
       });
-      router.replace({ pathname: '/jumps/result', params: { metric: params.metric, session: params.session } });
+      // A VBT set goes straight back to the set log (capture and marking are the two screens above it).
+      if (params.from === 'vbt') return router.dismiss(2);
+      router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
     } catch (e) {
       Alert.alert('保存失败', String(e));
       setSaving(false);
     }
   }
 
-  const phase = takeoff == null || frame < takeoff ? '准备 / 下蹲' : landing == null || frame < landing ? '腾空' : '落地';
-  const phaseColor = phase === '腾空' ? colors.accent : phase === '落地' ? colors.warn : colors.textMuted;
+  const phaseIndex = first == null || frame < first ? 0 : second == null || frame < second ? 1 : 2;
+  const phase = profile.phases[phaseIndex];
+  const phaseColor = [colors.textMuted, colors.accent, colors.warn][phaseIndex];
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -159,24 +164,22 @@ export default function Mark() {
         </View>
 
         <View style={styles.markRow}>
-          <MarkButton title="起跳帧" hint="脚尖刚离地" value={takeoff} color={colors.blue} onMark={() => mark('takeoff')} onJump={() => takeoff != null && go(takeoff)} />
-          <MarkButton title="落地帧" hint="脚尖刚触地" value={landing} color={colors.warn} onMark={() => mark('landing')} onJump={() => landing != null && go(landing)} />
+          <MarkButton {...profile.first} value={first} color={colors.blue} onMark={() => mark('first')} onJump={() => first != null && go(first)} />
+          <MarkButton {...profile.second} value={second} color={colors.warn} onMark={() => mark('second')} onJump={() => second != null && go(second)} />
         </View>
 
         <View style={styles.result}>
           {result.ok ? (
-            <>
-              <View style={styles.resultCell}>
-                <Text style={styles.label}>滞空</Text>
-                <Text style={styles.resultValue}>{Math.round(result.value.flightS * 1000)} <Text style={styles.unit}>ms</Text></Text>
+            result.cells.map((c) => (
+              <View key={c.label} style={styles.resultCell}>
+                <Text style={styles.label}>{c.label}</Text>
+                <Text style={[styles.resultValue, c.main && { color: colors.accent }]}>
+                  {c.value} <Text style={styles.unit}>{c.unit}</Text>
+                </Text>
               </View>
-              <View style={styles.resultCell}>
-                <Text style={styles.label}>跳高</Text>
-                <Text style={[styles.resultValue, { color: colors.accent }]}>{result.value.heightCm.toFixed(1)} <Text style={styles.unit}>cm</Text></Text>
-              </View>
-            </>
+            ))
           ) : (
-            <Text style={styles.problem}>{PROBLEM_TEXT[result.problem]}</Text>
+            <Text style={styles.problem}>{result.message}</Text>
           )}
         </View>
       </ScrollView>

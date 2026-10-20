@@ -5,9 +5,10 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TrendChart } from '@/components/TrendChart';
 import { Empty } from '@/components/ui';
-import { listSessionResults, type SessionResult } from '@/db/repo';
+import { listMetricResults, listSessionValues, type SessionResult } from '@/db/repo';
+import { fastestSetLoads, listVbtSets } from '@/db/vbt';
 import { judgeChange } from '@/domain/assess';
-import { JUMP_TESTS, formatValue, getMetric } from '@/domain/metrics';
+import { changeTone, formatValue, getMetric, metricColor, resultNote } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts } from '@/theme';
 
@@ -24,22 +25,30 @@ function fullDate(iso: string) {
 export default function MetricHistory() {
   const { metric } = useLocalSearchParams<{ metric: string }>();
   const def = getMetric(metric);
-  const color = JUMP_TESTS.find((m) => m.code === metric)?.color ?? colors.accent;
+  const color = def ? metricColor(def) : colors.accent;
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const [results, setResults] = useState<SessionResult[]>([]);
+  // Each session's attempts, needed only for tests scored as a set (repeated sprints).
+  const [attempts, setAttempts] = useState<Record<string, number[]>>({});
+  // For VBT lifts, the load of each session's fastest set: velocities only compare at the same load.
+  const [loads, setLoads] = useState<Record<string, number>>({});
 
   useFocusEffect(
     useCallback(() => {
-      if (current && def) listSessionResults(db, current.id, def.code, def.lowerIsBetter).then(setResults);
+      if (!current || !def) return;
+      listMetricResults(db, current.id, def).then(setResults);
+      if (def.aggregate === 'mean') listSessionValues(db, current.id, def.code).then(setAttempts);
+      if (def.category === 'vbt') listVbtSets(db, current.id, def.code).then((sets) => setLoads(fastestSetLoads(sets)));
     }, [db, current, def]),
   );
 
   if (!def) return <Empty title="找不到这个指标" />;
+  const note = (r: SessionResult) => resultNote(def, r.best, attempts[r.session_id]) ?? (loads[r.session_id] != null ? `@ ${loads[r.session_id]} kg` : null);
 
   const latest = results.at(-1);
   const sinceFirst = results.length > 1 ? latest!.best - results[0].best : null;
-  const goodDirection = (d: number) => (def.lowerIsBetter ? d < 0 : d > 0);
+  const tone = (d: number) => ({ good: colors.good, bad: colors.warn, flat: colors.textMuted })[changeTone(def, d)];
   const verdict = latest ? judgeChange(results.slice(0, -1).map((r) => r.best), latest.best, def.lowerIsBetter) : null;
   const recent = results.slice(-12);
 
@@ -56,12 +65,13 @@ export default function MetricHistory() {
             <Text style={[styles.big, { color }]}>{formatValue(def, latest.best)}</Text>
             <Text style={styles.unit}>{def.unit}</Text>
             {sinceFirst != null && (
-              <Text style={[styles.change, { color: Math.abs(sinceFirst) < 1e-9 ? colors.textMuted : goodDirection(sinceFirst) ? colors.good : colors.warn }]}>
+              <Text style={[styles.change, { color: tone(sinceFirst) }]}>
                 首次以来 {sinceFirst >= 0 ? '+' : '−'}
                 {Math.abs(sinceFirst).toFixed(def.decimals)} {def.unit}
               </Text>
             )}
           </View>
+          {note(latest) && <Text style={styles.note}>{note(latest)}</Text>}
 
           <TrendChart color={color} points={recent.map((r) => ({ label: shortDate(r.started_at), value: r.best, display: formatValue(def, r.best) }))} />
 
@@ -76,13 +86,17 @@ export default function MetricHistory() {
               .reverse()
               .map(({ r, prev }) => {
                 const d = prev ? r.best - prev.best : null;
+                const rowNote = note(r);
                 return (
                   <View key={r.session_id} style={styles.tableRow}>
                     <Text style={styles.dateCell}>{fullDate(r.started_at)}</Text>
-                    <Text style={[styles.valueCell, styles.right]}>
-                      {formatValue(def, r.best)} {def.unit}
-                    </Text>
-                    <Text style={[styles.deltaCell, styles.right, { color: d == null || Math.abs(d) < 1e-9 ? colors.textMuted : goodDirection(d) ? colors.good : colors.warn }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.valueCell, styles.right]}>
+                        {formatValue(def, r.best)} {def.unit}
+                      </Text>
+                      {rowNote && <Text style={[styles.rowNote, styles.right]}>{rowNote}</Text>}
+                    </View>
+                    <Text style={[styles.deltaCell, styles.right, { color: d == null ? colors.textMuted : tone(d) }]}>
                       {d == null ? '—' : `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(def.decimals)}`}
                     </Text>
                   </View>
@@ -104,6 +118,8 @@ const styles = StyleSheet.create({
   big: { fontFamily: fonts.numericBold, fontSize: 56, lineHeight: 60 },
   unit: { color: colors.textMuted, fontSize: 15 },
   change: { marginLeft: 'auto', fontSize: 12 },
+  note: { color: colors.textSoft, fontSize: 13, marginTop: -6 },
+  rowNote: { color: colors.textMuted, fontSize: 11 },
   tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: colors.divider },
   tableHead: { paddingVertical: 8 },
   headCell: { flex: 1, color: colors.textMuted, fontSize: 12 },
