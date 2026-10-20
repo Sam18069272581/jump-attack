@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- App icon: two rising chevrons above a ground bar. PNGs in mobile/assets are rendered from this. -->
+  <defs>
+    <radialGradient id="g" cx="50%" cy="38%" r="70%">
+      <stop offset="0" stop-color="#1F242C"/>
+      <stop offset="1" stop-color="#0F1115"/>
+    </radialGradient>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#g)"/>
+  <g transform="translate(0 -31)">
+    <polyline points="300,500 512,288 724,500" fill="none" stroke="#D4FF3F" stroke-width="112" stroke-linecap="round" stroke-linejoin="round"/>
+    <polyline points="348,664 512,500 676,664" fill="none" stroke="#D4FF3F" stroke-opacity="0.42" stroke-width="92" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="300" y="742" width="424" height="56" rx="28" fill="#D4FF3F"/>
+  </g>
+</svg>

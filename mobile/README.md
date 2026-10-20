@@ -45,9 +45,11 @@ Expo Go 不带高帧率相机模块，所以先用 iPhone 自带相机的慢动�
 3. App 里：跳跃测试 → 选项目 → 从相册导入视频 → 逐帧标记起跳帧和落地帧。
 4. 如果逐帧页显示视频只有 30 fps，把「拍摄帧率」选成 240。慢动作导出后每一帧仍然是 1/240 秒，App 会按 240 计算。
 
-### 以后：在 App 里直接录 240 fps
+### 正式版：在 App 里直接录 240 fps
 
-需要装开发版 App（含 react-native-vision-camera），二选一：
+正式版（TestFlight / App Store）自带 App 内 240fps 录像，打包和上架步骤见 [docs/release](../docs/release/README.md)。
+
+开发时也可以装开发版 App（含 react-native-vision-camera），二选一：
 
 - **不用 Mac**：加入 Apple Developer Program（每年 99 美元），用 EAS 云端编译后装到手机上，之后用 `npm run start:dev` 连接：
 
