@@ -5,9 +5,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TrendChart } from '@/components/TrendChart';
 import { Empty } from '@/components/ui';
-import { listSessionResults, type SessionResult } from '@/db/repo';
+import { listMetricResults, listSessionValues, type SessionResult } from '@/db/repo';
 import { judgeChange } from '@/domain/assess';
-import { JUMP_TESTS, formatValue, getMetric } from '@/domain/metrics';
+import { CONDITIONING_TESTS, JUMP_TESTS, formatValue, getMetric, resultNote } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts } from '@/theme';
 
@@ -24,14 +24,18 @@ function fullDate(iso: string) {
 export default function MetricHistory() {
   const { metric } = useLocalSearchParams<{ metric: string }>();
   const def = getMetric(metric);
-  const color = JUMP_TESTS.find((m) => m.code === metric)?.color ?? colors.accent;
+  const color = [...JUMP_TESTS, ...CONDITIONING_TESTS].find((m) => m.code === metric)?.color ?? colors.accent;
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const [results, setResults] = useState<SessionResult[]>([]);
+  // Each session's attempts, needed only for tests scored as a set (repeated sprints).
+  const [attempts, setAttempts] = useState<Record<string, number[]>>({});
 
   useFocusEffect(
     useCallback(() => {
-      if (current && def) listSessionResults(db, current.id, def.code, def.lowerIsBetter).then(setResults);
+      if (!current || !def) return;
+      listMetricResults(db, current.id, def).then(setResults);
+      if (def.aggregate === 'mean') listSessionValues(db, current.id, def.code).then(setAttempts);
     }, [db, current, def]),
   );
 
@@ -62,6 +66,7 @@ export default function MetricHistory() {
               </Text>
             )}
           </View>
+          {resultNote(def, latest.best, attempts[latest.session_id]) && <Text style={styles.note}>{resultNote(def, latest.best, attempts[latest.session_id])}</Text>}
 
           <TrendChart color={color} points={recent.map((r) => ({ label: shortDate(r.started_at), value: r.best, display: formatValue(def, r.best) }))} />
 
@@ -76,12 +81,16 @@ export default function MetricHistory() {
               .reverse()
               .map(({ r, prev }) => {
                 const d = prev ? r.best - prev.best : null;
+                const note = resultNote(def, r.best, attempts[r.session_id]);
                 return (
                   <View key={r.session_id} style={styles.tableRow}>
                     <Text style={styles.dateCell}>{fullDate(r.started_at)}</Text>
-                    <Text style={[styles.valueCell, styles.right]}>
-                      {formatValue(def, r.best)} {def.unit}
-                    </Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.valueCell, styles.right]}>
+                        {formatValue(def, r.best)} {def.unit}
+                      </Text>
+                      {note && <Text style={[styles.rowNote, styles.right]}>{note}</Text>}
+                    </View>
                     <Text style={[styles.deltaCell, styles.right, { color: d == null || Math.abs(d) < 1e-9 ? colors.textMuted : goodDirection(d) ? colors.good : colors.warn }]}>
                       {d == null ? '—' : `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(def.decimals)}`}
                     </Text>
@@ -104,6 +113,8 @@ const styles = StyleSheet.create({
   big: { fontFamily: fonts.numericBold, fontSize: 56, lineHeight: 60 },
   unit: { color: colors.textMuted, fontSize: 15 },
   change: { marginLeft: 'auto', fontSize: 12 },
+  note: { color: colors.textSoft, fontSize: 13, marginTop: -6 },
+  rowNote: { color: colors.textMuted, fontSize: 11 },
   tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 11, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: colors.divider },
   tableHead: { paddingVertical: 8 },
   headCell: { flex: 1, color: colors.textMuted, fontSize: 12 },

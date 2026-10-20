@@ -1,5 +1,7 @@
 import { LATEST_VERSION, migrate } from '../migrations';
-import { addTrial, deleteTrial, ensureSession, listAthletes, listSessionResults, listTrials, sessionCounts } from '../repo';
+import { getMetric } from '@/domain/metrics';
+
+import { addTrial, deleteTrial, ensureSession, listAthletes, listMetricResults, listSessionResults, listSessionValues, listTrials, saveSession, sessionCounts } from '../repo';
 import { openMemoryDb } from '../testing/memoryDb';
 
 async function setup() {
@@ -57,5 +59,15 @@ describe('sessions and trials', () => {
     await ensureSession(db, 'empty', 1, 'cmj');
     expect(await sessionCounts(db, 1)).toEqual({});
     expect(await listSessionResults(db, 1, 'cmj')).toEqual([]);
+  });
+
+  it('scores repeated sprints by the mean of the set and keeps each sprint', async () => {
+    const db = await setup();
+    await saveSession(db, 'r1', 1, 'rsa', [7.0, 7.2, 7.4]);
+    const [r] = await listMetricResults(db, 1, getMetric('rsa')!);
+    expect(r.best).toBeCloseTo(7.2);
+    expect(r.trials).toBe(3);
+    expect(await listSessionValues(db, 1, 'rsa')).toEqual({ r1: [7.0, 7.2, 7.4] });
+    expect(await listSessionValues(db, 1, 'cmj')).toEqual({});
   });
 });
