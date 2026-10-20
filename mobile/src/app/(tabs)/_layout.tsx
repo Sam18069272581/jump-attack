@@ -16,6 +16,7 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: '首页', tabBarIcon: ({ color }) => <Icon name="home" color={color} /> }} />
+      <Tabs.Screen name="train" options={{ title: '训练', tabBarIcon: ({ color }) => <Icon name="plan" color={color} /> }} />
       <Tabs.Screen name="history" options={{ title: '历史', tabBarIcon: ({ color }) => <Icon name="trend" color={color} /> }} />
       <Tabs.Screen name="me" options={{ title: '我的', tabBarIcon: ({ color }) => <Icon name="user" color={color} /> }} />
     </Tabs>
