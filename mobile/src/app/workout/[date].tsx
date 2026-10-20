@@ -12,10 +12,10 @@ import { finishWorkout, getWorkout, lastLoads, listSets, logSet, unlogSet, type 
 import { shortDate } from '@/domain/dates';
 import { formatPrescription, formatRpe, isLoaded, planDay, summarizeWorkout, type LoggedSet, type Prescription } from '@/domain/plan';
 import { useAthlete } from '@/state/athlete';
-import { beginWorkout, loadTraining, sessionFor, type TrainingData } from '@/state/training';
+import { beginWorkout, loadSuggestions, loadTraining, sessionFor, type LoadSuggestion, type TrainingData } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
 
-type Loaded = { data: TrainingData; workout: Workout; sets: LoggedSet[]; loads: Record<string, number> } | 'none';
+type Loaded = { data: TrainingData; workout: Workout; sets: LoggedSet[]; loads: Record<string, number>; suggested: Record<string, LoadSuggestion> } | 'none';
 
 export default function WorkoutScreen() {
   const { date } = useLocalSearchParams<{ date: string }>();
@@ -30,8 +30,10 @@ export default function WorkoutScreen() {
     // The training tab normally starts the workout; starting here too covers opening it directly.
     const workout = data && ((await getWorkout(db, data.plan.id, date)) ?? (await beginWorkout(db, data, date)));
     if (!data || !workout) return setLoaded('none');
-    const [sets, loads] = await Promise.all([listSets(db, workout.id), lastLoads(db, current.id)]);
-    setLoaded({ data, workout, sets, loads });
+    const planned = planDay(data.template, data.plan, date);
+    const items = planned ? sessionFor(planned, workout, null).session.items : [];
+    const [sets, loads, suggested] = await Promise.all([listSets(db, workout.id), lastLoads(db, current.id), loadSuggestions(db, current.id, items, date)]);
+    setLoaded({ data, workout, sets, loads, suggested });
   }, [db, current, date]);
 
   useFocusEffect(
@@ -50,7 +52,7 @@ export default function WorkoutScreen() {
     );
   }
 
-  const { workout, sets, loads } = loaded;
+  const { workout, sets, loads, suggested } = loaded;
   const { session } = sessionFor(planned, workout, null);
   const summary = summarizeWorkout(session, sets);
   const done = workout.finishedAt != null;
@@ -100,7 +102,7 @@ export default function WorkoutScreen() {
           </Card>
         )}
 
-        <AdjustmentNote adjustments={workout.adjustments} dropPct={workout.cmjDrop} />
+        <AdjustmentNote adjustments={workout.adjustments} reason={workout.reason} dropPct={workout.cmjDrop} />
 
         {session.items.map((p) => (
           <Card key={p.code} style={{ gap: 8 }}>
@@ -109,10 +111,16 @@ export default function WorkoutScreen() {
               <Text style={styles.dose}>{formatPrescription(p)}</Text>
             </View>
             {p.cue ? <Text style={text.caption}>{p.cue}</Text> : null}
+            {suggested[p.code] && (
+              <Text style={styles.suggest}>
+                按 VBT 估算 1RM {Math.round(suggested[p.code].oneRm)} kg，{p.reps} 次 @ RPE {formatRpe(p.rpe ?? 8)} 建议 {suggested[p.code].kg} kg
+              </Text>
+            )}
             {Array.from({ length: p.sets }, (_, i) => {
               const n = i + 1;
               const entry = logged(p.code, n);
-              const prevKg = logged(p.code, n - 1)?.load_kg ?? loads[p.code] ?? null;
+              // This workout's previous set, then the VBT-based weight, then what was lifted last time.
+              const prevKg = logged(p.code, n - 1)?.load_kg ?? suggested[p.code]?.kg ?? loads[p.code] ?? null;
               return (
                 <SetRow
                   key={`${n}-${entry ? 'done' : 'open'}`}
@@ -224,6 +232,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   exHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
   dose: { color: colors.accent, fontFamily: fonts.numeric, fontSize: 16 },
+  suggest: { color: colors.warn, fontSize: 12 },
   setRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 8, borderRadius: radius.chip },
   setRowDone: { backgroundColor: colors.accentTile },
   setNo: { width: 18, color: colors.textMuted, fontFamily: fonts.numeric, fontSize: 16, textAlign: 'center' },

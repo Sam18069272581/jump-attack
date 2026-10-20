@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import type { MetricDef } from '@/domain/metrics';
+import { best, getMetric, type MetricDef } from '@/domain/metrics';
 
 export type Athlete = {
   id: number;
@@ -18,6 +18,10 @@ export type Trial = {
   takeoff_frame: number | null;
   landing_frame: number | null;
   video_uri: string | null;
+  /** Barbell load of a VBT set. */
+  load_kg: number | null;
+  /** Per-test extras, e.g. {source: 'health'} or {rom_cm: 55}. */
+  detail: Record<string, unknown> | null;
   created_at: string;
 };
 
@@ -68,19 +72,23 @@ export async function ensureSession(db: SQLiteDatabase, sessionId: string, athle
   );
 }
 
-export type NewTrial = Omit<Trial, 'id' | 'created_at'>;
+export type NewTrial = Omit<Trial, 'id' | 'created_at' | 'flight_ms' | 'fps' | 'takeoff_frame' | 'landing_frame' | 'video_uri' | 'load_kg' | 'detail'> &
+  Partial<Pick<Trial, 'flight_ms' | 'fps' | 'takeoff_frame' | 'landing_frame' | 'video_uri' | 'load_kg' | 'detail'>>;
 
+/** Video marks are stored as frames: take-off/landing for jumps, start/finish for interval tests. */
 export async function addTrial(db: SQLiteDatabase, t: NewTrial): Promise<number> {
   const r = await db.runAsync(
-    `INSERT INTO trial (session_id, value, flight_ms, fps, takeoff_frame, landing_frame, video_uri)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO trial (session_id, value, flight_ms, fps, takeoff_frame, landing_frame, video_uri, load_kg, detail)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     t.session_id,
     t.value,
-    t.flight_ms,
-    t.fps,
-    t.takeoff_frame,
-    t.landing_frame,
-    t.video_uri,
+    t.flight_ms ?? null,
+    t.fps ?? null,
+    t.takeoff_frame ?? null,
+    t.landing_frame ?? null,
+    t.video_uri ?? null,
+    t.load_kg ?? null,
+    t.detail ? JSON.stringify(t.detail) : null,
   );
   return r.lastInsertRowId;
 }
@@ -92,7 +100,8 @@ export async function deleteTrial(db: SQLiteDatabase, id: number): Promise<void>
 }
 
 export async function listTrials(db: SQLiteDatabase, sessionId: string): Promise<Trial[]> {
-  return db.getAllAsync<Trial>('SELECT * FROM trial WHERE session_id = ? ORDER BY id', sessionId);
+  const rows = await db.getAllAsync<Omit<Trial, 'detail'> & { detail: string | null }>('SELECT * FROM trial WHERE session_id = ? ORDER BY id', sessionId);
+  return rows.map((r) => ({ ...r, detail: r.detail ? JSON.parse(r.detail) : null }));
 }
 
 /**
@@ -155,4 +164,31 @@ export async function sessionCounts(db: SQLiteDatabase, athleteId: number): Prom
     athleteId,
   );
   return Object.fromEntries(rows.map((r) => [r.metric_code, r.n]));
+}
+
+/**
+ * Each metric's most recent session, valued by its best attempt, for metric codes matching a LIKE pattern
+ * (e.g. 'sprint_%'). Keyed by metric code.
+ */
+export async function latestResults(db: SQLiteDatabase, athleteId: number, pattern: string): Promise<Record<string, SessionResult>> {
+  const rows = await db.getAllAsync<{ session_id: string; metric_code: string; started_at: string; value: number }>(
+    `SELECT s.id AS session_id, s.metric_code, s.started_at, t.value
+     FROM test_session s JOIN trial t ON t.session_id = s.id
+     WHERE s.athlete_id = ? AND s.metric_code LIKE ?
+     ORDER BY s.started_at, s.id, t.id`,
+    athleteId,
+    pattern,
+  );
+  const out: Record<string, SessionResult> = {};
+  for (const r of rows) {
+    const prev = out[r.metric_code];
+    if (prev?.session_id === r.session_id) {
+      const def = getMetric(r.metric_code);
+      prev.best = def ? best(def, [prev.best, r.value])! : Math.max(prev.best, r.value);
+      prev.trials += 1;
+    } else {
+      out[r.metric_code] = { session_id: r.session_id, metric_code: r.metric_code, started_at: r.started_at, best: r.value, trials: 1 };
+    }
+  }
+  return out;
 }

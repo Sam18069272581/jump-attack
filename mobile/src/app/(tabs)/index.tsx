@@ -1,15 +1,12 @@
-import { Link, router } from 'expo-router';
+import { Link, router, type Href } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { Icon, type IconName } from '@/components/Icon';
-import { CATEGORIES, type Category } from '@/domain/metrics';
+import { Icon } from '@/components/Icon';
+import { CATEGORIES } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { colors, radius, text } from '@/theme';
 
-const ICONS: Record<Category, IconName> = { jump: 'jump', conditioning: 'conditioning', speed: 'speed', vbt: 'vbt', mobility: 'mobility', recovery: 'recovery' };
-// Categories that are built so far, and where they open.
-const ROUTES: Partial<Record<Category, '/jumps' | '/conditioning'>> = { jump: '/jumps', conditioning: '/conditioning' };
 
 export default function Home() {
   const { current } = useAthlete();
@@ -33,12 +30,12 @@ export default function Home() {
 
         <View style={{ gap: 12 }}>
           {CATEGORIES.map((c) => {
-            const href = ROUTES[c.key];
+            const href = c.href as Href | null;
             const ready = href != null;
             const card = (
               <View style={[styles.card, !ready && styles.cardDisabled]}>
                 <View style={[styles.tile, { backgroundColor: c.tile }]}>
-                  <Icon name={ICONS[c.key]} size={28} color={c.color} />
+                  <Icon name={c.icon} size={28} color={c.color} />
                 </View>
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={styles.cardTitle}>{c.name}</Text>

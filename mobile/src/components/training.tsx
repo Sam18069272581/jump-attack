@@ -70,15 +70,17 @@ export function SessionItems({ session }: { session: SessionTemplate }) {
   );
 }
 
-/** What the readiness rule changed and why. */
-export function AdjustmentNote({ adjustments, dropPct }: { adjustments: Adjustment[]; dropPct: number | null }) {
+/**
+ * What the readiness rule changed and why. `reason` lists the fatigue signals; workouts saved before reasons
+ * were kept only had the CMJ rule, so they fall back to the CMJ drop.
+ */
+export function AdjustmentNote({ adjustments, reason, dropPct }: { adjustments: Adjustment[]; reason: string | null; dropPct: number | null }) {
   if (adjustments.length === 0) return null;
+  const why = reason ?? `CMJ 比近期均值低 ${dropPct != null ? `${(dropPct * 100).toFixed(1)}%` : '较多'}（超过 ${FATIGUE_DROP * 100}%）`;
   return (
     <View style={styles.note}>
       <Text style={styles.noteTitle}>已按疲劳信号减量</Text>
-      <Text style={styles.noteReason}>
-        CMJ 比近期均值低 {dropPct != null ? `${(dropPct * 100).toFixed(1)}%` : '较多'}（超过 {FATIGUE_DROP * 100}%）：今天总量减约 30%，取消最大强度练习。
-      </Text>
+      <Text style={styles.noteReason}>{why}：今天总量减约 30%，取消最大强度练习。</Text>
       {adjustments.map((a) => (
         <Text key={a.code} style={styles.noteLine}>
           · {a.name}：{a.change}

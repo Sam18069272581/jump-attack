@@ -20,7 +20,7 @@ describe('plans', () => {
     await startPlan(db, other, settings);
 
     const active = await getActivePlan(db, 1);
-    expect(active).toEqual({ id: second, athleteId: 1, templateCode: 'jump-maintain-2', startDate: '2026-10-21', weekdays: [2, 5] });
+    expect(active).toEqual({ id: second, athleteId: 1, templateCode: 'jump-maintain-2', startDate: '2026-10-21', weekdays: [2, 5], deloads: [] });
     expect(first).not.toBe(second);
 
     await endPlan(db, second);

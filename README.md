@@ -15,4 +15,4 @@
 
 ## 状态
 
-MVP 开发中：跳跃测试（录像 → 逐帧标记 → 结果与评估）、历史趋势、训练计划和今日训练（CMJ 准备度低时自动减量）已完成。技术栈：React Native + Expo，iOS 优先，本地 SQLite。不用 Xcode 也能装到 iPhone 上试（Expo Go），步骤见 [mobile/README.md](mobile/README.md)。
+MVP 开发中，闭环已经能在本地跑通：跳跃、速度、VBT、灵活度、恢复、体能耐力六个测试板块，历史趋势，训练计划和今日训练，以及评估后的自动调整（CMJ 或 HRV 显示疲劳时当天减量、连续疲劳插入减量周、按 VBT 估算 1RM 推荐深蹲重量）。技术栈：React Native + Expo，iOS 优先，本地 SQLite。不用 Xcode 也能装到 iPhone 上试（Expo Go），步骤见 [mobile/README.md](mobile/README.md)。

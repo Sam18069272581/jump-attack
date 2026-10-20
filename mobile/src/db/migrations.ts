@@ -78,6 +78,15 @@ const MIGRATIONS: string[] = [
     UNIQUE (workout_id, exercise_code, set_no)
   );
   `,
+  `
+  -- Barbell load for VBT sets; detail is a JSON object for per-test extras (e.g. {"source":"manual"}, {"rom_cm":55}).
+  ALTER TABLE trial ADD COLUMN load_kg REAL;
+  ALTER TABLE trial ADD COLUMN detail TEXT;
+
+  -- Start days of deload weeks inserted after repeated fatigue (JSON array), and why a workout was cut.
+  ALTER TABLE plan ADD COLUMN deloads TEXT NOT NULL DEFAULT '[]';
+  ALTER TABLE workout ADD COLUMN reason TEXT;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
