@@ -1,4 +1,4 @@
-import Capture from '@/app/jumps/capture';
+import Capture from '@/app/measure/capture';
 import { isExpoGo } from '@/media/runtime';
 
 // Expo Go has no vision-camera native module; importing it there crashes the app at startup.

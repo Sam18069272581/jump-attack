@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Empty } from '@/components/ui';
 import { endPlan } from '@/db/training';
 import { addDays, daysBetween, mondayOf, shortDate } from '@/domain/dates';
-import { PHASE_NAMES, planDay, planWeeks, type PlannedSession } from '@/domain/plan';
+import { PHASE_NAMES, planDay, planWeekOf, planWeeks, type PlannedSession } from '@/domain/plan';
 import { useAthlete } from '@/state/athlete';
 import { loadTraining, todayISO, type TrainingData } from '@/state/training';
 import { colors, radius, text } from '@/theme';
@@ -43,17 +43,21 @@ export default function PlanOverview() {
   const firstMonday = mondayOf(plan.startDate);
   const currentWeek = Math.max(0, Math.floor(daysBetween(firstMonday, today) / 7));
   const total = planWeeks(template);
+  // Calendar weeks. Each inserted deload adds a week, and one that starts mid-week spreads over two.
+  const deloads = plan.deloads ?? [];
+  const inserted = deloads.length + (deloads.some((d) => d !== mondayOf(d)) ? 1 : 0);
   // A repeating plan shows the week before this one and one full cycle ahead.
   const fromWeek = total ? 0 : Math.max(0, currentWeek - 1);
-  const toWeek = total ?? currentWeek + template.weeks.length;
+  const toWeek = total != null ? total + inserted : currentWeek + template.weeks.length;
   const byDate = new Map(workouts.map((w) => [w.date, w]));
 
   const weeks = Array.from({ length: toWeek - fromWeek }, (_, i) => {
     const week = fromWeek + i;
     const monday = addDays(firstMonday, week * 7);
     const sessions = Array.from({ length: 7 }, (_, d) => planDay(template, plan, addDays(monday, d))).filter((p): p is PlannedSession => p != null);
-    return { week, phase: template.weeks[week % template.weeks.length].phase, sessions };
-  });
+    const phase = sessions[0]?.phase ?? template.weeks[Math.max(0, planWeekOf(plan, monday)) % template.weeks.length].phase;
+    return { week, phase, deload: sessions.some((p) => p.inserted), sessions };
+  }).filter((w) => total == null || w.sessions.length > 0);
 
   function confirmEnd() {
     Alert.alert('结束这个计划？', '训练记录会保留，之后可以再选一个新计划。', [
@@ -77,10 +81,10 @@ export default function PlanOverview() {
           <Text style={text.muted}>{template.summary}</Text>
         </View>
 
-        {weeks.map(({ week, phase, sessions }) => (
+        {weeks.map(({ week, phase, deload, sessions }) => (
           <View key={week} style={[styles.week, week === currentWeek && { borderColor: colors.accent }]}>
             <Text style={text.section}>
-              第 {week + 1} 周 · {PHASE_NAMES[phase]}
+              第 {week + 1} 周 · {deload ? '减量（疲劳后插入）' : PHASE_NAMES[phase]}
             </Text>
             {sessions.map((p) => {
               const w = byDate.get(p.date);

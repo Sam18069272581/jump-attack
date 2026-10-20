@@ -7,17 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { TrendChart } from '@/components/TrendChart';
 import { Empty } from '@/components/ui';
-import { listMetricResults, type SessionResult } from '@/db/repo';
-import { CONDITIONING_TESTS, JUMP_TESTS, formatValue, resultNote, type MetricDef } from '@/domain/metrics';
+import { listMetricResults, sessionCounts, type SessionResult } from '@/db/repo';
+import { CATEGORIES, METRICS, formatValue, getMetric, metricColor, resultNote, type MetricDef } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
 type Row = { def: MetricDef; color: string; results: SessionResult[] };
 
-const GROUPS = [
-  { title: '跳跃测试', tests: JUMP_TESTS },
-  { title: '体能耐力', tests: CONDITIONING_TESTS },
-];
 
 export default function History() {
   const db = useSQLiteContext();
@@ -27,7 +23,17 @@ export default function History() {
   useFocusEffect(
     useCallback(() => {
       if (!current) return;
-      Promise.all([...JUMP_TESTS, ...CONDITIONING_TESTS].map(async (m) => ({ def: m, color: m.color, results: await listMetricResults(db, current.id, m) }))).then(setRows);
+      (async () => {
+        // Only metrics with data, in registry order; custom sprint distances aren't in the registry, so they come last.
+        const counts = await sessionCounts(db, current.id);
+        const known = METRICS.filter((m) => counts[m.code]);
+        const extra = Object.keys(counts)
+          .filter((c) => !known.some((m) => m.code === c))
+          .map(getMetric)
+          .filter((m): m is MetricDef => m != null);
+        const defs = [...known, ...extra];
+        setRows(await Promise.all(defs.map(async (m) => ({ def: m, color: metricColor(m), results: await listMetricResults(db, current.id, m) }))));
+      })();
     }, [db, current]),
   );
 
@@ -63,12 +69,12 @@ export default function History() {
           <Empty title="还没有记录" hint="去首页做一次测试，成绩会出现在这里。" />
         ) : null}
 
-        {GROUPS.map((g) => {
-          const groupRows = withData.filter((r) => g.tests.some((t) => t.code === r.def.code));
+        {CATEGORIES.map((g) => {
+          const groupRows = withData.filter((r) => r.def.category === g.key);
           if (groupRows.length === 0) return null;
           return (
-            <View key={g.title} style={{ gap: 10 }}>
-              <Text style={text.section}>{g.title}</Text>
+            <View key={g.key} style={{ gap: 10 }}>
+              <Text style={text.section}>{g.name}</Text>
               {groupRows.map(({ def, color, results }) => {
                 const last = results.at(-1)!;
                 const note = def.estimate ? resultNote(def, last.best) : def.aggregate === 'mean' ? '6 趟平均' : null;

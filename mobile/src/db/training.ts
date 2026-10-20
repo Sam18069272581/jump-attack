@@ -14,10 +14,12 @@ export type Workout = {
   readiness: Readiness;
   cmjDrop: number | null;
   adjustments: Adjustment[];
+  /** The fatigue signals that caused the adjustments; null on workouts saved before reasons were kept. */
+  reason: string | null;
   finishedAt: string | null;
 };
 
-type PlanRow = { id: number; athlete_id: number; template_code: string; start_date: string; weekdays: string };
+type PlanRow = { id: number; athlete_id: number; template_code: string; start_date: string; weekdays: string; deloads: string };
 type WorkoutRow = {
   id: number;
   plan_id: number;
@@ -26,6 +28,7 @@ type WorkoutRow = {
   readiness: Readiness;
   cmj_drop: number | null;
   adjustments: string;
+  reason: string | null;
   finished_at: string | null;
 };
 
@@ -35,6 +38,7 @@ const toPlan = (r: PlanRow): Plan => ({
   templateCode: r.template_code,
   startDate: r.start_date,
   weekdays: JSON.parse(r.weekdays),
+  deloads: JSON.parse(r.deloads),
 });
 
 const toWorkout = (r: WorkoutRow): Workout => ({
@@ -45,6 +49,7 @@ const toWorkout = (r: WorkoutRow): Workout => ({
   readiness: r.readiness,
   cmjDrop: r.cmj_drop,
   adjustments: JSON.parse(r.adjustments),
+  reason: r.reason,
   finishedAt: r.finished_at,
 });
 
@@ -70,6 +75,12 @@ export async function startPlan(db: SQLiteDatabase, athleteId: number, settings:
   return id;
 }
 
+/** Inserts a 7-day deload starting on `start`, pushing the rest of the plan back a week. */
+export async function insertDeload(db: SQLiteDatabase, plan: Plan, start: ISODate): Promise<void> {
+  const deloads = [...new Set([...(plan.deloads ?? []), start])].sort();
+  await db.runAsync('UPDATE plan SET deloads = ? WHERE id = ?', JSON.stringify(deloads), plan.id);
+}
+
 export async function endPlan(db: SQLiteDatabase, planId: number): Promise<void> {
   await db.runAsync("UPDATE plan SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ? AND ended_at IS NULL", planId);
 }
@@ -84,18 +95,19 @@ export async function getWorkout(db: SQLiteDatabase, planId: number, date: ISODa
   return row ? toWorkout(row) : null;
 }
 
-export type NewWorkout = Pick<Workout, 'planId' | 'date' | 'sessionCode' | 'readiness' | 'cmjDrop' | 'adjustments'>;
+export type NewWorkout = Pick<Workout, 'planId' | 'date' | 'sessionCode' | 'readiness' | 'cmjDrop' | 'adjustments'> & { reason?: string | null };
 
 /** Starts the day's workout, or returns the one already started so its readiness stays as first recorded. */
 export async function startWorkout(db: SQLiteDatabase, w: NewWorkout): Promise<Workout> {
   await db.runAsync(
-    'INSERT OR IGNORE INTO workout (plan_id, date, session_code, readiness, cmj_drop, adjustments) VALUES (?, ?, ?, ?, ?, ?)',
+    'INSERT OR IGNORE INTO workout (plan_id, date, session_code, readiness, cmj_drop, adjustments, reason) VALUES (?, ?, ?, ?, ?, ?, ?)',
     w.planId,
     w.date,
     w.sessionCode,
     w.readiness,
     w.cmjDrop,
     JSON.stringify(w.adjustments),
+    w.reason ?? null,
   );
   return (await getWorkout(db, w.planId, w.date))!;
 }

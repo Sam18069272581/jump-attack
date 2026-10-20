@@ -41,7 +41,13 @@ export type PlanTemplate = {
   repeat: boolean;
 };
 
-export type PlanSettings = { templateCode: string; startDate: ISODate; weekdays: number[] };
+export type PlanSettings = {
+  templateCode: string;
+  startDate: ISODate;
+  weekdays: number[];
+  /** First days of 7-day deload weeks inserted after repeated fatigue; each pushes the rest of the plan back a week. */
+  deloads?: ISODate[];
+};
 
 export type PlannedSession = {
   date: ISODate;
@@ -49,6 +55,8 @@ export type PlannedSession = {
   week: number;
   phase: Phase;
   session: SessionTemplate;
+  /** Part of a deload week inserted because of fatigue, not one the template planned. */
+  inserted?: boolean;
 };
 
 export const MIN_RPE = 5;
@@ -76,15 +84,41 @@ export function planWeeks(t: PlanTemplate): number | null {
   return t.repeat ? null : t.weeks.length;
 }
 
+/** Used for a deload week inserted into a template that has no deload week of its own. */
+export const INSERTED_DELOAD: WeekSpec = { phase: 'deload', setFactor: 0.6, rpeDelta: -1.5, dropIntense: true };
+
+export const DELOAD_DAYS = 7;
+
+/**
+ * Where `date` falls in the plan once inserted deload weeks are accounted for: the date in the original
+ * schedule it plays the part of, and whether it sits inside an inserted deload week.
+ */
+export function planPosition(s: PlanSettings, date: ISODate): { planDate: ISODate; inserted: boolean } {
+  let shift = 0;
+  for (const start of [...(s.deloads ?? [])].sort()) {
+    if (date < start) break;
+    if (daysBetween(start, date) < DELOAD_DAYS) return { planDate: addDays(date, -shift), inserted: true };
+    shift += DELOAD_DAYS;
+  }
+  return { planDate: addDays(date, -shift), inserted: false };
+}
+
+/** 0-based week of the original schedule a date plays the part of. */
+export function planWeekOf(s: PlanSettings, date: ISODate): number {
+  return Math.floor(daysBetween(mondayOf(s.startDate), planPosition(s, date).planDate) / 7);
+}
+
 /** The session planned for `date`, already scaled for its week; null on rest days and outside the plan. */
 export function planDay(t: PlanTemplate, s: PlanSettings, date: ISODate): PlannedSession | null {
   if (daysBetween(s.startDate, date) < 0) return null;
-  const week = Math.floor(daysBetween(mondayOf(s.startDate), date) / 7);
+  const { planDate, inserted } = planPosition(s, date);
+  const week = Math.floor(daysBetween(mondayOf(s.startDate), planDate) / 7);
   if (!t.repeat && week >= t.weeks.length) return null;
+  // Weekdays are kept: an inserted week is exactly 7 days, so the original date falls on the same weekday.
   const slot = [...s.weekdays].sort((a, b) => a - b).indexOf(weekday(date));
   if (slot < 0) return null;
-  const spec = t.weeks[week % t.weeks.length];
-  return { date, week, phase: spec.phase, session: scaleSession(t.sessions[slot % t.sessions.length], spec) };
+  const spec = inserted ? (t.weeks.find((w) => w.phase === 'deload') ?? INSERTED_DELOAD) : t.weeks[week % t.weeks.length];
+  return { date, week, phase: spec.phase, session: scaleSession(t.sessions[slot % t.sessions.length], spec), ...(inserted ? { inserted } : {}) };
 }
 
 /** Monday to Sunday of the week containing `date`. */
@@ -105,7 +139,8 @@ export function nextSession(t: PlanTemplate, s: PlanSettings, from: ISODate, hor
 /** True once a non-repeating plan has no more sessions on or after `date`. */
 export function planFinished(t: PlanTemplate, s: PlanSettings, date: ISODate): boolean {
   if (t.repeat) return false;
-  return daysBetween(addDays(mondayOf(s.startDate), t.weeks.length * 7), date) >= 0;
+  const { planDate, inserted } = planPosition(s, date);
+  return !inserted && daysBetween(addDays(mondayOf(s.startDate), t.weeks.length * 7), planDate) >= 0;
 }
 
 /** Share of sets kept on a fatigued day: total volume about −30%. */

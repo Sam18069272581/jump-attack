@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ui';
 import { deleteTrial, listSessionResults, listTrials, type Trial } from '@/db/repo';
-import { getMetric } from '@/domain/metrics';
+import { best as bestOf, getCategory, getMetric } from '@/domain/metrics';
 import { assess, type Assessment } from '@/domain/verdict';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
@@ -27,7 +27,7 @@ export default function Result() {
       const t = await listTrials(db, session);
       let a: Assessment | null = null;
       if (def && current && t.length > 0) {
-        const best = Math.max(...t.map((x) => x.value));
+        const best = bestOf(def, t.map((x) => x.value))!;
         const previous = (await listSessionResults(db, current.id, def.code, def.lowerIsBetter)).filter((r) => r.session_id !== session).map((r) => r.best);
         a = assess(def, previous, best);
       }
@@ -46,8 +46,10 @@ export default function Result() {
   }
 
   if (!def) return null;
-  const best = trials.length ? Math.max(...trials.map((t) => t.value)) : null;
-  const scale = best ? best * 1.1 : 1;
+  const best = bestOf(def, trials.map((t) => t.value));
+  const scale = trials.length ? Math.max(...trials.map((t) => t.value)) * 1.1 : 1;
+  const home = getCategory(def.category).href ?? '/';
+  const flights = trials.filter((t) => t.flight_ms != null);
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -72,11 +74,12 @@ export default function Result() {
               </Pressable>
             </View>
           ))}
-          {trials.length > 0 && (
+          {flights.length > 0 && def.capture.includes('flight') && (
             <Text style={styles.trialMeta}>
-              滞空 {trials.map((t) => Math.round(t.flight_ms ?? 0)).join(' / ')} ms · {trials[0].fps} fps
+              滞空 {flights.map((t) => Math.round(t.flight_ms!)).join(' / ')} ms · {flights[0].fps} fps
             </Text>
           )}
+          {trials.some((t) => t.detail?.source === 'manual') && <Text style={styles.trialMeta}>含手动输入的成绩</Text>}
         </View>
 
         {assessment && (
@@ -98,7 +101,7 @@ export default function Result() {
 
       <View style={styles.footer}>
         <Button label="再测一次" variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} />
-        <Button label="完成" onPress={() => (from === 'train' ? router.dismissAll() : router.dismissTo('/jumps'))} style={{ flex: 1 }} />
+        <Button label="完成" onPress={() => (from === 'train' ? router.dismissAll() : router.dismissTo(home as Href))} style={{ flex: 1 }} />
       </View>
     </SafeAreaView>
   );

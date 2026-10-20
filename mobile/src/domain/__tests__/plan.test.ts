@@ -1,5 +1,5 @@
 import { readinessOn } from '../assess';
-import { adjustForReadiness, formatPrescription, nextSession, planDay, planFinished, summarizeWorkout, type PlanSettings, type SessionTemplate } from '../plan';
+import { adjustForReadiness, formatPrescription, nextSession, planDay, planFinished, planWeekOf, summarizeWorkout, type PlanSettings, type SessionTemplate } from '../plan';
 import { defaultWeekdays, getTemplate, TEMPLATES } from '../templates';
 
 const fourPlusOne = getTemplate('jump-4-1')!;
@@ -58,6 +58,31 @@ describe('planDay', () => {
 
   it('finds the next session from a rest day', () => {
     expect(nextSession(fourPlusOne, settings, '2026-10-24')?.date).toBe('2026-10-26');
+  });
+});
+
+describe('inserted deload weeks', () => {
+  // Fatigue on Wednesday 2026-10-28 (week index 1): a deload runs to Tuesday 11-03 and the plan resumes a week later.
+  const withDeload: PlanSettings = { ...settings, deloads: ['2026-10-28'] };
+
+  it('keeps the days before it as planned', () => {
+    expect(planDay(fourPlusOne, withDeload, '2026-10-26')).toEqual(planDay(fourPlusOne, settings, '2026-10-26'));
+  });
+
+  it('turns the next 7 days into a deload of the sessions due then', () => {
+    const wed = planDay(fourPlusOne, withDeload, '2026-10-28')!;
+    expect(wed).toMatchObject({ phase: 'deload', inserted: true, week: 1 });
+    expect(wed.session.code).toBe('B');
+    expect(wed.session.items.some((p) => p.intense)).toBe(false);
+    expect(item(wed.session, 'pogo')!.sets).toBeLessThan(item(planDay(fourPlusOne, settings, '2026-10-28')!.session, 'pogo')!.sets);
+    expect(planDay(fourPlusOne, withDeload, '2026-11-02')).toMatchObject({ inserted: true, session: { code: 'A' } });
+  });
+
+  it('pushes the rest of the plan back a week', () => {
+    expect(planDay(fourPlusOne, withDeload, '2026-11-04')).toEqual({ ...planDay(fourPlusOne, settings, '2026-10-28')!, date: '2026-11-04' });
+    expect(planWeekOf(withDeload, '2026-11-09')).toBe(2);
+    expect(planFinished(fourPlusOne, withDeload, '2026-11-23')).toBe(false);
+    expect(planFinished(fourPlusOne, withDeload, '2026-11-30')).toBe(true);
   });
 });
 

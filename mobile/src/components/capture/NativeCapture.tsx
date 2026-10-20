@@ -14,10 +14,9 @@ import { colors, fonts } from '@/theme';
 type Mode = 'idle' | 'recording' | 'done';
 
 const FPS_OPTIONS = [120, 240];
-const MAX_SECONDS = 15;
 
 /** In-app high-frame-rate recording. Needs a development build: vision-camera does not exist in Expo Go. */
-export default function NativeCapture({ title, subtitle, onClose, onImport, onRecorded }: CaptureProps) {
+export default function NativeCapture({ title, subtitle, guide, onClose, onImport, onManual, onRecorded }: CaptureProps) {
   const focused = useIsFocused();
   const permission = useCameraPermission();
   const device = useCameraDevice('back');
@@ -50,7 +49,7 @@ export default function NativeCapture({ title, subtitle, onClose, onImport, onRe
 
   async function start() {
     try {
-      const r = await videoOutput.createRecorder({ maxDuration: MAX_SECONDS });
+      const r = await videoOutput.createRecorder({ maxDuration: guide.maxSeconds });
       recorder.current = r;
       await r.startRecording(
         (path) => {
@@ -82,13 +81,14 @@ export default function NativeCapture({ title, subtitle, onClose, onImport, onRe
     return (
       <SafeAreaView style={[styles.screen, styles.center]}>
         <Text style={styles.permTitle}>需要相机权限</Text>
-        <Text style={styles.permHint}>用高帧率录像来测量滞空时间。</Text>
+        <Text style={styles.permHint}>用高帧率录像来逐帧测量。</Text>
         {permission.canRequestPermission ? (
           <Button label="允许使用相机" onPress={() => permission.requestPermission()} style={{ alignSelf: 'stretch' }} />
         ) : (
           <Text style={styles.permHint}>请在系统设置中为 Jump Attack 打开相机权限。</Text>
         )}
         <Button label="从相册导入视频" variant="secondary" onPress={onImport} style={{ alignSelf: 'stretch' }} />
+        {onManual && <Button label="手动输入成绩" variant="secondary" onPress={onManual} style={{ alignSelf: 'stretch' }} />}
         <Button label="返回" variant="ghost" onPress={onClose} style={{ alignSelf: 'stretch' }} />
       </SafeAreaView>
     );
@@ -124,11 +124,13 @@ export default function NativeCapture({ title, subtitle, onClose, onImport, onRe
           </View>
         )}
 
-        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-          <View style={styles.footBox} />
-          <View style={styles.groundLine} />
-          <Text style={styles.guide}>双脚放进框内 · 地面对齐虚线</Text>
-        </View>
+        {guide.feetOverlay && (
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <View style={styles.footBox} />
+            <View style={styles.groundLine} />
+            <Text style={styles.guide}>双脚放进框内 · 地面对齐虚线</Text>
+          </View>
+        )}
 
         {mode === 'recording' && (
           <View style={styles.recBadge}>
@@ -138,8 +140,11 @@ export default function NativeCapture({ title, subtitle, onClose, onImport, onRe
         )}
         {mode === 'idle' && (
           <View style={styles.checks}>
-            <Text style={styles.check}>手机放稳（地面或三脚架），别手持</Text>
-            <Text style={styles.check}>距离约 1.5 米，镜头对准脚踝</Text>
+            {guide.checks.map((c) => (
+              <Text key={c} style={styles.check}>
+                {c}
+              </Text>
+            ))}
             <Text style={styles.check}>实际帧率 {shownFps} fps</Text>
           </View>
         )}
@@ -147,7 +152,7 @@ export default function NativeCapture({ title, subtitle, onClose, onImport, onRe
           <View style={styles.doneCard}>
             <Text style={styles.doneTitle}>录制完成</Text>
             <Text style={styles.doneText}>
-              {elapsed.toFixed(1)} 秒 · 约 {Math.round(elapsed * shownFps)} 帧 · {shownFps} fps。下一步逐帧找到起跳和落地。
+              {elapsed.toFixed(1)} 秒 · 约 {Math.round(elapsed * shownFps)} 帧 · {shownFps} fps。{guide.doneHint}
             </Text>
           </View>
         )}
@@ -177,13 +182,18 @@ export default function NativeCapture({ title, subtitle, onClose, onImport, onRe
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="拍摄指引"
-                onPress={() => Alert.alert('拍摄指引', '1. 手机横放或竖放在地面/三脚架上，镜头对准脚踝高度。\n2. 运动员站在框内，完成一次起跳并落地。\n3. 落地站稳后再停止录制。\n4. 优先用 240 fps，误差约 ±4 ms。')}
+                onPress={() => Alert.alert('拍摄指引', guide.tips)}
                 style={styles.sideButton}
               >
                 <Icon name="info" />
               </Pressable>
             </View>
-            <Text style={styles.hint}>{mode === 'recording' ? '完成一次起跳并落地后，点击停止' : `最长录制 ${MAX_SECONDS} 秒`}</Text>
+            <Text style={styles.hint}>{mode === 'recording' ? guide.recordingHint : `最长录制 ${guide.maxSeconds} 秒`}</Text>
+            {onManual && mode === 'idle' && (
+              <Pressable accessibilityRole="button" onPress={onManual}>
+                <Text style={styles.manual}>手动输入成绩</Text>
+              </Pressable>
+            )}
           </>
         )}
       </View>
@@ -215,5 +225,6 @@ const styles = StyleSheet.create({
   shutterDot: { width: 64, height: 64, borderRadius: 32, backgroundColor: colors.record },
   shutterStop: { width: 30, height: 30, borderRadius: 6, backgroundColor: colors.record },
   hint: { textAlign: 'center', color: colors.textMuted, fontSize: 12 },
+  manual: { textAlign: 'center', color: colors.accent, fontSize: 13, padding: 4 },
   doneButtons: { flexDirection: 'row', gap: 10 },
 });

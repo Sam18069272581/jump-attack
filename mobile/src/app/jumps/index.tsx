@@ -14,7 +14,7 @@ export default function JumpTests() {
           key={t.code}
           accessibilityRole="button"
           style={({ pressed }) => [styles.row, pressed && { opacity: 0.75 }]}
-          onPress={() => router.push({ pathname: '/jumps/capture', params: { metric: t.code, session: newSessionId() } })}
+          onPress={() => router.push({ pathname: '/measure/capture', params: { metric: t.code, session: newSessionId() } })}
         >
           <Text style={[styles.code, { color: t.color }]}>{t.short}</Text>
           <Text style={styles.name}>{t.name}</Text>
