@@ -3,25 +3,27 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import type { FvJump } from '@/domain/fvp';
 import type { LadderJump } from '@/domain/dropJump';
 import { roundTo } from '@/domain/interval';
+import { DROP_JUMP, LOADED_SJ } from '@/domain/metrics';
 
 import { addTrial, ensureSession } from './repo';
 
-/** Squat jumps with the load on the bar: the trials of `sj` sessions. Unloaded jumps have no load (0 kg). */
+/** Squat jumps with the load on the bar, for the force-velocity profile. */
 export type LoadedJump = FvJump & { id: number; session_id: string; started_at: string };
 
 export async function listLoadedJumps(db: SQLiteDatabase, athleteId: number): Promise<LoadedJump[]> {
   const rows = await db.getAllAsync<{ id: number; session_id: string; started_at: string; load_kg: number | null; value: number }>(
     `SELECT t.id, t.session_id, s.started_at, t.load_kg, t.value
      FROM trial t JOIN test_session s ON s.id = t.session_id
-     WHERE s.athlete_id = ? AND s.metric_code = 'sj'
+     WHERE s.athlete_id = ? AND s.metric_code = ?
      ORDER BY s.started_at, t.id`,
     athleteId,
+    LOADED_SJ.code,
   );
   return rows.map((r) => ({ id: r.id, session_id: r.session_id, started_at: r.started_at, loadKg: r.load_kg ?? 0, heightCm: r.value }));
 }
 
 export async function addLoadedJump(db: SQLiteDatabase, athleteId: number, sessionId: string, loadKg: number, heightCm: number): Promise<number> {
-  await ensureSession(db, sessionId, athleteId, 'sj');
+  await ensureSession(db, sessionId, athleteId, LOADED_SJ.code);
   return addTrial(db, { session_id: sessionId, value: heightCm, load_kg: loadKg, detail: { source: 'manual' } });
 }
 
@@ -43,9 +45,10 @@ export async function listDropJumps(db: SQLiteDatabase, athleteId: number): Prom
   const rows = await db.getAllAsync<{ id: number; session_id: string; started_at: string; value: number; detail: string | null }>(
     `SELECT t.id, t.session_id, s.started_at, t.value, t.detail
      FROM trial t JOIN test_session s ON s.id = t.session_id
-     WHERE s.athlete_id = ? AND s.metric_code = 'dj_rsi'
+     WHERE s.athlete_id = ? AND s.metric_code = ?
      ORDER BY s.started_at, t.id`,
     athleteId,
+    DROP_JUMP.code,
   );
   return rows.map((r) => {
     const d = (r.detail ? JSON.parse(r.detail) : {}) as { box_cm?: number; contact_ms?: number; height_cm?: number };
@@ -60,7 +63,7 @@ export async function addDropJump(
   sessionId: string,
   jump: { boxCm: number; rsi: number; contactMs: number; heightCm: number; flightS: number },
 ): Promise<number> {
-  await ensureSession(db, sessionId, athleteId, 'dj_rsi');
+  await ensureSession(db, sessionId, athleteId, DROP_JUMP.code);
   return addTrial(db, {
     session_id: sessionId,
     value: roundTo(jump.rsi, 2),

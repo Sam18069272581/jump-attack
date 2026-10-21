@@ -13,11 +13,11 @@ import { addLoadedJump, listLoadedJumps, profileSessions, type LoadedJump } from
 import { deleteTrial } from '@/db/repo';
 import { parseNumber } from '@/domain/entry';
 import { bandOf, EXERCISE_KINDS, fvProfile, heightPerLoad, MIN_R2, pushOff, suggestedLoads, suggestion, type FvProfile } from '@/domain/fvp';
-import { getMetric } from '@/domain/metrics';
+import { LOADED_SJ } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
-const COLOR = '#4FD1FF';
+const COLOR = LOADED_SJ.color;
 const SIDE_TEXT = {
   force: '力量端偏弱：重负荷下推不动，轻负荷下的速度相对够用',
   balanced: '力量端和速度端比较均衡',
@@ -68,8 +68,7 @@ export default function ForceVelocity() {
   const load = parseNumber(kg);
   const height = parseNumber(cm);
   const loadOk = load != null && load >= 0 && load <= 300;
-  const sj = getMetric('sj')!;
-  const heightOk = height != null && height >= 1 && height <= sj.range![1];
+  const heightOk = height != null && height >= LOADED_SJ.range![0] && height <= LOADED_SJ.range![1];
 
   const sessions = profileSessions(all);
   const history = sessions.map((s) => ({ ...s, profile: fvProfile(mass, hpo, s.jumps) })).filter((s): s is typeof s & { profile: FvProfile } => s.profile != null);
@@ -94,7 +93,7 @@ export default function ForceVelocity() {
 
   function measureVideo() {
     if (!loadOk) return Alert.alert('先填负重', '负重包括杠铃杆（史密斯机按机器标注的杆重算），徒手跳填 0。');
-    router.push({ pathname: '/measure/capture', params: { metric: 'sj', session, from: 'fvp', load: String(load) } });
+    router.push({ pathname: '/measure/capture', params: { metric: LOADED_SJ.code, session, from: 'fvp', load: String(load) } });
   }
 
   function remove(j: LoadedJump) {

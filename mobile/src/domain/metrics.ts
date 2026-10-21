@@ -88,6 +88,24 @@ export const DROP_JUMP: MetricDef & { short: string; color: string } = {
   range: [0.1, 5],
 };
 
+/**
+ * Squat jumps at several loads for the force-velocity profile (jumps/fvp), the load in `trial.load_kg`. Kept apart
+ * from `sj` so loaded jumps never pull down the squat-jump history; a session's result is its highest jump,
+ * normally the unloaded one.
+ */
+export const LOADED_SJ: MetricDef & { short: string; color: string } = {
+  code: 'fvp_sj',
+  short: 'F-V',
+  name: '负重蹲跳 · 力-速度曲线',
+  category: 'jump',
+  unit: 'cm',
+  decimals: 1,
+  color: '#4FD1FF',
+  use: '每次测试最高的一跳，通常是徒手那级',
+  capture: ['flight', 'manual'],
+  range: [1, 120],
+};
+
 const VO2MAX = { name: 'VO2max', unit: 'ml/kg/min', decimals: 1 };
 
 /** Field tests for aerobic capacity and repeated sprints; protocols in ./conditioning. */
@@ -194,7 +212,7 @@ export const RECOVERY_METRICS: MetricDef[] = [
   { code: 'rec_resp', name: '呼吸频率', category: 'recovery', unit: '次/分', decimals: 1, neutral: true, capture: ['manual'], range: [5, 40] },
 ];
 
-export const METRICS: MetricDef[] = [...JUMP_TESTS, DROP_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
+export const METRICS: MetricDef[] = [...JUMP_TESTS, LOADED_SJ, DROP_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
 
 export function getMetric(code: string): MetricDef | undefined {
   const known = METRICS.find((m) => m.code === code);

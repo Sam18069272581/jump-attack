@@ -3,7 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { Text, TextInput } from 'react-native';
 
 import { migrate } from '@/db/migrations';
-import { listTrials } from '@/db/repo';
+import { listSessionResults, listTrials } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 
 import DropJumpLadder from '../jumps/dj';
@@ -107,13 +107,15 @@ describe('force-velocity profile', () => {
     expect(t).not.toContain('单次测试的斜率误差较大'); // 71 % is clearly off balance
     expect(t).toContain('按 4 级负重、蹬伸距离 40 cm 计算');
 
-    // Saved as squat jumps with their loads, so the unloaded jump also counts as an SJ result.
+    // Saved under their own metric with their loads, so the plain SJ history stays unloaded.
     expect((await listTrials(mockDb, 'fv-1')).map((x) => [x.load_kg, x.value])).toEqual([
       [0, 36.2],
       [20, 26.4],
       [40, 19.3],
       [60, 13.8],
     ]);
+    expect(await listSessionResults(mockDb, 1, 'sj')).toEqual([]);
+    expect((await listSessionResults(mockDb, 1, 'fvp_sj')).map((x) => x.best)).toEqual([36.2]);
   });
 
   it('sends a jump to video marking with its load', async () => {
@@ -123,7 +125,7 @@ describe('force-velocity profile', () => {
     expect(texts(r.root)).toContain('最近一次的力-速度曲线');
     await type(r.root, '负重（含杆）（kg）', '37.5');
     await press(r.root, '录像测这一跳');
-    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/measure/capture', params: { metric: 'sj', session: 'fv-2', from: 'fvp', load: '37.5' } });
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/measure/capture', params: { metric: 'fvp_sj', session: 'fv-2', from: 'fvp', load: '37.5' } });
   });
 });
 

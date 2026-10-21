@@ -3,12 +3,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { newSessionId } from '@/db/repo';
-import { DROP_JUMP, JUMP_TESTS } from '@/domain/metrics';
+import { DROP_JUMP, JUMP_TESTS, LOADED_SJ } from '@/domain/metrics';
 import { colors, fonts, radius } from '@/theme';
 
 /** Multi-step tests that each log several jumps on their own screen. */
 const PROFILES = [
-  { pathname: '/jumps/fvp', short: 'F-V', color: '#4FD1FF', name: '力-速度曲线', hint: '史密斯机负重蹲跳 4 级，看缺力量还是缺速度' },
+  { pathname: '/jumps/fvp', short: LOADED_SJ.short, color: LOADED_SJ.color, name: '力-速度曲线', hint: '史密斯机负重蹲跳 4 级，看缺力量还是缺速度' },
   { pathname: '/jumps/dj', short: DROP_JUMP.short, color: DROP_JUMP.color, name: 'DJ 跳深 · 找最佳箱高', hint: '逐级加高箱子，看哪个高度 RSI 最高' },
 ] as const;
 
