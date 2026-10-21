@@ -39,6 +39,8 @@ export default function RootLayout() {
             <Stack.Screen name="conditioning/rsa" options={{ title: 'RSA 反复冲刺' }} />
             <Stack.Screen name="conditioning/result" options={{ title: '测试结果', headerBackVisible: false, gestureEnabled: false }} />
             <Stack.Screen name="jumps/index" options={{ title: '跳跃测试' }} />
+            <Stack.Screen name="jumps/fvp" options={{ title: '力-速度曲线' }} />
+            <Stack.Screen name="jumps/dj" options={{ title: 'DJ 跳深 · 找最佳箱高' }} />
             <Stack.Screen name="speed/index" options={{ title: '速度训练' }} />
             <Stack.Screen name="mobility/index" options={{ title: '灵活度' }} />
             <Stack.Screen name="mobility/[test]" options={{ title: '' }} />

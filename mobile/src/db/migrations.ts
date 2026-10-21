@@ -87,6 +87,12 @@ const MIGRATIONS: string[] = [
   ALTER TABLE plan ADD COLUMN deloads TEXT NOT NULL DEFAULT '[]';
   ALTER TABLE workout ADD COLUMN reason TEXT;
   `,
+  `
+  -- For the squat-jump force-velocity profile: leg length (greater trochanter to tiptoe, standing on toes) and
+  -- trochanter height in the 90° start position. Their difference is the push-off distance.
+  ALTER TABLE athlete ADD COLUMN leg_length_cm REAL;
+  ALTER TABLE athlete ADD COLUMN squat_height_cm REAL;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

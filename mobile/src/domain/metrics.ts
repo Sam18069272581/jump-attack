@@ -8,10 +8,11 @@ export type Category = 'jump' | 'conditioning' | 'speed' | 'vbt' | 'mobility' | 
 /**
  * How a result can be recorded, first one is the default.
  * - `flight`: take-off and landing frames in a video (jump height).
+ * - `contact`: touch-down, take-off and landing frames of a drop jump (reactive strength index).
  * - `interval`: start and finish frames in a video (sprint time, bar velocity).
  * - `manual`: typed in, from a stopwatch, timing gates, a VBT device or Apple Health.
  */
-export type CaptureKind = 'flight' | 'interval' | 'manual';
+export type CaptureKind = 'flight' | 'contact' | 'interval' | 'manual';
 
 export type MetricDef = {
   code: string;
@@ -69,6 +70,23 @@ export const JUMP_TESTS: (MetricDef & { short: string; color: string })[] = [
   { code: 'sl_cmj_l', short: 'SL-L', name: '单腿 CMJ · 左', category: 'jump', unit: 'cm', decimals: 1, color: '#6EE7B7', capture: ['flight'], range: [3, 80] },
   { code: 'sl_cmj_r', short: 'SL-R', name: '单腿 CMJ · 右', category: 'jump', unit: 'cm', decimals: 1, color: '#6EE7B7', capture: ['flight'], range: [3, 80] },
 ];
+
+/**
+ * Drop jump from a ladder of box heights, each trial's box in `trial.detail.box_cm`. Logged on its own screen
+ * (jumps/dj), not straight from the jump list, because every jump needs its box height.
+ */
+export const DROP_JUMP: MetricDef & { short: string; color: string } = {
+  code: 'dj_rsi',
+  short: 'DJ',
+  name: 'DJ 跳深 RSI',
+  category: 'jump',
+  unit: '',
+  decimals: 2,
+  color: '#C9A7FF',
+  use: '跳高 ÷ 触地时间，反应力量',
+  capture: ['contact', 'manual'],
+  range: [0.1, 5],
+};
 
 const VO2MAX = { name: 'VO2max', unit: 'ml/kg/min', decimals: 1 };
 
@@ -176,7 +194,7 @@ export const RECOVERY_METRICS: MetricDef[] = [
   { code: 'rec_resp', name: '呼吸频率', category: 'recovery', unit: '次/分', decimals: 1, neutral: true, capture: ['manual'], range: [5, 40] },
 ];
 
-export const METRICS: MetricDef[] = [...JUMP_TESTS, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
+export const METRICS: MetricDef[] = [...JUMP_TESTS, DROP_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
 
 export function getMetric(code: string): MetricDef | undefined {
   const known = METRICS.find((m) => m.code === code);

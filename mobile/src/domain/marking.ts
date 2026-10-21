@@ -1,3 +1,4 @@
+import { dropJumpFromMarks, type DropJumpProblem } from './dropJump';
 import { intervalFromMarks, LIFT_LIMITS, meanVelocity, roundTo, sprintDistance, sprintLimits, type IntervalProblem } from './interval';
 import { measureFromMarks, type MarkProblem } from './jump';
 import type { MetricDef } from './metrics';
@@ -5,16 +6,25 @@ import type { MetricDef } from './metrics';
 type Mark = { title: string; hint: string };
 
 export type MarkOutcome =
-  | { ok: true; value: number; elapsedS: number; cells: { label: string; value: string; unit: string; main?: boolean }[] }
+  | {
+      ok: true;
+      value: number;
+      elapsedS: number;
+      cells: { label: string; value: string; unit: string; main?: boolean }[];
+      /** Extras stored with the trial, e.g. a drop jump's contact time. */
+      detail?: Record<string, unknown>;
+    }
   | { ok: false; message: string };
 
-/** What the two marks on a video mean for a metric, and how they become a result. */
+/**
+ * What the marks on a video mean for a metric, and how they become a result. Most tests take two marks; a drop
+ * jump takes three. The last two are stored as the trial's take-off and landing (start and finish) frames.
+ */
 export type MarkProfile = {
-  first: Mark;
-  second: Mark;
-  /** Shown over the video: before the first mark, between the marks, after the second. */
-  phases: [string, string, string];
-  measure: (first: number | null, second: number | null, fps: number) => MarkOutcome;
+  marks: Mark[];
+  /** Shown over the video: before the first mark, between each pair of marks, after the last. One more than `marks`. */
+  phases: string[];
+  measure: (marks: (number | null)[], fps: number) => MarkOutcome;
 };
 
 const JUMP_PROBLEMS: Record<MarkProblem, string> = {
@@ -25,10 +35,12 @@ const JUMP_PROBLEMS: Record<MarkProblem, string> = {
 };
 
 const jumpProfile: MarkProfile = {
-  first: { title: '起跳帧', hint: '脚尖刚离地' },
-  second: { title: '落地帧', hint: '脚尖刚触地' },
+  marks: [
+    { title: '起跳帧', hint: '脚尖刚离地' },
+    { title: '落地帧', hint: '脚尖刚触地' },
+  ],
   phases: ['准备 / 下蹲', '腾空', '落地'],
-  measure(first, second, fps) {
+  measure([first, second], fps) {
     const r = measureFromMarks({ takeoffFrame: first, landingFrame: second, fps });
     if (!r.ok) return { ok: false, message: JUMP_PROBLEMS[r.problem] };
     const { flightS, heightCm } = r.value;
@@ -53,10 +65,12 @@ function sprintProfile(metres: number): MarkProfile {
     'too-long': `超过 ${limits.maxS.toFixed(0)} s：检查是否标错帧；慢动作视频要把拍摄帧率选成 240`,
   };
   return {
-    first: { title: '起跑帧', hint: '身体第一次动' },
-    second: { title: '冲线帧', hint: '躯干越过终点线' },
+    marks: [
+      { title: '起跑帧', hint: '身体第一次动' },
+      { title: '冲线帧', hint: '躯干越过终点线' },
+    ],
     phases: ['准备', '跑', '冲线后'],
-    measure(first, second, fps) {
+    measure([first, second], fps) {
       const r = intervalFromMarks(first, second, fps, limits);
       if (!r.ok) return { ok: false, message: problems[r.problem] };
       return {
@@ -82,10 +96,12 @@ const LIFT_PROBLEMS: Record<IntervalProblem, string> = {
 
 function liftProfile(romCm: number): MarkProfile {
   return {
-    first: { title: '向心开始', hint: '杠铃在最低点开始上升' },
-    second: { title: '向心结束', hint: '杠铃到最高点' },
+    marks: [
+      { title: '向心开始', hint: '杠铃在最低点开始上升' },
+      { title: '向心结束', hint: '杠铃到最高点' },
+    ],
     phases: ['准备 / 下放', '向心', '结束'],
-    measure(first, second, fps) {
+    measure([first, second], fps) {
       const r = intervalFromMarks(first, second, fps, LIFT_LIMITS);
       if (!r.ok) return { ok: false, message: LIFT_PROBLEMS[r.problem] };
       const v = meanVelocity(romCm, r.seconds);
@@ -103,11 +119,53 @@ function liftProfile(romCm: number): MarkProfile {
   };
 }
 
+const DROP_PROBLEMS: Record<DropJumpProblem, string> = {
+  missing: '标记触地、起跳和落地三帧后显示结果',
+  order: '三帧要按触地 → 起跳 → 落地的顺序',
+  'contact-short': '触地不到 80 ms，检查是否标错帧',
+  'contact-long': '触地超过 1 秒，这是一次下蹲而不是反弹，重跳一次',
+  'flight-short': '滞空不到 150 ms，检查是否标错帧',
+  'flight-long': '滞空超过 1.2 s：检查是否标错帧；慢动作视频要把拍摄帧率选成 240',
+};
+
+const dropJumpProfile: MarkProfile = {
+  marks: [
+    { title: '触地帧', hint: '跳下后脚刚着地' },
+    { title: '起跳帧', hint: '反弹脚尖刚离地' },
+    { title: '落地帧', hint: '脚尖再次触地' },
+  ],
+  phases: ['跳下', '触地', '腾空', '落地'],
+  measure([contact, takeoff, landing], fps) {
+    const r = dropJumpFromMarks(contact, takeoff, landing, fps);
+    if (!r.ok) return { ok: false, message: DROP_PROBLEMS[r.problem] };
+    const { contactS, flightS, heightCm, rsi } = r.value;
+    return {
+      ok: true,
+      value: roundTo(rsi, 2),
+      elapsedS: flightS,
+      cells: [
+        { label: '触地', value: String(Math.round(contactS * 1000)), unit: 'ms' },
+        { label: '跳高', value: heightCm.toFixed(1), unit: 'cm' },
+        { label: 'RSI', value: rsi.toFixed(2), unit: '', main: true },
+      ],
+      detail: { contact_frame: contact, contact_ms: Math.round(contactS * 1000), height_cm: roundTo(heightCm, 1) },
+    };
+  },
+};
+
 /** The marking profile for a metric recorded from video, or null when it can't be marked. A lift needs its bar travel. */
 export function markProfile(def: MetricDef, opts: { romCm?: number } = {}): MarkProfile | null {
+  if (def.capture.includes('contact')) return dropJumpProfile;
   if (def.capture.includes('flight')) return jumpProfile;
   const metres = sprintDistance(def.code);
   if (metres != null) return sprintProfile(metres);
   if (def.category === 'vbt' && opts.romCm != null && opts.romCm > 0) return liftProfile(opts.romCm);
   return null;
+}
+
+/** Screens that log several measured trials in a row and take a marked video straight back to themselves. */
+const LOGGERS = ['vbt', 'fvp', 'dj'];
+
+export function returnsToLogger(from: string | undefined): boolean {
+  return from != null && LOGGERS.includes(from);
 }

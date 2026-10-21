@@ -31,6 +31,21 @@ const JUMP: CaptureGuide = {
   maxSeconds: 15,
 };
 
+const DROP_JUMP: CaptureGuide = {
+  steps: [
+    SLOW_MO_SETUP,
+    { title: '侧面拍箱子和落点', text: '手机放在地面或三脚架上，距离约 2 米，镜头对准脚踝高度。箱子边缘和落地点都要在画面里。' },
+    { title: '用「慢动作」拍', text: '站上箱子后开拍。一只脚迈出箱子自然落下（别往下跳也别往上跳），一着地就尽快弹起，落地站稳后再停。' },
+    { title: '导入并逐帧标记', text: '找到三帧：跳下后脚刚着地、反弹脚尖刚离地、再次落地。' },
+  ],
+  checks: ['手机放稳，侧对箱子', '箱子边缘和落地点都在画面里'],
+  feetOverlay: true,
+  recordingHint: '反弹并落地站稳后，点击停止',
+  doneHint: '下一步逐帧找到触地、起跳和落地。',
+  tips: '1. 手机放在侧面，箱子和落地点都在画面里。\n2. 从箱子上迈出落下，着地后尽快弹起，双手叉腰。\n3. 落地站稳后再停止录制。\n4. 优先用 240 fps，触地时间误差约 ±4 ms。',
+  maxSeconds: 15,
+};
+
 const SPRINT: CaptureGuide = {
   steps: [
     SLOW_MO_SETUP,
@@ -61,6 +76,7 @@ const LIFT: CaptureGuide = {
   maxSeconds: 30,
 };
 
-export function captureGuide(category: Category): CaptureGuide {
+export function captureGuide(category: Category, code?: string): CaptureGuide {
+  if (code === 'dj_rsi') return DROP_JUMP;
   return category === 'speed' ? SPRINT : category === 'vbt' ? LIFT : JUMP;
 }

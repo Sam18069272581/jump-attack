@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ui';
 import { createAthlete, updateAthlete, type Athlete } from '@/db/repo';
+import { pushOff } from '@/domain/fvp';
 import { useAthlete } from '@/state/athlete';
 import { colors, radius, text } from '@/theme';
 
@@ -63,12 +64,24 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
   const [name, setName] = useState(athlete.name);
   const [mass, setMass] = useState(athlete.body_mass_kg?.toString() ?? '');
   const [reach, setReach] = useState(athlete.standing_reach_cm?.toString() ?? '');
+  const [leg, setLeg] = useState(athlete.leg_length_cm?.toString() ?? '');
+  const [squat, setSquat] = useState(athlete.squat_height_cm?.toString() ?? '');
   const [saving, setSaving] = useState(false);
+  const legCm = toNumber(leg);
+  const squatCm = toNumber(squat);
+  const hpo = legCm != null && squatCm != null ? pushOff(legCm, squatCm) : null;
 
   async function save() {
     if (!name.trim()) return;
     setSaving(true);
-    await updateAthlete(db, { ...athlete, name: name.trim(), body_mass_kg: toNumber(mass), standing_reach_cm: toNumber(reach) });
+    await updateAthlete(db, {
+      ...athlete,
+      name: name.trim(),
+      body_mass_kg: toNumber(mass),
+      standing_reach_cm: toNumber(reach),
+      leg_length_cm: legCm,
+      squat_height_cm: squatCm,
+    });
     await onSaved();
     setSaving(false);
   }
@@ -79,6 +92,15 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
       <Field label="名字" value={name} onChangeText={setName} />
       <Field label="体重（kg）" value={mass} onChangeText={setMass} keyboardType="decimal-pad" />
       <Field label="站立摸高（cm）" value={reach} onChangeText={setReach} keyboardType="decimal-pad" />
+      <Field label="腿长（cm）· 踮脚站立，大转子到脚尖" value={leg} onChangeText={setLeg} keyboardType="decimal-pad" />
+      <Field label="90° 下蹲时大转子离地（cm）" value={squat} onChangeText={setSquat} keyboardType="decimal-pad" />
+      <Text style={styles.footnote}>
+        {hpo != null
+          ? `蹬伸距离 ${Math.round(hpo * 100)} cm，用于力-速度曲线。`
+          : legCm != null && squatCm != null
+            ? '腿长减下蹲高度应在 15–70 cm 之间，检查一下两个数。'
+            : '后两项用于力-速度曲线：大转子是大腿外侧最突出的骨点，下蹲到膝关节 90°、脚跟着地时量。'}
+      </Text>
       <Button label="保存" onPress={save} busy={saving} disabled={!name.trim()} />
     </View>
   );

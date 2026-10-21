@@ -63,19 +63,19 @@ describe('interval timing', () => {
 describe('marking profiles', () => {
   it('turns sprint marks into a time rounded to the hundredth', () => {
     const p = markProfile(sprintMetric(10))!;
-    expect(p.first.title).toBe('起跑帧');
-    const r = p.measure(0, 437, 240); // 1.8208 s
+    expect(p.marks[0].title).toBe('起跑帧');
+    const r = p.measure([0, 437], 240); // 1.8208 s
     expect(r).toMatchObject({ ok: true, value: 1.82 });
   });
 
   it('keeps the jump profile for flight tests', () => {
-    const r = markProfile(getMetric('cmj')!)!.measure(0, 132, 240); // 0.55 s → 37.1 cm
+    const r = markProfile(getMetric('cmj')!)!.measure([0, 132], 240); // 0.55 s → 37.1 cm
     expect(r).toMatchObject({ ok: true, value: 37.1 });
   });
 
   it('needs bar travel to mark a lift', () => {
     expect(markProfile(getMetric('vbt_squat')!)).toBeNull();
-    const r = markProfile(getMetric('vbt_squat')!, { romCm: 55 })!.measure(0, 176, 240); // 0.733 s
+    const r = markProfile(getMetric('vbt_squat')!, { romCm: 55 })!.measure([0, 176], 240); // 0.733 s
     expect(r).toMatchObject({ ok: true, value: 0.75 });
   });
 });

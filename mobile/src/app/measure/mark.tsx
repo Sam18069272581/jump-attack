@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Chip, Empty } from '@/components/ui';
 import { addTrial, ensureSession } from '@/db/repo';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
-import { markProfile } from '@/domain/marking';
+import { markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { persistVideo } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
@@ -25,7 +25,7 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
 }
 
 export default function Mark() {
-  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; reps?: string; rom?: string }>();
+  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; reps?: string; rom?: string; box?: string }>();
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const def = getMetric(params.metric);
@@ -39,9 +39,8 @@ export default function Mark() {
   const [detectedFps, setDetectedFps] = useState<number | null>(null);
   const [captureOverride, setCaptureOverride] = useState<number | null>(null);
   const [frame, setFrame] = useState(0);
-  // The two marks: take-off/landing for a jump, start/finish for a sprint.
-  const [first, setFirst] = useState<number | null>(null);
-  const [second, setSecond] = useState<number | null>(null);
+  // The marks, in the profile's order: take-off/landing for a jump, start/finish for a sprint, touch-down/take-off/landing for a drop jump.
+  const [marks, setMarks] = useState<(number | null)[]>([]);
   const [saving, setSaving] = useState(false);
 
   useEventListener(player, 'sourceLoad', ({ duration: d, availableVideoTracks }) => {
@@ -69,18 +68,17 @@ export default function Mark() {
     if (detectedFps != null) return;
     // Without a detected file rate the choice also sets the frame step: keep the same moment.
     show(Math.round((frame / fileFps) * next), next);
-    setFirst(null);
-    setSecond(null);
+    setMarks([]);
   }
 
-  function mark(which: 'first' | 'second') {
+  function mark(i: number) {
     Haptics.selectionAsync();
-    if (which === 'first') setFirst(frame);
-    else setSecond(frame);
+    setMarks((m) => profile!.marks.map((_, j) => (j === i ? frame : (m[j] ?? null))));
   }
 
   if (!profile) return <Empty title="这个项目不能用录像测量" />;
-  const result = profile.measure(first, second, fps);
+  const marked = profile.marks.map((_, i) => marks[i] ?? null);
+  const result = profile.measure(marked, fps);
 
   async function save() {
     if (!result.ok || !current) return;
@@ -93,15 +91,19 @@ export default function Mark() {
         value: result.value,
         flight_ms: result.elapsedS * 1000,
         fps,
-        takeoff_frame: first,
-        landing_frame: second,
+        // The last two marks; a drop jump's touch-down frame goes in the detail.
+        takeoff_frame: marked.at(-2),
+        landing_frame: marked.at(-1),
         video_uri: videoUri,
         ...(params.from === 'vbt'
           ? { load_kg: Number(params.load) || 0, detail: { source: 'video', rom_cm: Number(params.rom), ...(Number(params.reps) ? { reps: Number(params.reps) } : {}) } }
-          : {}),
+          : params.load != null
+            ? { load_kg: Number(params.load) || 0 }
+            : {}),
+        ...(result.detail || params.box ? { detail: { ...result.detail, ...(params.box ? { box_cm: Number(params.box) } : {}) } } : {}),
       });
-      // A VBT set goes straight back to the set log (capture and marking are the two screens above it).
-      if (params.from === 'vbt') return router.dismiss(2);
+      // A VBT set or a profile jump goes straight back to its log (capture and marking are the two screens above it).
+      if (returnsToLogger(params.from)) return router.dismiss(2);
       router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
     } catch (e) {
       Alert.alert('保存失败', String(e));
@@ -109,9 +111,12 @@ export default function Mark() {
     }
   }
 
-  const phaseIndex = first == null || frame < first ? 0 : second == null || frame < second ? 1 : 2;
+  // Past every mark that is set and not after the current frame.
+  const firstAhead = marked.findIndex((m) => m == null || frame < m);
+  const phaseIndex = firstAhead === -1 ? marked.length : firstAhead;
   const phase = profile.phases[phaseIndex];
-  const phaseColor = [colors.textMuted, colors.accent, colors.warn][phaseIndex];
+  const markColors = marked.length === 3 ? [colors.purple, colors.blue, colors.warn] : [colors.blue, colors.warn];
+  const phaseColor = [colors.textMuted, ...(marked.length === 3 ? [colors.purple, colors.accent] : [colors.accent]), colors.warn][phaseIndex];
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -164,8 +169,9 @@ export default function Mark() {
         </View>
 
         <View style={styles.markRow}>
-          <MarkButton {...profile.first} value={first} color={colors.blue} onMark={() => mark('first')} onJump={() => first != null && go(first)} />
-          <MarkButton {...profile.second} value={second} color={colors.warn} onMark={() => mark('second')} onJump={() => second != null && go(second)} />
+          {profile.marks.map((m, i) => (
+            <MarkButton key={m.title} {...m} value={marked[i]} color={markColors[i]} onMark={() => mark(i)} onJump={() => marked[i] != null && go(marked[i]!)} />
+          ))}
         </View>
 
         <View style={styles.result}>
