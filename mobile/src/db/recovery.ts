@@ -37,8 +37,16 @@ export async function listRecoveryDays(db: SQLiteDatabase, athleteId: number): P
   return [...byDate.values()].sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
-/** Saves one day, replacing what was there; a null value clears that metric for the day. */
-export async function saveRecoveryDay(db: SQLiteDatabase, athleteId: number, day: RecoveryDay): Promise<void> {
+/** Where a value came from: typed in, or pasted from Apple Health. */
+export type RecoverySource = 'manual' | 'health';
+
+/** Saves one day, replacing what was there; a null value clears that metric for the day. Values default to typed in. */
+export async function saveRecoveryDay(
+  db: SQLiteDatabase,
+  athleteId: number,
+  day: RecoveryDay,
+  sources: Partial<Record<RecoveryKey, RecoverySource>> = {},
+): Promise<void> {
   await db.withTransactionAsync(async () => {
     for (const key of KEYS) {
       const code = RECOVERY_CODES[key];
@@ -47,7 +55,7 @@ export async function saveRecoveryDay(db: SQLiteDatabase, athleteId: number, day
       const value = day[key];
       if (value == null) continue;
       await db.runAsync('INSERT INTO test_session (id, athlete_id, metric_code, started_at) VALUES (?, ?, ?, ?)', id, athleteId, code, middayIso(day.date));
-      await db.runAsync('INSERT INTO trial (session_id, value, detail) VALUES (?, ?, ?)', id, value, JSON.stringify({ source: 'manual' }));
+      await db.runAsync('INSERT INTO trial (session_id, value, detail) VALUES (?, ?, ?)', id, value, JSON.stringify({ source: sources[key] ?? 'manual' }));
     }
   });
 }

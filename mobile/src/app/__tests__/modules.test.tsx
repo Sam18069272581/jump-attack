@@ -1,6 +1,6 @@
 // Drives the speed, mobility, recovery and VBT screens, and the training tab's use of their data, against an in-memory database.
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
-import { Text, TextInput } from 'react-native';
+import { Alert, Text, TextInput, type AlertButton } from 'react-native';
 
 import { saveRecoveryDay } from '@/db/recovery';
 import { migrate } from '@/db/migrations';
@@ -16,6 +16,7 @@ import ManualEntry from '../measure/entry';
 import Result from '../measure/result';
 import MobilityEntry from '../mobility/[test]';
 import Mobility from '../mobility/index';
+import HealthImportGuide from '../recovery/health';
 import Recovery from '../recovery/index';
 import SpeedTests from '../speed/index';
 import VbtSession from '../vbt/[lift]';
@@ -30,6 +31,17 @@ const mockAthlete = { current: { id: 1, name: '我自己' } };
 jest.mock('@/state/athlete', () => ({ useAthlete: () => mockAthlete }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn() }));
 jest.mock('expo-sensors', () => ({ Accelerometer: { isAvailableAsync: async () => false, setUpdateInterval: jest.fn(), addListener: jest.fn() } }));
+let mockClipboard = '';
+jest.mock('expo-clipboard', () => ({ getStringAsync: async () => mockClipboard, setStringAsync: async (t: string) => void (mockClipboard = t) }));
+const mockKv = new Map<string, string>();
+jest.mock('expo-sqlite/kv-store', () => ({
+  __esModule: true,
+  default: {
+    getItem: async (k: string) => mockKv.get(k) ?? null,
+    setItem: async (k: string, v: string) => void mockKv.set(k, v),
+    removeItem: async (k: string) => void mockKv.delete(k),
+  },
+}));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('expo-router', () => {
   const React = jest.requireActual('react');
@@ -209,5 +221,67 @@ describe('VBT', () => {
     expect(texts(r.root)).toContain('按 VBT 估算 1RM 120 kg，5 次 @ RPE 5 建议 90 kg');
     const kg = r.root.findAll((n) => n.type === TextInput && n.props.accessibilityLabel === 'kg')[0];
     expect(kg.props.placeholder).toBe('90');
+  });
+});
+
+describe('Apple Health import', () => {
+  const alerts: { title: string; buttons?: AlertButton[] }[] = [];
+  let answer = '同意并导入';
+  beforeAll(() => {
+    jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
+      alerts.push({ title, buttons });
+      buttons?.find((b) => b.text === answer)?.onPress?.();
+    });
+  });
+  beforeEach(() => {
+    alerts.length = 0;
+  });
+
+  it('asks for consent first and imports nothing without it', async () => {
+    mockClipboard = 'HRV: 71 毫秒\n静息心率: 50 次/分\n睡眠: 8小时6分钟';
+    answer = '不同意';
+    const r = await render(<Recovery />);
+    await press(r.root, '从苹果健康导入');
+    expect(alerts.map((a) => a.title)).toEqual(['读取健康数据']);
+    expect(input(r.root, 'HRV (SDNN)（ms）').props.value).not.toBe('71');
+    expect(mockKv.size).toBe(0);
+  });
+
+  it('fills the form from the clipboard once agreed, and saves the values as from Health', async () => {
+    answer = '同意并导入';
+    const r = await render(<Recovery />);
+    await press(r.root, '从苹果健康导入');
+    expect(input(r.root, 'HRV (SDNN)（ms）').props.value).toBe('71');
+    expect(input(r.root, '静息心率（bpm）').props.value).toBe('50');
+    expect(input(r.root, '睡眠（h）').props.value).toBe('8.1');
+    expect(texts(r.root)).toContain('已从健康导入HRV、静息心率、睡眠，核对后点保存。');
+    await type(r.root, '静息心率（bpm）', '51'); // typed over
+    await press(r.root, '保存');
+    const rows = await mockDb.getAllAsync<{ code: string; value: number; detail: string }>(
+      `SELECT s.metric_code AS code, t.value, t.detail FROM test_session s JOIN trial t ON t.session_id = s.id WHERE s.id LIKE ?`,
+      `day-1-%-${today}`,
+    );
+    const source = Object.fromEntries(rows.map((x) => [x.code, [x.value, JSON.parse(x.detail).source]]));
+    expect(source).toMatchObject({ rec_hrv: [71, 'health'], rec_rhr: [51, 'manual'], rec_sleep: [8.1, 'health'] });
+  });
+
+  it('does not ask again, and points to the setup when the clipboard has no Health data', async () => {
+    mockClipboard = 'hello';
+    const r = await render(<Recovery />);
+    await press(r.root, '从苹果健康导入');
+    expect(alerts.map((a) => a.title)).toEqual(['剪贴板里没有健康数据']);
+    answer = '查看设置方法';
+    await press(r.root, '从苹果健康导入');
+    expect(mockRouter.push).toHaveBeenCalledWith('/recovery/health');
+  });
+
+  it('shows the Shortcut setup and lets consent be withdrawn', async () => {
+    const r = await render(<HealthImportGuide />);
+    expect(texts(r.root)).toContain('你已同意导入健康数据。');
+    await press(r.root, '撤回同意');
+    expect(mockKv.size).toBe(0);
+    expect(texts(r.root)).toContain('第一次导入时会先问你');
+    await press(r.root, '复制示例试一下');
+    expect(mockClipboard).toContain('HRV: 58');
   });
 });
