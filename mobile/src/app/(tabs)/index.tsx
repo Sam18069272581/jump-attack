@@ -4,23 +4,28 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DayStateRow } from '@/components/dunk';
 import { DunkPanel } from '@/components/DunkPanel';
 import { Icon } from '@/components/Icon';
 import { loadDiagnosis } from '@/db/dunk';
-import type { DunkDiagnosis } from '@/domain/dunk';
+import { dayState, type DayState, type DunkDiagnosis } from '@/domain/dunk';
 import { CATEGORIES } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
+import { loadReadiness, todayISO } from '@/state/training';
 import { colors, radius, text } from '@/theme';
 
 /** Leads with how far the athlete is from dunking; every module below serves that. */
 export default function Home() {
   const db = useSQLiteContext();
   const { current } = useAthlete();
-  const [diagnosis, setDiagnosis] = useState<DunkDiagnosis | null>(null);
+  const [goal, setGoal] = useState<{ diagnosis: DunkDiagnosis; state: DayState } | null>(null);
 
   useFocusEffect(
     useCallback(() => {
-      if (current) loadDiagnosis(db, current).then(setDiagnosis);
+      if (!current) return;
+      Promise.all([loadDiagnosis(db, current), loadReadiness(db, current.id, todayISO())]).then(([diagnosis, readiness]) =>
+        setGoal({ diagnosis, state: dayState(readiness) }),
+      );
     }, [db, current]),
   );
 
@@ -41,10 +46,11 @@ export default function Home() {
           </Pressable>
         </View>
 
-        {diagnosis && <DunkPanel diagnosis={diagnosis} standingReach={current?.standing_reach_cm ?? null} />}
+        {goal && <DunkPanel diagnosis={goal.diagnosis} standingReach={current?.standing_reach_cm ?? null} />}
 
         <View style={{ gap: 12 }}>
           <Text style={text.section}>训练和测试</Text>
+          {goal && <DayStateRow state={goal.state} />}
           {CATEGORIES.map((c) => {
             const href = c.href as Href | null;
             const ready = href != null;

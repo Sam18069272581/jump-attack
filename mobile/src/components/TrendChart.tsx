@@ -10,12 +10,24 @@ const PAD_X = 24;
 const PAD_TOP = 34;
 const PAD_BOTTOM = 36;
 
-/** Line chart of a metric across sessions, styled after the history detail screen in the design. */
-export function TrendChart({ points, color = colors.accent, height = 200, showLabels = true }: { points: Point[]; color?: string; height?: number; showLabels?: boolean }) {
+/** Line chart of a metric across sessions, styled after the history detail screen in the design. `target` adds a dashed goal line. */
+export function TrendChart({
+  points,
+  color = colors.accent,
+  height = 200,
+  showLabels = true,
+  target,
+}: {
+  points: Point[];
+  color?: string;
+  height?: number;
+  showLabels?: boolean;
+  target?: { value: number; label: string };
+}) {
   const [width, setWidth] = useState(0);
   const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
 
-  const values = points.map((p) => p.value);
+  const values = [...points.map((p) => p.value), ...(target ? [target.value] : [])];
   const min = Math.min(...values);
   const max = Math.max(...values);
   const span = max - min || 1;
@@ -26,6 +38,7 @@ export function TrendChart({ points, color = colors.accent, height = 200, showLa
     x: points.length === 1 ? width / 2 : PAD_X + (i * (width - 2 * PAD_X)) / (points.length - 1),
     y: top + (1 - (p.value - min) / span) * innerH,
   }));
+  const targetY = target ? top + (1 - (target.value - min) / span) * innerH : 0;
   // Too many labels collide; show at most ~8 evenly spaced.
   const every = Math.max(1, Math.ceil(points.length / 8));
 
@@ -40,6 +53,7 @@ export function TrendChart({ points, color = colors.accent, height = 200, showLa
                 <Line x1={0} x2={width} y1={top + innerH} y2={top + innerH} stroke={colors.border} strokeDasharray="4 4" />
               </>
             )}
+            {target && <Line x1={0} x2={width} y1={targetY} y2={targetY} stroke={colors.textSoft} strokeDasharray="6 5" strokeWidth={1.5} />}
             {coords.length > 1 && (
               <Polyline points={coords.map((c) => `${c.x},${c.y}`).join(' ')} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
             )}
@@ -56,6 +70,7 @@ export function TrendChart({ points, color = colors.accent, height = 200, showLa
                 </View>
               ) : null,
             )}
+          {target && <Text style={[styles.target, { top: targetY - 18 }]}>{target.label}</Text>}
         </>
       )}
     </View>
@@ -65,5 +80,6 @@ export function TrendChart({ points, color = colors.accent, height = 200, showLa
 const styles = StyleSheet.create({
   box: { backgroundColor: colors.surface, borderRadius: 18, overflow: 'hidden' },
   value: { position: 'absolute', width: 48, textAlign: 'center', fontFamily: fonts.numeric, fontSize: 13, color: colors.textSoft },
+  target: { position: 'absolute', right: 8, fontFamily: fonts.numeric, fontSize: 12, color: colors.textSoft },
   date: { position: 'absolute', width: 48, textAlign: 'center', fontFamily: fonts.numeric, fontSize: 12, color: colors.textMuted },
 });
