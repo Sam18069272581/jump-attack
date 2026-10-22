@@ -7,7 +7,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Empty } from '@/components/ui';
 import { endPlan } from '@/db/training';
 import { addDays, daysBetween, mondayOf, shortDate } from '@/domain/dates';
-import { PHASE_NAMES, planDay, planWeekOf, planWeeks, type PlannedSession } from '@/domain/plan';
+import { BLOCKS } from '@/domain/dunk';
+import { BLOCK_WEEKS, PHASE_NAMES, planDay, planWeekOf, planWeeks, type PlannedSession } from '@/domain/plan';
 import { useAthlete } from '@/state/athlete';
 import { loadTraining, todayISO, type TrainingData } from '@/state/training';
 import { colors, radius, text } from '@/theme';
@@ -56,7 +57,10 @@ export default function PlanOverview() {
     const monday = addDays(firstMonday, week * 7);
     const sessions = Array.from({ length: 7 }, (_, d) => planDay(template, plan, addDays(monday, d))).filter((p): p is PlannedSession => p != null);
     const phase = sessions[0]?.phase ?? template.weeks[Math.max(0, planWeekOf(plan, monday)) % template.weeks.length].phase;
-    return { week, phase, deload: sessions.some((p) => p.inserted), sessions };
+    const block = sessions.find((p) => !p.inserted)?.block;
+    const spec = block && template.blocks?.[block.type].weeks[block.week];
+    const label = block && spec ? `${BLOCKS[block.type].name} ${block.week + 1}/${BLOCK_WEEKS} · ${spec.retest ? '减量复测' : PHASE_NAMES[spec.phase]}` : PHASE_NAMES[phase];
+    return { week, label, deload: sessions.some((p) => p.inserted), sessions };
   }).filter((w) => total == null || w.sessions.length > 0);
 
   function confirmEnd() {
@@ -81,10 +85,10 @@ export default function PlanOverview() {
           <Text style={text.muted}>{template.summary}</Text>
         </View>
 
-        {weeks.map(({ week, phase, deload, sessions }) => (
+        {weeks.map(({ week, label, deload, sessions }) => (
           <View key={week} style={[styles.week, week === currentWeek && { borderColor: colors.accent }]}>
             <Text style={text.section}>
-              第 {week + 1} 周 · {deload ? '减量（疲劳后插入）' : PHASE_NAMES[phase]}
+              第 {week + 1} 周 · {deload ? '减量（疲劳后插入）' : label}
             </Text>
             {sessions.map((p) => {
               const w = byDate.get(p.date);

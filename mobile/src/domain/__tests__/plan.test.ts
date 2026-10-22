@@ -1,6 +1,21 @@
 import { readinessOn } from '../assess';
-import { adjustForReadiness, formatPrescription, nextSession, planDay, planFinished, planWeekOf, summarizeWorkout, type PlanSettings, type SessionTemplate } from '../plan';
-import { defaultWeekdays, getTemplate, TEMPLATES } from '../templates';
+import {
+  adjustForReadiness,
+  blockOn,
+  blockPosition,
+  calendarDate,
+  formatPrescription,
+  isJump,
+  nextSession,
+  planDay,
+  planFinished,
+  planPosition,
+  planWeekOf,
+  summarizeWorkout,
+  type PlanSettings,
+  type SessionTemplate,
+} from '../plan';
+import { BLOCK_PLAN_CODE, defaultWeekdays, getTemplate, TEMPLATES } from '../templates';
 
 const fourPlusOne = getTemplate('jump-4-1')!;
 const maintain = getTemplate('jump-maintain-2')!;
@@ -145,5 +160,64 @@ describe('readinessOn', () => {
 
   it('is unknown until CMJ is tested that day', () => {
     expect(readinessOn([{ started_at: at(14), best: 40 }], '2026-10-19')).toEqual({ today: null, readiness: 'unknown', dropPct: 0 });
+  });
+});
+
+describe('block plans', () => {
+  const blocks = getTemplate(BLOCK_PLAN_CODE)!;
+  // Monday start, Monday / Wednesday / Friday, one reactive block.
+  const s: PlanSettings = { templateCode: BLOCK_PLAN_CODE, startDate: '2026-10-19', weekdays: [1, 3, 5], blocks: [{ start: '2026-10-19', type: 'reactive' }] };
+
+  it('takes sessions and weeks from the block the day falls in', () => {
+    expect(planDay(blocks, s, '2026-10-19')).toMatchObject({ phase: 'accumulate', session: { code: 'R1' }, block: { index: 0, type: 'reactive', week: 0, start: '2026-10-19', end: '2026-11-16' } });
+    expect(planDay(blocks, s, '2026-10-23')?.session.code).toBe('R3');
+    expect(planDay(blocks, s, '2026-11-02')).toMatchObject({ phase: 'intensify', block: { week: 2 } });
+  });
+
+  it('deloads and retests in week 4, then runs the block again until another is picked', () => {
+    const retest = planDay(blocks, s, '2026-11-09')!;
+    expect(retest).toMatchObject({ phase: 'deload', block: { week: 3 } });
+    expect(item(retest.session, 'depth_jump')).toBeUndefined();
+    expect(planDay(blocks, s, '2026-11-16')).toMatchObject({ phase: 'accumulate', session: { code: 'R1' }, block: { week: 0, start: '2026-11-16' } });
+    expect(planFinished(blocks, s, '2027-06-01')).toBe(false);
+  });
+
+  it('tells which block a day is in', () => {
+    const switched: PlanSettings = { ...s, blocks: [...s.blocks!, { start: '2026-11-16', type: 'transfer' }] };
+    expect(blockOn(switched, '2026-10-18')).toBeNull();
+    expect(blockOn(switched, '2026-11-15')).toBe('reactive');
+    expect(blockOn(switched, '2026-11-16')).toBe('transfer');
+    expect(planDay(blocks, switched, '2026-11-16')?.session.code).toBe('T1');
+    expect(blockOn(settings, '2026-10-26')).toBeNull();
+  });
+
+  it('pushes blocks back with an inserted deload', () => {
+    const withDeload: PlanSettings = { ...s, deloads: ['2026-10-28'] };
+    expect(planDay(blocks, withDeload, '2026-10-28')).toMatchObject({ inserted: true, phase: 'deload', block: { week: 1 } });
+    expect(planDay(blocks, withDeload, '2026-11-16')).toMatchObject({ phase: 'deload', block: { week: 3 } });
+    expect(blockPosition(withDeload, '2026-11-23')).toMatchObject({ week: 0 });
+    expect(calendarDate(withDeload, '2026-10-27')).toBe('2026-10-27');
+    expect(calendarDate(withDeload, planPosition(withDeload, '2026-11-04').planDate)).toBe('2026-11-04');
+    expect(calendarDate(withDeload, '2026-11-16')).toBe('2026-11-23');
+  });
+
+  it('adds the extras a block switched on to their session', () => {
+    const extras: PlanSettings = { ...s, blocks: [{ start: '2026-10-19', type: 'transfer', extras: ['technique', 'heavy_squat'] }] };
+    expect(item(planDay(blocks, extras, '2026-10-19')!.session, 'penultimate_step')?.kind).toBe('technique');
+    expect(item(planDay(blocks, extras, '2026-10-23')!.session, 'back_squat')).toBeDefined();
+    expect(item(planDay(blocks, s, '2026-10-19')!.session, 'penultimate_step')).toBeUndefined();
+  });
+
+  it('tags every block exercise and counts reactive and transfer jumps', () => {
+    for (const b of Object.values(blocks.blocks!)) {
+      expect(b.weeks.filter((w) => w.retest)).toHaveLength(1);
+      for (const session of b.sessions) {
+        expect(new Set(session.items.map((p) => p.code)).size).toBe(session.items.length);
+        for (const p of session.items) expect(['strength', 'reactive', 'transfer', 'technique', 'accessory']).toContain(p.kind);
+      }
+    }
+    const r1 = planDay(blocks, s, '2026-10-19')!.session;
+    expect(summarizeWorkout(r1, [{ exercise_code: 'pogo', set_no: 1, reps: 15, load_kg: null, rpe: null }]).jumps).toBe(15);
+    expect(isJump({ code: 'sprint_20', name: '20 m 冲刺', kind: 'transfer', sets: 1, reps: 1 })).toBe(false);
   });
 });

@@ -63,19 +63,28 @@ describe('interval timing', () => {
 describe('marking profiles', () => {
   it('turns sprint marks into a time rounded to the hundredth', () => {
     const p = markProfile(sprintMetric(10))!;
-    expect(p.first.title).toBe('起跑帧');
-    const r = p.measure(0, 437, 240); // 1.8208 s
+    expect(p.marks[0].title).toBe('起跑帧');
+    const r = p.measure([0, 437], 240); // 1.8208 s
     expect(r).toMatchObject({ ok: true, value: 1.82 });
   });
 
   it('keeps the jump profile for flight tests', () => {
-    const r = markProfile(getMetric('cmj')!)!.measure(0, 132, 240); // 0.55 s → 37.1 cm
+    const r = markProfile(getMetric('cmj')!)!.measure([0, 132], 240); // 0.55 s → 37.1 cm
     expect(r).toMatchObject({ ok: true, value: 37.1 });
+  });
+
+  it('adds standing reach to a marked run-up jump for the touch height', () => {
+    const touch = getMetric('approach_touch')!;
+    const r = markProfile(touch, { reachCm: 240 })!.measure([0, 132], 240); // 37.1 cm jump
+    expect(r).toMatchObject({ ok: true, value: 277.1, detail: { jump_cm: 37.1, standing_reach_cm: 240 } });
+    expect(markProfile(touch)!.measure([0, 132], 240)).toMatchObject({ ok: false, message: expect.stringContaining('先在「我的」填站立摸高') });
+    // A bad mark is still reported as a marking problem.
+    expect(markProfile(touch, { reachCm: 240 })!.measure([10, 5], 240)).toMatchObject({ ok: false, message: '落地帧要在起跳帧之后' });
   });
 
   it('needs bar travel to mark a lift', () => {
     expect(markProfile(getMetric('vbt_squat')!)).toBeNull();
-    const r = markProfile(getMetric('vbt_squat')!, { romCm: 55 })!.measure(0, 176, 240); // 0.733 s
+    const r = markProfile(getMetric('vbt_squat')!, { romCm: 55 })!.measure([0, 176], 240); // 0.733 s
     expect(r).toMatchObject({ ok: true, value: 0.75 });
   });
 });

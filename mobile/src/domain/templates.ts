@@ -1,4 +1,5 @@
-import type { PlanTemplate, Prescription, SessionTemplate } from './plan';
+import type { BlockType } from './dunk';
+import type { BlockTemplate, PlanTemplate, Prescription, SessionTemplate, WeekSpec } from './plan';
 
 // Exercises shared by the templates. Sets and RPE are week-1 values; the week specs scale them.
 const EX = {
@@ -16,6 +17,85 @@ const EX = {
   approachJump: { code: 'approach_jump', name: '助跑摸高', kind: 'plyo', sets: 5, reps: 3, intense: true, cue: '3–5 步助跑，全力起跳摸高，每次休息 1 分钟' },
   nordic: { code: 'nordic', name: '北欧腿弯举', kind: 'accessory', sets: 3, reps: 5 },
 } satisfies Record<string, Prescription>;
+
+// The block plan's exercises, each tagged strength / reactive / transfer / technique. A new exercise only needs a
+// tag and a place in a session; the plan logic doesn't change.
+const SMITH = '没有深蹲架就用史密斯机';
+const BX = {
+  heavySquat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 4, reps: 4, rpe: 8, cue: `大重量，每次下到大腿平行。${SMITH}` },
+  squat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 3, reps: 5, rpe: 7.5, cue: SMITH },
+  maintainSquat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 3, reps: 3, rpe: 8, cue: `维持力量，组数少但不轻。${SMITH}` },
+  rdl: { code: 'rdl', name: '罗马尼亚硬拉', kind: 'strength', sets: 3, reps: 6, rpe: 7.5 },
+  splitSquat: { code: 'split_squat', name: '保加利亚分腿蹲', kind: 'strength', sets: 3, reps: 6, perSide: true, rpe: 7.5 },
+  depthJump: { code: 'depth_jump', name: '跳深', kind: 'reactive', sets: 4, reps: 5, intense: true, cue: '用跳深测试找到的最佳箱高，一触地就起跳，每次休息 1 分钟' },
+  maintainDepthJump: { code: 'depth_jump', name: '跳深', kind: 'reactive', sets: 3, reps: 4, intense: true, cue: '用最佳箱高，维持反应力量' },
+  pogo: { code: 'pogo', name: 'Pogo 跳', kind: 'reactive', sets: 3, reps: 15, cue: '膝盖微屈，靠脚踝弹，触地越短越好' },
+  maintainPogo: { code: 'pogo', name: 'Pogo 跳', kind: 'reactive', sets: 2, reps: 10, cue: '热身后做，保持弹性' },
+  hurdleHop: { code: 'hurdle_hop', name: '连续跨栏跳', kind: 'reactive', sets: 4, reps: 5, cue: '栏高到膝盖下方，落地即起，不要停顿' },
+  singleLegHop: { code: 'single_leg_hop', name: '单腿连续跳', kind: 'reactive', sets: 3, reps: 5, perSide: true, cue: '触地短，膝盖对准脚尖' },
+  approachJump: { code: 'approach_jump', name: '助跑摸高', kind: 'transfer', sets: 5, reps: 3, intense: true, jump: true, cue: '3–5 步助跑，全力起跳摸高，每次休息 1 分钟' },
+  trapBarJump: { code: 'trap_bar_jump', name: '六角杠铃跳', kind: 'transfer', sets: 4, reps: 4, loaded: true, jump: true, cue: '用后蹲 1RM 的 20–30%，每次都全力跳' },
+  squatJump: { code: 'squat_jump', name: '深蹲跳', kind: 'transfer', sets: 3, reps: 3, jump: true, cue: '每次落地站稳再跳，追求高度' },
+  sprint: { code: 'sprint_20', name: '20 m 冲刺', kind: 'transfer', sets: 4, reps: 1, intense: true, cue: '站立起跑全力冲，每趟走回来休息 2 分钟' },
+  penultimate: { code: 'penultimate_step', name: '助跑最后两步', kind: 'technique', sets: 4, reps: 3, jump: true, cue: '最后两步一长一短，降重心、摆臂向上；先求节奏不求高度' },
+  calfRaise: { code: 'calf_raise', name: '单腿提踵', kind: 'accessory', sets: 3, reps: 12, perSide: true },
+  nordic: { code: 'nordic', name: '北欧腿弯举', kind: 'accessory', sets: 3, reps: 5 },
+  deadBug: { code: 'dead_bug', name: '死虫', kind: 'accessory', sets: 3, reps: 10, perSide: true },
+} satisfies Record<string, Prescription>;
+
+/** Three weeks building up, then a deload week to retest in. */
+export const BLOCK_WEEK_SPECS: WeekSpec[] = [
+  { phase: 'accumulate' },
+  { phase: 'accumulate', rpeDelta: 0.5 },
+  { phase: 'intensify', setDelta: 1, rpeDelta: 1 },
+  { phase: 'deload', setFactor: 0.6, rpeDelta: -1.5, dropIntense: true, retest: true },
+];
+
+/** Optional additions any block can switch on. */
+const BLOCK_EXTRAS: BlockTemplate['extras'] = {
+  /** Run-up technique: the approach jump barely beats the standing one. */
+  technique: { slot: 0, item: BX.penultimate },
+  /** A second heavy squat day while squat is still under 2× body mass. */
+  heavy_squat: { slot: 2, item: BX.maintainSquat },
+};
+
+export const BLOCK_TEMPLATES: Record<BlockType, BlockTemplate> = {
+  strength: {
+    type: 'strength',
+    sessions: [
+      { code: 'S1', name: '大重量深蹲', focus: '下肢最大力量', items: [BX.heavySquat, BX.rdl, BX.squatJump, BX.calfRaise] },
+      { code: 'S2', name: '单腿力量', focus: '单腿力量和后链', items: [BX.squat, BX.splitSquat, BX.maintainPogo, BX.nordic] },
+      { code: 'S3', name: '深蹲 + 跳', focus: '重量和跳跃配着练', items: [BX.maintainSquat, BX.rdl, BX.maintainDepthJump, BX.deadBug] },
+    ],
+    weeks: BLOCK_WEEK_SPECS,
+    retest: ['vbt_squat', 'sj', 'cmj'],
+    extras: BLOCK_EXTRAS,
+  },
+  reactive: {
+    type: 'reactive',
+    sessions: [
+      { code: 'R1', name: '跳深', focus: '最佳箱高跳深，触地短', items: [BX.depthJump, BX.pogo, BX.maintainSquat, BX.calfRaise] },
+      { code: 'R2', name: '连续跳', focus: '短触地连续跳', items: [BX.hurdleHop, BX.singleLegHop, BX.splitSquat, BX.deadBug] },
+      { code: 'R3', name: '跳深 + 力量', focus: '跳深配维持力量', items: [BX.maintainDepthJump, BX.pogo, BX.maintainSquat, BX.nordic] },
+    ],
+    weeks: BLOCK_WEEK_SPECS,
+    retest: ['dj_rsi', 'cmj'],
+    extras: BLOCK_EXTRAS,
+  },
+  transfer: {
+    type: 'transfer',
+    sessions: [
+      { code: 'T1', name: '助跑摸高', focus: '把力量和弹性用到助跑起跳上', items: [BX.approachJump, BX.trapBarJump, BX.sprint, BX.nordic] },
+      { code: 'T2', name: '维持', focus: '深蹲和跳深各维持一次', items: [BX.maintainDepthJump, BX.maintainSquat, BX.squatJump, BX.calfRaise] },
+      { code: 'T3', name: '速度', focus: '冲刺和助跑跳', items: [BX.sprint, BX.approachJump, BX.hurdleHop, BX.deadBug] },
+    ],
+    weeks: BLOCK_WEEK_SPECS,
+    retest: ['approach_touch', 'cmj'],
+    extras: BLOCK_EXTRAS,
+  },
+};
+
+export const BLOCK_PLAN_CODE = 'dunk-blocks';
 
 const STRENGTH: SessionTemplate = {
   code: 'A',
@@ -39,6 +119,15 @@ const POWER: SessionTemplate = {
 };
 
 export const TEMPLATES: PlanTemplate[] = [
+  {
+    code: BLOCK_PLAN_CODE,
+    name: '扣篮 · 4 周训练块',
+    summary: '按诊断出的短板练 4 周：缺力量练力量块，缺反应练反应块，都过线练转化块。第 4 周减量并复测，再看下一块练什么。',
+    sessions: BLOCK_TEMPLATES.strength.sessions,
+    weeks: BLOCK_WEEK_SPECS,
+    repeat: true,
+    blocks: BLOCK_TEMPLATES,
+  },
   {
     code: 'jump-4-1',
     name: '垂直弹跳 · 4+1 周期',
