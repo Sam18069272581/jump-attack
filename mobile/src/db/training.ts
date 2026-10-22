@@ -125,7 +125,7 @@ export async function finishWorkout(db: SQLiteDatabase, workoutId: number): Prom
 
 export async function listSets(db: SQLiteDatabase, workoutId: number): Promise<LoggedSet[]> {
   return db.getAllAsync<LoggedSet>(
-    'SELECT exercise_code, set_no, reps, load_kg, rpe FROM set_log WHERE workout_id = ? ORDER BY exercise_code, set_no',
+    'SELECT exercise_code, set_no, reps, load_kg, rpe, mean_velocity FROM set_log WHERE workout_id = ? ORDER BY exercise_code, set_no',
     workoutId,
   );
 }
@@ -133,14 +133,16 @@ export async function listSets(db: SQLiteDatabase, workoutId: number): Promise<L
 /** Records a set, replacing what was logged for the same set before. */
 export async function logSet(db: SQLiteDatabase, workoutId: number, s: LoggedSet): Promise<void> {
   await db.runAsync(
-    `INSERT INTO set_log (workout_id, exercise_code, set_no, reps, load_kg, rpe) VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT (workout_id, exercise_code, set_no) DO UPDATE SET reps = excluded.reps, load_kg = excluded.load_kg, rpe = excluded.rpe`,
+    `INSERT INTO set_log (workout_id, exercise_code, set_no, reps, load_kg, rpe, mean_velocity) VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (workout_id, exercise_code, set_no) DO UPDATE SET
+       reps = excluded.reps, load_kg = excluded.load_kg, rpe = excluded.rpe, mean_velocity = excluded.mean_velocity`,
     workoutId,
     s.exercise_code,
     s.set_no,
     s.reps,
     s.load_kg,
     s.rpe,
+    s.mean_velocity ?? null,
   );
 }
 

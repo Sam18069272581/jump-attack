@@ -102,6 +102,10 @@ const MIGRATIONS: string[] = [
   -- Block plans: the training blocks in order (JSON array of {start, type, ...}, see PlanBlock in domain/plan.ts).
   ALTER TABLE plan ADD COLUMN blocks TEXT NOT NULL DEFAULT '[]';
   `,
+  `
+  -- Mean velocity of a logged set's fastest rep (m/s), when the athlete measured it.
+  ALTER TABLE set_log ADD COLUMN mean_velocity REAL;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

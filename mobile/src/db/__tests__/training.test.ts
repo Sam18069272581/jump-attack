@@ -57,8 +57,8 @@ describe('workouts and sets', () => {
     await logSet(db, w.id, { exercise_code: 'squat_jump', set_no: 1, reps: 5, load_kg: null, rpe: null });
     await unlogSet(db, w.id, 'squat_jump', 1);
     expect(await listSets(db, w.id)).toEqual([
-      { exercise_code: 'back_squat', set_no: 1, reps: 4, load_kg: 102.5, rpe: 8 },
-      { exercise_code: 'back_squat', set_no: 2, reps: 5, load_kg: 105, rpe: 8 },
+      { exercise_code: 'back_squat', set_no: 1, reps: 4, load_kg: 102.5, rpe: 8, mean_velocity: null },
+      { exercise_code: 'back_squat', set_no: 2, reps: 5, load_kg: 105, rpe: 8, mean_velocity: null },
     ]);
     expect(await lastLoads(db, 1)).toEqual({ back_squat: 105 });
 

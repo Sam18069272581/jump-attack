@@ -63,3 +63,12 @@ export function readinessOn(results: { started_at: string; best: number }[], dat
   const today = Math.max(...todays);
   return { today, ...cmjReadiness(before, today) };
 }
+
+/**
+ * The results that count toward progress: those from `exclude` days (days the athlete was in poor shape)
+ * are left out of baselines and bests, so one bad day doesn't drag the trend down.
+ */
+export function countedResults<T extends { started_at: string }>(results: T[], exclude?: ReadonlySet<ISODate>): T[] {
+  if (!exclude?.size) return results;
+  return results.filter((r) => !exclude.has(toISODate(new Date(r.started_at))));
+}

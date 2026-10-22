@@ -8,8 +8,10 @@ import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ui';
 import { deleteTrial, listSessionResults, listTrials, type Trial } from '@/db/repo';
 import { best as bestOf, getCategory, getMetric } from '@/domain/metrics';
+import { toISODate } from '@/domain/dates';
 import { assess, type Assessment } from '@/domain/verdict';
 import { useAthlete } from '@/state/athlete';
+import { countedTrend, POOR_DAY_NOTE } from '@/state/training';
 import { colors, fonts, radius } from '@/theme';
 
 export default function Result() {
@@ -17,21 +19,26 @@ export default function Result() {
   const def = getMetric(metric);
   const db = useSQLiteContext();
   const { current } = useAthlete();
-  const [data, setData] = useState<{ trials: Trial[]; assessment: Assessment | null }>({ trials: [], assessment: null });
+  const [data, setData] = useState<{ trials: Trial[]; assessment: Assessment | null; poorDay: boolean }>({ trials: [], assessment: null, poorDay: false });
   const [version, setVersion] = useState(0);
-  const { trials, assessment } = data;
+  const { trials, assessment, poorDay } = data;
 
   useEffect(() => {
     let alive = true;
     (async () => {
       const t = await listTrials(db, session);
       let a: Assessment | null = null;
+      let poorDay = false;
       if (def && current && t.length > 0) {
         const best = bestOf(def, t.map((x) => x.value))!;
-        const previous = (await listSessionResults(db, current.id, def.code, def.lowerIsBetter)).filter((r) => r.session_id !== session).map((r) => r.best);
+        const all = await listSessionResults(db, current.id, def.code, def.lowerIsBetter);
+        // Poor days stay out of the baseline, so one bad day doesn't make the next normal one look like progress.
+        const { counted, poor } = await countedTrend(db, current.id, def.code, all);
+        const previous = counted.filter((r) => r.session_id !== session).map((r) => r.best);
         a = assess(def, previous, best);
+        poorDay = poor.has(toISODate(new Date(all.find((r) => r.session_id === session)?.started_at ?? Date.now())));
       }
-      if (alive) setData({ trials: t, assessment: a });
+      if (alive) setData({ trials: t, assessment: a, poorDay });
     })();
     return () => {
       alive = false;
@@ -91,6 +98,7 @@ export default function Result() {
             {assessment.readiness && (
               <Text style={[styles.assessText, { color: assessment.readiness.readiness === 'fatigued' ? colors.warn : colors.good }]}>{assessment.readiness.text}</Text>
             )}
+            {poorDay && <Text style={[styles.assessText, { color: colors.textMuted }]}>{POOR_DAY_NOTE}</Text>}
           </View>
         )}
 
