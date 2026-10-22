@@ -8,7 +8,8 @@ import { Empty } from '@/components/ui';
 import { listMetricResults, listSessionValues, type SessionResult } from '@/db/repo';
 import { fastestSetLoads, listVbtSets } from '@/db/vbt';
 import { judgeChange } from '@/domain/assess';
-import { changeTone, formatValue, getMetric, metricColor, resultNote } from '@/domain/metrics';
+import { dunkLine } from '@/domain/dunk';
+import { APPROACH_TOUCH, changeTone, formatValue, getMetric, metricColor, resultNote } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts } from '@/theme';
 
@@ -51,6 +52,8 @@ export default function MetricHistory() {
   const tone = (d: number) => ({ good: colors.good, bad: colors.warn, flat: colors.textMuted })[changeTone(def, d)];
   const verdict = latest ? judgeChange(results.slice(0, -1).map((r) => r.best), latest.best, def.lowerIsBetter) : null;
   const recent = results.slice(-12);
+  // Touch heights are read against the dunk line.
+  const line = def.code === APPROACH_TOUCH.code && current ? dunkLine(current.rim_height_cm, current.dunk_clearance_cm) : null;
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -72,8 +75,13 @@ export default function MetricHistory() {
             )}
           </View>
           {note(latest) && <Text style={styles.note}>{note(latest)}</Text>}
+          {line != null && <Text style={styles.note}>{latest.best < line ? `离扣篮线 ${line} cm 还差 ${(line - latest.best).toFixed(1)} cm` : `已过扣篮线 ${line} cm`}</Text>}
 
-          <TrendChart color={color} points={recent.map((r) => ({ label: shortDate(r.started_at), value: r.best, display: formatValue(def, r.best) }))} />
+          <TrendChart
+            color={color}
+            points={recent.map((r) => ({ label: shortDate(r.started_at), value: r.best, display: formatValue(def, r.best) }))}
+            target={line != null ? { value: line, label: `扣篮线 ${line}` } : undefined}
+          />
 
           <View>
             <View style={[styles.tableRow, styles.tableHead]}>
