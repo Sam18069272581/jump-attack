@@ -47,6 +47,7 @@ export function RetestCard({ codes, diagnosis, nextStart }: { codes: string[]; d
         ))}
       </View>
       {diagnosis && diagnosis.missing.length > 0 && <Text style={text.caption}>诊断还缺：{diagnosis.missing.map((m) => MISSING_TEXT[m]).join('；')}</Text>}
+      <Button label="看扣篮诊断" variant="ghost" onPress={() => router.push('/dunk')} />
     </Card>
   );
 }
