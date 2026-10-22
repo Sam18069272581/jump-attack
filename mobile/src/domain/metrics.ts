@@ -37,6 +37,8 @@ export type MetricDef = {
   aggregate?: 'best' | 'mean';
   /** A figure estimated from the measured value, shown alongside it (VO2max from a run distance). */
   estimate?: { name: string; unit: string; decimals: number; from: (value: number) => number };
+  /** The value is a touch height: a jump measured from video is saved as standing reach + jump height. */
+  plusReach?: boolean;
 };
 
 export type CategoryDef = {
@@ -62,6 +64,25 @@ export const CATEGORIES: CategoryDef[] = [
 export function getCategory(key: Category): CategoryDef {
   return CATEGORIES.find((c) => c.key === key)!;
 }
+
+/**
+ * How high the hand reaches in a run-up jump, the number the whole app works towards: the dunk line is the rim
+ * plus clearance (domain/dunk.ts). Typed in from a mark on a wall or the backboard, or measured from video as
+ * standing reach + flight-time jump height, which `trial.detail` keeps as `jump_cm` and `standing_reach_cm`.
+ */
+export const APPROACH_TOUCH: MetricDef & { short: string; color: string } = {
+  code: 'approach_touch',
+  short: '摸高',
+  name: '助跑摸高',
+  category: 'jump',
+  unit: 'cm',
+  decimals: 1,
+  color: '#FFD84F',
+  use: '离扣篮还差多少就看它',
+  capture: ['flight', 'manual'],
+  plusReach: true,
+  range: [150, 420],
+};
 
 /** Jump tests measured by flight time from video. */
 export const JUMP_TESTS: (MetricDef & { short: string; color: string })[] = [
@@ -212,7 +233,7 @@ export const RECOVERY_METRICS: MetricDef[] = [
   { code: 'rec_resp', name: '呼吸频率', category: 'recovery', unit: '次/分', decimals: 1, neutral: true, capture: ['manual'], range: [5, 40] },
 ];
 
-export const METRICS: MetricDef[] = [...JUMP_TESTS, LOADED_SJ, DROP_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
+export const METRICS: MetricDef[] = [APPROACH_TOUCH, ...JUMP_TESTS, LOADED_SJ, DROP_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
 
 export function getMetric(code: string): MetricDef | undefined {
   const known = METRICS.find((m) => m.code === code);

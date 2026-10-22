@@ -11,6 +11,10 @@ export type Athlete = {
   leg_length_cm: number | null;
   /** Greater trochanter height in the 90° squat-jump start. */
   squat_height_cm: number | null;
+  /** Null means a regulation 305 cm rim. */
+  rim_height_cm: number | null;
+  /** How far above the rim the hand must reach to dunk; null means the default. */
+  dunk_clearance_cm: number | null;
 };
 
 export type Trial = {
@@ -43,11 +47,11 @@ export function newSessionId(): string {
 }
 
 export async function listAthletes(db: SQLiteDatabase): Promise<Athlete[]> {
-  return db.getAllAsync<Athlete>('SELECT id, name, body_mass_kg, standing_reach_cm, leg_length_cm, squat_height_cm FROM athlete ORDER BY id');
+  return db.getAllAsync<Athlete>('SELECT id, name, body_mass_kg, standing_reach_cm, leg_length_cm, squat_height_cm, rim_height_cm, dunk_clearance_cm FROM athlete ORDER BY id');
 }
 
 export async function getAthlete(db: SQLiteDatabase, id: number): Promise<Athlete | null> {
-  return db.getFirstAsync<Athlete>('SELECT id, name, body_mass_kg, standing_reach_cm, leg_length_cm, squat_height_cm FROM athlete WHERE id = ?', id);
+  return db.getFirstAsync<Athlete>('SELECT id, name, body_mass_kg, standing_reach_cm, leg_length_cm, squat_height_cm, rim_height_cm, dunk_clearance_cm FROM athlete WHERE id = ?', id);
 }
 
 export async function createAthlete(db: SQLiteDatabase, name: string): Promise<number> {
@@ -57,12 +61,14 @@ export async function createAthlete(db: SQLiteDatabase, name: string): Promise<n
 
 export async function updateAthlete(db: SQLiteDatabase, a: Athlete): Promise<void> {
   await db.runAsync(
-    'UPDATE athlete SET name = ?, body_mass_kg = ?, standing_reach_cm = ?, leg_length_cm = ?, squat_height_cm = ? WHERE id = ?',
+    'UPDATE athlete SET name = ?, body_mass_kg = ?, standing_reach_cm = ?, leg_length_cm = ?, squat_height_cm = ?, rim_height_cm = ?, dunk_clearance_cm = ? WHERE id = ?',
     a.name,
     a.body_mass_kg,
     a.standing_reach_cm,
     a.leg_length_cm,
     a.squat_height_cm,
+    a.rim_height_cm,
+    a.dunk_clearance_cm,
     a.id,
   );
 }

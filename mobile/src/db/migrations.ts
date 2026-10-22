@@ -93,6 +93,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE athlete ADD COLUMN leg_length_cm REAL;
   ALTER TABLE athlete ADD COLUMN squat_height_cm REAL;
   `,
+  `
+  -- The dunk goal: rim height and how far above it the hand has to reach. Null means 305 cm and 15 cm.
+  ALTER TABLE athlete ADD COLUMN rim_height_cm REAL;
+  ALTER TABLE athlete ADD COLUMN dunk_clearance_cm REAL;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
