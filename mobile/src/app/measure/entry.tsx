@@ -1,7 +1,7 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Empty } from '@/components/ui';
@@ -40,7 +40,8 @@ export default function ManualEntry() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <Stack.Screen options={{ title: def.name }} />
-      <KeyboardAvoidingView behavior="padding" style={styles.body}>
+      {/* The button sits right under the field: the number pad has no return key and would cover anything lower. */}
+      <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
         <Text style={text.muted}>{def.entryHint ?? '输入这一次的成绩'}</Text>
         <View style={styles.inputRow}>
           <TextInput
@@ -56,16 +57,15 @@ export default function ManualEntry() {
           <Text style={styles.unit}>{def.unit}</Text>
         </View>
         {problem ? <Text style={styles.problem}>{problem}</Text> : null}
-        <View style={{ flex: 1 }} />
         <Button label="保存这一次" onPress={save} disabled={value == null || problem != null} busy={saving} />
-      </KeyboardAvoidingView>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
-  body: { flex: 1, padding: 20, gap: 12 },
+  body: { padding: 20, gap: 12 },
   inputRow: { flexDirection: 'row', alignItems: 'baseline', gap: 10, padding: 16, borderRadius: radius.card, backgroundColor: colors.surface },
   input: { flex: 1, color: colors.accent, fontFamily: fonts.numericBold, fontSize: 64, padding: 0 },
   unit: { color: colors.textMuted, fontSize: 20 },

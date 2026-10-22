@@ -5,6 +5,7 @@ import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 
+import { KeyboardDoneBar } from '@/components/KeyboardDoneBar';
 import { migrate } from '@/db/migrations';
 import { AthleteProvider } from '@/state/athlete';
 import { colors } from '@/theme';
@@ -58,6 +59,7 @@ export default function RootLayout() {
             <Stack.Screen name="plan/new" options={{ title: '选择训练计划' }} />
             <Stack.Screen name="workout/[date]" options={{ title: '' }} />
           </Stack>
+          <KeyboardDoneBar />
         </AthleteProvider>
       </SQLiteProvider>
     </ThemeProvider>
