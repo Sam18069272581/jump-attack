@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import type { Readiness } from '@/domain/assess';
 import type { ISODate } from '@/domain/dates';
-import type { Adjustment, LoggedSet, PlanSettings } from '@/domain/plan';
+import type { Adjustment, LoggedSet, PlanBlock, PlanSettings } from '@/domain/plan';
 
 export type Plan = PlanSettings & { id: number; athleteId: number };
 
@@ -19,7 +19,7 @@ export type Workout = {
   finishedAt: string | null;
 };
 
-type PlanRow = { id: number; athlete_id: number; template_code: string; start_date: string; weekdays: string; deloads: string };
+type PlanRow = { id: number; athlete_id: number; template_code: string; start_date: string; weekdays: string; deloads: string; blocks: string };
 type WorkoutRow = {
   id: number;
   plan_id: number;
@@ -39,6 +39,7 @@ const toPlan = (r: PlanRow): Plan => ({
   startDate: r.start_date,
   weekdays: JSON.parse(r.weekdays),
   deloads: JSON.parse(r.deloads),
+  blocks: JSON.parse(r.blocks),
 });
 
 const toWorkout = (r: WorkoutRow): Workout => ({
@@ -64,11 +65,12 @@ export async function startPlan(db: SQLiteDatabase, athleteId: number, settings:
   await db.withTransactionAsync(async () => {
     await db.runAsync("UPDATE plan SET ended_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE athlete_id = ? AND ended_at IS NULL", athleteId);
     const r = await db.runAsync(
-      'INSERT INTO plan (athlete_id, template_code, start_date, weekdays) VALUES (?, ?, ?, ?)',
+      'INSERT INTO plan (athlete_id, template_code, start_date, weekdays, blocks) VALUES (?, ?, ?, ?, ?)',
       athleteId,
       settings.templateCode,
       settings.startDate,
       JSON.stringify([...settings.weekdays].sort((a, b) => a - b)),
+      JSON.stringify(settings.blocks ?? []),
     );
     id = r.lastInsertRowId;
   });
@@ -79,6 +81,11 @@ export async function startPlan(db: SQLiteDatabase, athleteId: number, settings:
 export async function insertDeload(db: SQLiteDatabase, plan: Plan, start: ISODate): Promise<void> {
   const deloads = [...new Set([...(plan.deloads ?? []), start])].sort();
   await db.runAsync('UPDATE plan SET deloads = ? WHERE id = ?', JSON.stringify(deloads), plan.id);
+}
+
+/** Replaces a block plan's blocks, e.g. after a switch or skip-ahead suggestion was accepted or turned down. */
+export async function setBlocks(db: SQLiteDatabase, planId: number, blocks: PlanBlock[]): Promise<void> {
+  await db.runAsync('UPDATE plan SET blocks = ? WHERE id = ?', JSON.stringify(blocks), planId);
 }
 
 export async function endPlan(db: SQLiteDatabase, planId: number): Promise<void> {
@@ -118,7 +125,7 @@ export async function finishWorkout(db: SQLiteDatabase, workoutId: number): Prom
 
 export async function listSets(db: SQLiteDatabase, workoutId: number): Promise<LoggedSet[]> {
   return db.getAllAsync<LoggedSet>(
-    'SELECT exercise_code, set_no, reps, load_kg, rpe FROM set_log WHERE workout_id = ? ORDER BY exercise_code, set_no',
+    'SELECT exercise_code, set_no, reps, load_kg, rpe, mean_velocity FROM set_log WHERE workout_id = ? ORDER BY exercise_code, set_no',
     workoutId,
   );
 }
@@ -126,14 +133,16 @@ export async function listSets(db: SQLiteDatabase, workoutId: number): Promise<L
 /** Records a set, replacing what was logged for the same set before. */
 export async function logSet(db: SQLiteDatabase, workoutId: number, s: LoggedSet): Promise<void> {
   await db.runAsync(
-    `INSERT INTO set_log (workout_id, exercise_code, set_no, reps, load_kg, rpe) VALUES (?, ?, ?, ?, ?, ?)
-     ON CONFLICT (workout_id, exercise_code, set_no) DO UPDATE SET reps = excluded.reps, load_kg = excluded.load_kg, rpe = excluded.rpe`,
+    `INSERT INTO set_log (workout_id, exercise_code, set_no, reps, load_kg, rpe, mean_velocity) VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (workout_id, exercise_code, set_no) DO UPDATE SET
+       reps = excluded.reps, load_kg = excluded.load_kg, rpe = excluded.rpe, mean_velocity = excluded.mean_velocity`,
     workoutId,
     s.exercise_code,
     s.set_no,
     s.reps,
     s.load_kg,
     s.rpe,
+    s.mean_velocity ?? null,
   );
 }
 

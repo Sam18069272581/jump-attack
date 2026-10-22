@@ -41,7 +41,7 @@ export default function ManualEntry() {
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <Stack.Screen options={{ title: def.name }} />
       <KeyboardAvoidingView behavior="padding" style={styles.body}>
-        <Text style={text.muted}>输入这一次的成绩</Text>
+        <Text style={text.muted}>{def.entryHint ?? '输入这一次的成绩'}</Text>
         <View style={styles.inputRow}>
           <TextInput
             value={raw}

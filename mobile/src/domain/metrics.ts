@@ -8,10 +8,11 @@ export type Category = 'jump' | 'conditioning' | 'speed' | 'vbt' | 'mobility' | 
 /**
  * How a result can be recorded, first one is the default.
  * - `flight`: take-off and landing frames in a video (jump height).
+ * - `contact`: touch-down, take-off and landing frames of a drop jump (reactive strength index).
  * - `interval`: start and finish frames in a video (sprint time, bar velocity).
  * - `manual`: typed in, from a stopwatch, timing gates, a VBT device or Apple Health.
  */
-export type CaptureKind = 'flight' | 'interval' | 'manual';
+export type CaptureKind = 'flight' | 'contact' | 'interval' | 'manual';
 
 export type MetricDef = {
   code: string;
@@ -36,6 +37,10 @@ export type MetricDef = {
   aggregate?: 'best' | 'mean';
   /** A figure estimated from the measured value, shown alongside it (VO2max from a run distance). */
   estimate?: { name: string; unit: string; decimals: number; from: (value: number) => number };
+  /** The value is a touch height: a jump measured from video is saved as standing reach + jump height. */
+  plusReach?: boolean;
+  /** What to type on the manual entry screen, when "this attempt's result" isn't clear enough. */
+  entryHint?: string;
 };
 
 export type CategoryDef = {
@@ -62,6 +67,26 @@ export function getCategory(key: Category): CategoryDef {
   return CATEGORIES.find((c) => c.key === key)!;
 }
 
+/**
+ * How high the hand reaches in a run-up jump, the number the whole app works towards: the dunk line is the rim
+ * plus clearance (domain/dunk.ts). Typed in from a mark on a wall or the backboard, or measured from video as
+ * standing reach + flight-time jump height, which `trial.detail` keeps as `jump_cm` and `standing_reach_cm`.
+ */
+export const APPROACH_TOUCH: MetricDef & { short: string; color: string } = {
+  code: 'approach_touch',
+  short: '摸高',
+  name: '助跑摸高',
+  category: 'jump',
+  unit: 'cm',
+  decimals: 1,
+  color: '#FFD84F',
+  use: '离扣篮还差多少就看它',
+  capture: ['flight', 'manual'],
+  plusReach: true,
+  entryHint: '输入摸到的高度：从地面量到手指摸到的刻度',
+  range: [150, 420],
+};
+
 /** Jump tests measured by flight time from video. */
 export const JUMP_TESTS: (MetricDef & { short: string; color: string })[] = [
   { code: 'cmj', short: 'CMJ', name: 'CMJ 反向跳', category: 'jump', unit: 'cm', decimals: 1, color: '#D4FF3F', capture: ['flight'], range: [5, 120] },
@@ -69,6 +94,41 @@ export const JUMP_TESTS: (MetricDef & { short: string; color: string })[] = [
   { code: 'sl_cmj_l', short: 'SL-L', name: '单腿 CMJ · 左', category: 'jump', unit: 'cm', decimals: 1, color: '#6EE7B7', capture: ['flight'], range: [3, 80] },
   { code: 'sl_cmj_r', short: 'SL-R', name: '单腿 CMJ · 右', category: 'jump', unit: 'cm', decimals: 1, color: '#6EE7B7', capture: ['flight'], range: [3, 80] },
 ];
+
+/**
+ * Drop jump from a ladder of box heights, each trial's box in `trial.detail.box_cm`. Logged on its own screen
+ * (jumps/dj), not straight from the jump list, because every jump needs its box height.
+ */
+export const DROP_JUMP: MetricDef & { short: string; color: string } = {
+  code: 'dj_rsi',
+  short: 'DJ',
+  name: 'DJ 跳深 RSI',
+  category: 'jump',
+  unit: '',
+  decimals: 2,
+  color: '#C9A7FF',
+  use: '跳高 ÷ 触地时间，反应力量',
+  capture: ['contact', 'manual'],
+  range: [0.1, 5],
+};
+
+/**
+ * Squat jumps at several loads for the force-velocity profile (jumps/fvp), the load in `trial.load_kg`. Kept apart
+ * from `sj` so loaded jumps never pull down the squat-jump history; a session's result is its highest jump,
+ * normally the unloaded one.
+ */
+export const LOADED_SJ: MetricDef & { short: string; color: string } = {
+  code: 'fvp_sj',
+  short: 'F-V',
+  name: '负重蹲跳 · 力-速度曲线',
+  category: 'jump',
+  unit: 'cm',
+  decimals: 1,
+  color: '#4FD1FF',
+  use: '每次测试最高的一跳，通常是徒手那级',
+  capture: ['flight', 'manual'],
+  range: [1, 120],
+};
 
 const VO2MAX = { name: 'VO2max', unit: 'ml/kg/min', decimals: 1 };
 
@@ -176,7 +236,7 @@ export const RECOVERY_METRICS: MetricDef[] = [
   { code: 'rec_resp', name: '呼吸频率', category: 'recovery', unit: '次/分', decimals: 1, neutral: true, capture: ['manual'], range: [5, 40] },
 ];
 
-export const METRICS: MetricDef[] = [...JUMP_TESTS, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
+export const METRICS: MetricDef[] = [APPROACH_TOUCH, ...JUMP_TESTS, LOADED_SJ, DROP_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
 
 export function getMetric(code: string): MetricDef | undefined {
   const known = METRICS.find((m) => m.code === code);

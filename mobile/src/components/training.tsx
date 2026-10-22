@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { WEEKDAY_NAMES, type ISODate } from '@/domain/dates';
 import { FATIGUE_DROP } from '@/domain/assess';
-import { formatPrescription, type Adjustment, type SessionTemplate } from '@/domain/plan';
+import { formatPrescription, KIND_NAMES, type Adjustment, type SessionTemplate } from '@/domain/plan';
 import { colors, fonts, radius } from '@/theme';
 
 export type DayStatus = 'rest' | 'planned' | 'started' | 'done';
@@ -62,7 +62,10 @@ export function SessionItems({ session }: { session: SessionTemplate }) {
     <View style={{ gap: 2 }}>
       {session.items.map((p) => (
         <View key={p.code} style={styles.item}>
-          <Text style={styles.itemName}>{p.name}</Text>
+          <View style={styles.itemHead}>
+            <Text style={styles.itemTag}>{KIND_NAMES[p.kind]}</Text>
+            <Text style={styles.itemName}>{p.name}</Text>
+          </View>
           <Text style={styles.itemDose}>{formatPrescription(p)}</Text>
         </View>
       ))}
@@ -100,6 +103,8 @@ const styles = StyleSheet.create({
   dayNum: { color: colors.text, fontFamily: fonts.numeric, fontSize: 18 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.accent },
   item: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },
+  itemHead: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
+  itemTag: { color: colors.textMuted, fontSize: 11, borderWidth: StyleSheet.hairlineWidth, borderColor: colors.textMuted, borderRadius: 4, paddingHorizontal: 4, overflow: 'hidden' },
   itemName: { color: colors.text, fontSize: 14 },
   itemDose: { color: colors.textSoft, fontFamily: fonts.numeric, fontSize: 15 },
   note: { borderRadius: radius.row, borderWidth: 1, borderColor: colors.warn, padding: 12, gap: 4 },

@@ -1,7 +1,7 @@
 import { migrate } from '../migrations';
 import { createAthlete } from '../repo';
 import { openMemoryDb } from '../testing/memoryDb';
-import { endPlan, finishWorkout, getActivePlan, lastLoads, listSets, listWorkouts, logSet, startPlan, startWorkout, unlogSet } from '../training';
+import { endPlan, finishWorkout, getActivePlan, lastLoads, listSets, listWorkouts, logSet, setBlocks, startPlan, startWorkout, unlogSet } from '../training';
 
 async function setup() {
   const db = openMemoryDb();
@@ -20,12 +20,25 @@ describe('plans', () => {
     await startPlan(db, other, settings);
 
     const active = await getActivePlan(db, 1);
-    expect(active).toEqual({ id: second, athleteId: 1, templateCode: 'jump-maintain-2', startDate: '2026-10-21', weekdays: [2, 5], deloads: [] });
+    expect(active).toEqual({ id: second, athleteId: 1, templateCode: 'jump-maintain-2', startDate: '2026-10-21', weekdays: [2, 5], deloads: [], blocks: [] });
     expect(first).not.toBe(second);
 
     await endPlan(db, second);
     expect(await getActivePlan(db, 1)).toBeNull();
     expect((await getActivePlan(db, other))?.weekdays).toEqual([1, 3, 5]);
+  });
+});
+
+describe('block plans', () => {
+  it('stores the blocks and replaces them after a suggestion', async () => {
+    const db = await setup();
+    const blocks = [{ start: '2026-10-19', type: 'reactive' as const, reason: '跳深 RSI 1.60，不到 2.0' }];
+    const id = await startPlan(db, 1, { templateCode: 'dunk-blocks', startDate: '2026-10-19', weekdays: [1, 3, 5], blocks });
+    expect((await getActivePlan(db, 1))?.blocks).toEqual(blocks);
+
+    const next = [...blocks, { start: '2026-11-16', type: 'transfer' as const }];
+    await setBlocks(db, id, next);
+    expect((await getActivePlan(db, 1))?.blocks).toEqual(next);
   });
 });
 
@@ -44,8 +57,8 @@ describe('workouts and sets', () => {
     await logSet(db, w.id, { exercise_code: 'squat_jump', set_no: 1, reps: 5, load_kg: null, rpe: null });
     await unlogSet(db, w.id, 'squat_jump', 1);
     expect(await listSets(db, w.id)).toEqual([
-      { exercise_code: 'back_squat', set_no: 1, reps: 4, load_kg: 102.5, rpe: 8 },
-      { exercise_code: 'back_squat', set_no: 2, reps: 5, load_kg: 105, rpe: 8 },
+      { exercise_code: 'back_squat', set_no: 1, reps: 4, load_kg: 102.5, rpe: 8, mean_velocity: null },
+      { exercise_code: 'back_squat', set_no: 2, reps: 5, load_kg: 105, rpe: 8, mean_velocity: null },
     ]);
     expect(await lastLoads(db, 1)).toEqual({ back_squat: 105 });
 
