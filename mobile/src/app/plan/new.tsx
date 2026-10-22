@@ -1,13 +1,16 @@
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Chip } from '@/components/ui';
+import { loadDiagnosis } from '@/db/dunk';
 import { getActivePlan, startPlan } from '@/db/training';
+import { firstBlock } from '@/domain/blocks';
 import { addDays, mondayOf, shortDate, WEEKDAY_NAMES, type ISODate } from '@/domain/dates';
-import { planDay, planWeeks, weekDays, type PlanTemplate } from '@/domain/plan';
+import { BLOCKS, MISSING_TEXT, type BlockType, type DunkDiagnosis } from '@/domain/dunk';
+import { planDay, planWeeks, weekDays, type PlanSettings, type PlanTemplate } from '@/domain/plan';
 import { defaultWeekdays, getTemplate, TEMPLATES } from '@/domain/templates';
 import { useAthlete } from '@/state/athlete';
 import { todayISO } from '@/state/training';
@@ -23,11 +26,25 @@ export default function NewPlan() {
   const [weekdays, setWeekdays] = useState(() => defaultWeekdays(template.sessions.length));
   const [start, setStart] = useState<Start>('today');
   const [saving, setSaving] = useState(false);
+  const [diagnosis, setDiagnosis] = useState<DunkDiagnosis | null>(null);
+  // The first block of a block plan; null follows the diagnosis.
+  const [picked, setPicked] = useState<BlockType | null>(null);
+
+  useEffect(() => {
+    if (!current) return;
+    let alive = true;
+    loadDiagnosis(db, current).then((d) => alive && setDiagnosis(d));
+    return () => {
+      alive = false;
+    };
+  }, [db, current]);
 
   const needed = template.sessions.length;
   const today = todayISO();
   const startDate: ISODate = start === 'today' ? today : addDays(mondayOf(today), 7);
   const ready = weekdays.length === needed;
+  const block = template.blocks ? firstBlock(diagnosis, startDate, picked ?? undefined) : null;
+  const settings: PlanSettings = { templateCode: code, startDate, weekdays, ...(block ? { blocks: [block] } : {}) };
 
   function pickTemplate(t: PlanTemplate) {
     setCode(t.code);
@@ -44,7 +61,7 @@ export default function NewPlan() {
     const go = async () => {
       setSaving(true);
       try {
-        await startPlan(db, current.id, { templateCode: code, startDate, weekdays });
+        await startPlan(db, current.id, settings);
         router.back();
       } catch (e) {
         Alert.alert('保存失败', String(e));
@@ -63,7 +80,7 @@ export default function NewPlan() {
 
   // The first week the athlete will see, so the choice of days is concrete.
   const preview = weekDays(startDate)
-    .map((d) => planDay(template, { templateCode: code, startDate, weekdays }, d))
+    .map((d) => planDay(template, settings, d))
     .filter((p) => p != null);
 
   return (
@@ -89,6 +106,22 @@ export default function NewPlan() {
             </Pressable>
           );
         })}
+
+        {block && (
+          <>
+            <Text style={styles.label}>第一块</Text>
+            <View style={styles.days}>
+              {(Object.keys(BLOCKS) as BlockType[]).map((b) => (
+                <Chip key={b} label={`${BLOCKS[b].name}${diagnosis?.limiter === b ? '（诊断）' : ''}`} selected={block.type === b} onPress={() => setPicked(b)} />
+              ))}
+            </View>
+            <View style={styles.preview}>
+              <Text style={text.body}>{block.reason}</Text>
+              <Text style={text.muted}>{BLOCKS[block.type].focus}</Text>
+              {diagnosis && diagnosis.missing.length > 0 && <Text style={text.caption}>诊断还缺：{diagnosis.missing.map((m) => MISSING_TEXT[m]).join('；')}</Text>}
+            </View>
+          </>
+        )}
 
         <Text style={styles.label}>训练日（选 {needed} 天，最好隔天）</Text>
         <View style={styles.days}>

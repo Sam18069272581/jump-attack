@@ -98,6 +98,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE athlete ADD COLUMN rim_height_cm REAL;
   ALTER TABLE athlete ADD COLUMN dunk_clearance_cm REAL;
   `,
+  `
+  -- Block plans: the training blocks in order (JSON array of {start, type, ...}, see PlanBlock in domain/plan.ts).
+  ALTER TABLE plan ADD COLUMN blocks TEXT NOT NULL DEFAULT '[]';
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
