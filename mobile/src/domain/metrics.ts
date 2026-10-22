@@ -39,6 +39,8 @@ export type MetricDef = {
   estimate?: { name: string; unit: string; decimals: number; from: (value: number) => number };
   /** The value is a touch height: a jump measured from video is saved as standing reach + jump height. */
   plusReach?: boolean;
+  /** What to type on the manual entry screen, when "this attempt's result" isn't clear enough. */
+  entryHint?: string;
 };
 
 export type CategoryDef = {
@@ -81,6 +83,7 @@ export const APPROACH_TOUCH: MetricDef & { short: string; color: string } = {
   use: '离扣篮还差多少就看它',
   capture: ['flight', 'manual'],
   plusReach: true,
+  entryHint: '输入摸到的高度：从地面量到手指摸到的刻度',
   range: [150, 420],
 };
 

@@ -56,6 +56,35 @@ const jumpProfile: MarkProfile = {
   },
 };
 
+/**
+ * A run-up jump measured for touch height: flight time gives the jump, standing reach is added on top. Without a
+ * standing reach there is nothing to add it to.
+ */
+function touchProfile(reachCm: number | undefined): MarkProfile {
+  return {
+    ...jumpProfile,
+    marks: [
+      { title: '起跳帧', hint: '起跳脚刚离地' },
+      { title: '落地帧', hint: '第一只脚刚触地' },
+    ],
+    phases: ['助跑', '腾空', '落地'],
+    measure(marks, fps) {
+      const jump = jumpProfile.measure(marks, fps);
+      if (!jump.ok) return jump;
+      if (reachCm == null) return { ok: false, message: '先在「我的」填站立摸高，才能用录像算摸高；也可以直接手填摸到的高度' };
+      return {
+        ...jump,
+        value: roundTo(reachCm + jump.value, 1),
+        cells: [
+          { label: '跳高', value: jump.value.toFixed(1), unit: 'cm' },
+          { label: '摸高', value: (reachCm + jump.value).toFixed(1), unit: 'cm', main: true },
+        ],
+        detail: { jump_cm: jump.value, standing_reach_cm: reachCm },
+      };
+    },
+  };
+}
+
 function sprintProfile(metres: number): MarkProfile {
   const limits = sprintLimits(metres);
   const problems: Record<IntervalProblem, string> = {
@@ -154,9 +183,9 @@ const dropJumpProfile: MarkProfile = {
 };
 
 /** The marking profile for a metric recorded from video, or null when it can't be marked. A lift needs its bar travel. */
-export function markProfile(def: MetricDef, opts: { romCm?: number } = {}): MarkProfile | null {
+export function markProfile(def: MetricDef, opts: { romCm?: number; reachCm?: number } = {}): MarkProfile | null {
   if (def.capture.includes('contact')) return dropJumpProfile;
-  if (def.capture.includes('flight')) return jumpProfile;
+  if (def.capture.includes('flight')) return def.plusReach ? touchProfile(opts.reachCm) : jumpProfile;
   const metres = sprintDistance(def.code);
   if (metres != null) return sprintProfile(metres);
   if (def.category === 'vbt' && opts.romCm != null && opts.romCm > 0) return liftProfile(opts.romCm);

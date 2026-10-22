@@ -38,6 +38,7 @@ export default function RootLayout() {
             <Stack.Screen name="conditioning/cooper" options={{ title: 'Cooper 12 分钟跑' }} />
             <Stack.Screen name="conditioning/rsa" options={{ title: 'RSA 反复冲刺' }} />
             <Stack.Screen name="conditioning/result" options={{ title: '测试结果', headerBackVisible: false, gestureEnabled: false }} />
+            <Stack.Screen name="dunk" options={{ title: '扣篮诊断' }} />
             <Stack.Screen name="jumps/index" options={{ title: '跳跃测试' }} />
             <Stack.Screen name="jumps/fvp" options={{ title: '力-速度曲线' }} />
             <Stack.Screen name="jumps/dj" options={{ title: 'DJ 跳深 · 找最佳箱高' }} />

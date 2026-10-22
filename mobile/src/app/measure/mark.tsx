@@ -29,7 +29,7 @@ export default function Mark() {
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const def = getMetric(params.metric);
-  const profile = def ? markProfile(def, { romCm: Number(params.rom) || undefined }) : null;
+  const profile = def ? markProfile(def, { romCm: Number(params.rom) || undefined, reachCm: current?.standing_reach_cm ?? undefined }) : null;
   const player = useVideoPlayer(params.uri, (p) => {
     p.muted = true;
     p.pause();
@@ -100,7 +100,7 @@ export default function Mark() {
           : params.load != null
             ? { load_kg: Number(params.load) || 0 }
             : {}),
-        ...(result.detail || params.box ? { detail: { ...result.detail, ...(params.box ? { box_cm: Number(params.box) } : {}) } } : {}),
+        ...(result.detail || params.box ? { detail: { source: 'video', ...result.detail, ...(params.box ? { box_cm: Number(params.box) } : {}) } } : {}),
       });
       // A VBT set or a profile jump goes straight back to its log (capture and marking are the two screens above it).
       if (returnsToLogger(params.from)) return router.dismiss(2);
