@@ -7,6 +7,7 @@ import { captureGuide } from '@/components/capture/guides';
 import SlowMoImport from '@/components/capture/SlowMoImport';
 import type { CaptureProps } from '@/components/capture/types';
 import { listTrials } from '@/db/repo';
+import { returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { isExpoGo } from '@/media/runtime';
 
@@ -17,8 +18,8 @@ const NativeCapture: ComponentType<CaptureProps> | null = isExpoGo
     require('@/components/capture/NativeCapture').default;
 
 export default function Capture() {
-  // Everything besides the metric and session (`from`, a VBT set's load and bar travel) is passed on to marking and the result.
-  const { metric, session, ...extra } = useLocalSearchParams<{ metric: string; session: string; from?: string; load?: string; reps?: string; rom?: string }>();
+  // Everything besides the metric and session (`from`, a set's or jump's load, bar travel, box height) is passed on to marking and the result.
+  const { metric, session, ...extra } = useLocalSearchParams<{ metric: string; session: string; from?: string; load?: string; reps?: string; rom?: string; box?: string }>();
   const def = getMetric(metric);
   const db = useSQLiteContext();
   const [attempt, setAttempt] = useState(1);
@@ -47,14 +48,14 @@ export default function Capture() {
   }
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
-  const manual = def?.capture.includes('manual') && extra.from !== 'vbt' ? () => router.push({ pathname: '/measure/entry', params: pass }) : undefined;
+  const manual = def?.capture.includes('manual') && !returnsToLogger(extra.from) ? () => router.push({ pathname: '/measure/entry', params: pass }) : undefined;
 
   const Screen = NativeCapture ?? SlowMoImport;
   return (
     <Screen
       title={`录制 · ${def?.name ?? metric}`}
       subtitle={`第 ${attempt} 次`}
-      guide={captureGuide(def?.category ?? 'jump')}
+      guide={captureGuide(def?.category ?? 'jump', def?.code)}
       onClose={close}
       onImport={importVideo}
       onManual={manual}
