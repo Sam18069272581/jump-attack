@@ -1,15 +1,31 @@
-import { Link, router, type Href } from 'expo-router';
+import { Link, router, useFocusEffect, type Href } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { DunkGoalCard } from '@/components/dunk';
 import { Icon } from '@/components/Icon';
+import { loadDiagnosis } from '@/db/dunk';
+import { dayState, type DayState, type DunkDiagnosis } from '@/domain/dunk';
 import { CATEGORIES } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
+import { loadReadiness, todayISO } from '@/state/training';
 import { colors, radius, text } from '@/theme';
 
-
 export default function Home() {
+  const db = useSQLiteContext();
   const { current } = useAthlete();
+  const [goal, setGoal] = useState<{ diagnosis: DunkDiagnosis; state: DayState } | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!current) return;
+      Promise.all([loadDiagnosis(db, current), loadReadiness(db, current.id, todayISO())]).then(([diagnosis, readiness]) =>
+        setGoal({ diagnosis, state: dayState(readiness) }),
+      );
+    }, [db, current]),
+  );
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -27,6 +43,8 @@ export default function Home() {
             <Icon name="chevronDown" size={14} />
           </Pressable>
         </View>
+
+        {goal && <DunkGoalCard diagnosis={goal.diagnosis} standingReach={current?.standing_reach_cm ?? null} state={goal.state} />}
 
         <View style={{ gap: 12 }}>
           {CATEGORIES.map((c) => {
