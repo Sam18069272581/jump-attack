@@ -69,9 +69,11 @@ Expo Go 不带高帧率相机模块，所以先用 iPhone 自带相机的慢动�
 
 测之前把手机音量开大，静音键开着也会响，有音乐会自动压低。测试进行中屏幕不会自动锁。Yo-Yo 和 RSA 都是 20 m 往返，手机放在起点旁边就行。
 
-### 以后：在 App 里直接录 240 fps
+### 正式版：在 App 里直接录 240 fps
 
-需要装开发版 App（含 react-native-vision-camera），二选一：
+正式版（TestFlight / App Store）自带 App 内 240fps 录像，打包和上架步骤见 [docs/release](../docs/release/README.md)。
+
+开发时也可以装开发版 App（含 react-native-vision-camera），二选一：
 
 - **不用 Mac**：加入 Apple Developer Program（每年 99 美元），用 EAS 云端编译后装到手机上，之后用 `npm run start:dev` 连接：
 
