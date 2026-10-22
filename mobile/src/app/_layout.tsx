@@ -46,6 +46,7 @@ export default function RootLayout() {
             <Stack.Screen name="mobility/index" options={{ title: '灵活度' }} />
             <Stack.Screen name="mobility/[test]" options={{ title: '' }} />
             <Stack.Screen name="recovery/index" options={{ title: '恢复' }} />
+            <Stack.Screen name="recovery/health" options={{ title: '从苹果健康导入' }} />
             <Stack.Screen name="vbt/index" options={{ title: 'VBT 训练' }} />
             <Stack.Screen name="vbt/[lift]" options={{ title: '' }} />
             <Stack.Screen name="measure/capture" options={{ headerShown: false }} />

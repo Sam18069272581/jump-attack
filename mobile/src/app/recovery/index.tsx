@@ -1,3 +1,4 @@
+import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
@@ -5,12 +6,14 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card, Chip } from '@/components/ui';
-import { listRecoveryDays, saveRecoveryDay } from '@/db/recovery';
+import { listRecoveryDays, saveRecoveryDay, type RecoverySource } from '@/db/recovery';
 import { addDays, shortDate, type ISODate } from '@/domain/dates';
 import { manualProblem, parseNumber } from '@/domain/entry';
+import { parseHealthImport } from '@/domain/healthImport';
 import { formatValue, getCategory, getMetric } from '@/domain/metrics';
 import { readRecovery, RECOVERY_CODES, STATUS_TEXT, type RecoveryDay, type RecoveryKey } from '@/domain/recovery';
 import { useAthlete } from '@/state/athlete';
+import { CONSENT_TEXT, CONSENT_TITLE, hasHealthConsent, setHealthConsent } from '@/state/healthConsent';
 import { todayISO } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
 
@@ -25,6 +28,17 @@ const HINT: Record<RecoveryKey, string> = {
 const STATUS_COLOR = { good: colors.good, fair: colors.warn, poor: colors.record, unknown: colors.textMuted };
 
 type Form = Record<RecoveryKey, string>;
+type Sources = Partial<Record<RecoveryKey, RecoverySource>>;
+
+/** Asks once, before the first import, whether Apple Health data may be pasted in. */
+function askConsent(): Promise<boolean> {
+  return new Promise((resolve) =>
+    Alert.alert(CONSENT_TITLE, CONSENT_TEXT, [
+      { text: '不同意', style: 'cancel', onPress: () => resolve(false) },
+      { text: '同意并导入', onPress: () => resolve(true) },
+    ]),
+  );
+}
 
 const toForm = (d: RecoveryDay | undefined): Form =>
   Object.fromEntries(KEYS.map((k) => [k, d?.[k] != null ? String(d[k]) : ''])) as Form;
@@ -38,6 +52,8 @@ export default function Recovery() {
   const [date, setDate] = useState<ISODate>(today);
   const [form, setForm] = useState<Form>(toForm(undefined));
   const [saving, setSaving] = useState(false);
+  const [sources, setSources] = useState<Sources>({});
+  const [importNote, setImportNote] = useState<string | null>(null);
 
   const load = useCallback(
     async (d: ISODate) => {
@@ -45,6 +61,8 @@ export default function Recovery() {
       const rows = await listRecoveryDays(db, current.id);
       setDays(rows);
       setForm(toForm(rows.find((r) => r.date === d)));
+      setSources({});
+      setImportNote(null);
     },
     [db, current],
   );
@@ -61,11 +79,40 @@ export default function Recovery() {
   const problems = KEYS.map((k) => values[k] != null && manualProblem(getMetric(RECOVERY_CODES[k])!, values[k]!)).filter(Boolean) as string[];
 
 
+  async function importFromHealth() {
+    if (!(await hasHealthConsent())) {
+      if (!(await askConsent())) return;
+      await setHealthConsent(true);
+    }
+    const parsed = parseHealthImport(await Clipboard.getStringAsync());
+    if (!parsed || !Object.keys(parsed.values).length) {
+      Alert.alert('剪贴板里没有健康数据', parsed?.problems.join('\n') || '先运行「恢复数据」快捷指令，再回来点导入。', [
+        { text: '好', style: 'cancel' },
+        { text: '查看设置方法', onPress: () => router.push('/recovery/health') },
+      ]);
+      return;
+    }
+    const keys = KEYS.filter((k) => parsed.values[k] != null);
+    setForm((f) => ({ ...f, ...Object.fromEntries(keys.map((k) => [k, String(parsed.values[k])])) }));
+    setSources((s) => ({ ...s, ...Object.fromEntries(keys.map((k) => [k, 'health'])) }));
+    const names = keys.map((k) => getMetric(RECOVERY_CODES[k])!.short ?? getMetric(RECOVERY_CODES[k])!.name).join('、');
+    setImportNote([`已从健康导入${names}，核对后点保存。`, ...parsed.problems].join('\n'));
+  }
+
+  function edit(k: RecoveryKey, t: string) {
+    setForm((f) => ({ ...f, [k]: t }));
+    setSources((s) => {
+      const next = { ...s };
+      delete next[k]; // typed over, so no longer from Health
+      return next;
+    });
+  }
+
   async function save() {
     if (!current || problems.length) return;
     setSaving(true);
     try {
-      await saveRecoveryDay(db, current.id, { date, ...values });
+      await saveRecoveryDay(db, current.id, { date, ...values }, sources);
       await load(date);
     } catch (e) {
       Alert.alert('保存失败', String(e));
@@ -123,7 +170,12 @@ export default function Recovery() {
               <Chip label="昨天" selected={date === addDays(today, -1)} onPress={() => setDate(addDays(today, -1))} color={COLOR} />
             </View>
           </View>
-          <Text style={text.caption}>{shortDate(date)} · 起床后记一次。数据可以从 iPhone「健康」App 或手表里看到。</Text>
+          <Text style={text.caption}>{shortDate(date)} · 起床后记一次。可以从苹果健康导入，也可以手填。</Text>
+          <Button label="从苹果健康导入" variant="secondary" onPress={importFromHealth} />
+          <Pressable accessibilityRole="link" onPress={() => router.push('/recovery/health')}>
+            <Text style={styles.smallLink}>怎么设置快捷指令 · 隐私说明</Text>
+          </Pressable>
+          {importNote && <Text style={styles.note}>{importNote}</Text>}
           {KEYS.map((k) => {
             const def = getMetric(RECOVERY_CODES[k])!;
             return (
@@ -132,7 +184,7 @@ export default function Recovery() {
                   <Text style={styles.fieldName}>{def.name}</Text>
                   <TextInput
                     value={form[k]}
-                    onChangeText={(t) => setForm((f) => ({ ...f, [k]: t }))}
+                    onChangeText={(t) => edit(k, t)}
                     keyboardType="decimal-pad"
                     placeholder="—"
                     placeholderTextColor={colors.textFaint}
@@ -176,4 +228,6 @@ const styles = StyleSheet.create({
   unit: { width: 44, color: colors.textMuted, fontSize: 12 },
   problem: { color: colors.warn, fontSize: 13 },
   link: { color: COLOR, fontSize: 14, textAlign: 'center', padding: 8 },
+  smallLink: { color: COLOR, fontSize: 13, textAlign: 'center' },
+  note: { color: colors.good, fontSize: 13 },
 });
