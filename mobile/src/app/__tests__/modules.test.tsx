@@ -225,7 +225,7 @@ describe('VBT', () => {
 });
 
 describe('Apple Health import', () => {
-  const alerts: { title: string; buttons?: AlertButton[] }[] = [];
+  const alerts: { title?: string | null; buttons?: AlertButton[] }[] = [];
   let answer = '同意并导入';
   beforeAll(() => {
     jest.spyOn(Alert, 'alert').mockImplementation((title, _message, buttons) => {
