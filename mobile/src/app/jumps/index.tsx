@@ -1,38 +1,111 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
+import { useSQLiteContext } from 'expo-sqlite';
+import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
+import { loadDiagnosis } from '@/db/dunk';
 import { newSessionId } from '@/db/repo';
-import { JUMP_TESTS } from '@/domain/metrics';
+import { BLOCKS, type DunkDiagnosis } from '@/domain/dunk';
+import { APPROACH_TOUCH, DROP_JUMP, JUMP_TESTS, LOADED_SJ } from '@/domain/metrics';
+import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
+/** Multi-step tests that each log several jumps on their own screen. */
+const PROFILES = [
+  { key: 'dj', pathname: '/jumps/dj', short: DROP_JUMP.short, color: DROP_JUMP.color, name: 'DJ 跳深 · 找最佳箱高', hint: '逐级加高箱子，看哪个高度 RSI 最高' },
+  { key: 'fvp', pathname: '/jumps/fvp', short: LOADED_SJ.short, color: LOADED_SJ.color, name: '力-速度曲线', hint: '史密斯机负重蹲跳 4 级，看缺力量还是缺速度' },
+] as const;
+
+/** Tests the dunk diagnosis is waiting for, or that measure the current limiter. */
+function suggested(d: DunkDiagnosis | null): Set<string> {
+  const out = new Set<string>();
+  if (!d) return out;
+  if (d.missing.includes('approach')) out.add(APPROACH_TOUCH.code);
+  if (d.missing.includes('cmj')) out.add('cmj');
+  if (d.missing.includes('drop_jump') || d.limiter === 'reactive') out.add('dj');
+  return out;
+}
+
+function gapLine(d: DunkDiagnosis | null): string {
+  if (!d || d.gapCm == null) return '离扣篮还差多少、缺哪一块';
+  const gap = d.gapCm > 0 ? `还差 ${d.gapCm.toFixed(1)} cm` : '够到扣篮线了';
+  return d.limiter ? `${gap} · 短板：${BLOCKS[d.limiter].name}` : gap;
+}
+
 export default function JumpTests() {
+  const db = useSQLiteContext();
+  const { current } = useAthlete();
+  const [diagnosis, setDiagnosis] = useState<DunkDiagnosis | null>(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (current) loadDiagnosis(db, current).then(setDiagnosis);
+    }, [db, current]),
+  );
+
+  const todo = suggested(diagnosis);
+  const capture = (metric: string) => router.push({ pathname: '/measure/capture', params: { metric, session: newSessionId() } });
+  const profiles = [...PROFILES].sort((a, b) => Number(todo.has(b.key)) - Number(todo.has(a.key)));
+
   return (
     <ScrollView contentContainerStyle={styles.content}>
+      <Text style={styles.heading}>扣篮</Text>
+      <Row code={APPROACH_TOUCH.short} color={APPROACH_TOUCH.color} name={APPROACH_TOUCH.name} hint="录像或手填摸到的高度" tag={todo.has(APPROACH_TOUCH.code)} onPress={() => capture(APPROACH_TOUCH.code)} />
+      <Row icon="jump" color={colors.accent} name="扣篮诊断" hint={gapLine(diagnosis)} onPress={() => router.push('/dunk')} />
+
+      <Text style={styles.heading}>纵跳</Text>
       {JUMP_TESTS.map((t) => (
-        <Pressable
-          key={t.code}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.row, pressed && { opacity: 0.75 }]}
-          onPress={() => router.push({ pathname: '/measure/capture', params: { metric: t.code, session: newSessionId() } })}
-        >
-          <Text style={[styles.code, { color: t.color }]}>{t.short}</Text>
-          <Text style={styles.name}>{t.name}</Text>
-          <Icon name="chevronRight" size={18} color={colors.textMuted} />
-        </Pressable>
+        <Row key={t.code} code={t.short} color={t.color} name={t.name} tag={todo.has(t.code)} onPress={() => capture(t.code)} />
       ))}
       <View style={styles.note}>
-        <Text style={styles.noteText}>每次测试建议做 3 次，取最好成绩。DJ 跳深和 Pogo 连跳需要测触地时间，会在下一版加入。</Text>
+        <Text style={styles.noteText}>每次测试建议做 3 次，取最好成绩。</Text>
       </View>
+
+      <Text style={styles.heading}>找短板</Text>
+      {profiles.map((p) => (
+        <Row
+          key={p.pathname}
+          code={p.short}
+          color={p.color}
+          name={p.name}
+          hint={p.hint}
+          tag={todo.has(p.key)}
+          onPress={() => router.push({ pathname: p.pathname, params: { session: newSessionId() } })}
+        />
+      ))}
     </ScrollView>
+  );
+}
+
+function Row({ code, icon, color, name, hint, tag, onPress }: { code?: string; icon?: 'jump'; color: string; name: string; hint?: string; tag?: boolean; onPress: () => void }) {
+  return (
+    <Pressable accessibilityRole="button" style={({ pressed }) => [styles.row, hint != null && styles.tallRow, pressed && { opacity: 0.75 }]} onPress={onPress}>
+      {icon ? (
+        <View style={styles.code}>
+          <Icon name={icon} size={26} color={color} />
+        </View>
+      ) : (
+        <Text style={[styles.code, { color }]}>{code}</Text>
+      )}
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.name}>{name}</Text>
+        {hint != null && <Text style={styles.noteText}>{hint}</Text>}
+      </View>
+      {tag && <Text style={styles.tag}>建议测</Text>}
+      <Icon name="chevronRight" size={18} color={colors.textMuted} />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
   content: { padding: 20, paddingTop: 8, gap: 10 },
   row: { backgroundColor: colors.surface, borderRadius: radius.row, height: 68, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  tallRow: { height: 76 },
   code: { width: 64, fontFamily: fonts.numericBold, fontSize: 26 },
-  name: { flex: 1, color: colors.text, fontSize: 15, fontWeight: '500' },
-  note: { paddingHorizontal: 4, paddingTop: 8 },
+  name: { color: colors.text, fontSize: 15, fontWeight: '500' },
+  note: { paddingHorizontal: 4, paddingTop: 2 },
+  heading: { color: colors.text, fontSize: 15, fontWeight: '700', paddingTop: 12, paddingHorizontal: 4 },
   noteText: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
+  tag: { color: colors.onAccent, backgroundColor: colors.accent, fontSize: 11, fontWeight: '700', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden' },
 });
