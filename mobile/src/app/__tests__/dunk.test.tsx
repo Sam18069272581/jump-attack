@@ -1,4 +1,4 @@
-// Drives the dunk diagnosis screen and the jump list's dunk section against an in-memory database.
+// Drives the dunk diagnosis on the home and diagnosis screens, and the jump list's dunk section, against an in-memory database.
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { Text } from 'react-native';
 
@@ -8,6 +8,7 @@ import { addTrial, ensureSession } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { addVbtSet } from '@/db/vbt';
 
+import Home from '../(tabs)/index';
 import Dunk from '../dunk';
 import JumpTests from '../jumps/index';
 
@@ -27,6 +28,7 @@ jest.mock('expo-router', () => {
     useLocalSearchParams: () => ({}),
     useFocusEffect: (cb: () => void) => React.useEffect(cb, [cb]),
     Stack: { Screen: () => null },
+    Link: ({ children }: { children: React.ReactNode }) => children,
   };
 });
 
@@ -89,6 +91,14 @@ describe('before any test', () => {
     await press(r.root, '在 VBT 页测一次后蹲（两个以上重量），估出 1RM');
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/vbt/[lift]', params: { lift: 'vbt_squat', session: expect.any(String) } });
   });
+
+  it('opens the home screen on the dunk goal, above the modules', async () => {
+    const r = await render(<Home />);
+    const t = texts(r.root);
+    expect(t).toContain('扣篮线 320 cm');
+    expect(t).toContain('测一次助跑摸高');
+    expect(t.indexOf('还不知道离扣篮多远')).toBeLessThan(t.indexOf('训练和测试'));
+  });
 });
 
 describe('with results', () => {
@@ -115,6 +125,17 @@ describe('with results', () => {
     expect(t).toContain('目标 ≤ 250 ms');
     await press(r.root, '跳深 RSI');
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/jumps/dj', params: { session: expect.any(String) } });
+  });
+
+  it('shows the same gap, limiter and metrics on the home screen, with the run-up touch one tap away', async () => {
+    const r = await render(<Home />);
+    const t = texts(r.root);
+    expect(t).toContain('28.0');
+    expect(t).toContain('反应块');
+    expect(t).toContain('1.73×');
+    expect(t).not.toContain('还不知道离扣篮多远');
+    await press(r.root, '测助跑摸高');
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/measure/capture', params: { metric: 'approach_touch', session: expect.any(String) } });
   });
 
   it('puts the drop-jump ladder first in the jump list while reactive strength is the limiter', async () => {
