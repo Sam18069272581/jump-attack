@@ -4,20 +4,23 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { BlockReason, blockLabel, RetestCard, SuggestionCard } from '@/components/blocks';
 import { Icon } from '@/components/Icon';
 import { AdjustmentNote, SessionItems, WeekStrip, type DayStatus } from '@/components/training';
 import { Button, Card } from '@/components/ui';
 import { newSessionId } from '@/db/repo';
 import { insertDeload } from '@/db/training';
 import { addDays, daysBetween, shortDate, type ISODate } from '@/domain/dates';
-import { DELOAD_DAYS, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
+import { isRetestWeek, nextBlockStart } from '@/domain/blocks';
+import { blockPosition, DELOAD_DAYS, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
 import { DELOAD_STREAK } from '@/domain/readiness';
 import { STATUS_TEXT } from '@/domain/recovery';
 import { useAthlete } from '@/state/athlete';
+import { acceptBlockSuggestion, declineBlockSuggestion, loadBlockAdvice, type BlockAdvice } from '@/state/blocks';
 import { beginWorkout, loadReadiness, loadTraining, sessionFor, todayISO, type DayReadiness, type TrainingData } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
 
-type Loaded = { data: TrainingData | null; readiness: DayReadiness & { streak: number } };
+type Loaded = { data: TrainingData | null; readiness: DayReadiness & { streak: number }; advice: BlockAdvice };
 
 export default function Train() {
   const db = useSQLiteContext();
@@ -30,7 +33,8 @@ export default function Train() {
   const load = useCallback(async () => {
     if (!current) return;
     const [data, readiness] = await Promise.all([loadTraining(db, current.id), loadReadiness(db, current.id, todayISO())]);
-    setLoaded({ data, readiness });
+    const advice = data ? await loadBlockAdvice(db, current, data, todayISO()) : { diagnosis: null, suggestion: null };
+    setLoaded({ data, readiness, advice });
   }, [db, current]);
 
   useFocusEffect(
@@ -47,7 +51,7 @@ export default function Train() {
     );
   }
 
-  const { data, readiness } = loaded;
+  const { data, readiness, advice } = loaded;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -56,6 +60,7 @@ export default function Train() {
           <PlanView
             data={data}
             readiness={readiness}
+            advice={advice}
             today={today}
             selected={selected}
             onSelect={setSelected}
@@ -63,6 +68,17 @@ export default function Train() {
             onDeload={async () => {
               await insertDeload(db, data.plan, today);
               await load();
+            }}
+            onSuggestion={async (accept) => {
+              if (!advice.suggestion) return;
+              setStarting(true);
+              try {
+                if (accept) await acceptBlockSuggestion(db, data, advice.suggestion, advice.diagnosis, today);
+                else await declineBlockSuggestion(db, data, advice.suggestion, today);
+                await load();
+              } finally {
+                setStarting(false);
+              }
             }}
             onStart={async (date) => {
               setStarting(true);
@@ -95,21 +111,25 @@ export default function Train() {
 function PlanView({
   data,
   readiness,
+  advice,
   today,
   selected,
   onSelect,
   starting,
   onStart,
   onDeload,
+  onSuggestion,
 }: {
   data: TrainingData;
   readiness: DayReadiness & { streak: number };
+  advice: BlockAdvice;
   today: ISODate;
   selected: ISODate;
   onSelect: (d: ISODate) => void;
   starting: boolean;
   onStart: (date: ISODate) => void;
   onDeload: () => void;
+  onSuggestion: (accept: boolean) => void;
 }) {
   const { plan, template, workouts } = data;
   const byDate = new Map(workouts.map((w) => [w.date, w]));
@@ -125,13 +145,18 @@ function PlanView({
   const finished = planFinished(template, plan, today);
   const inDeload = planPosition(plan, today).inserted;
   const phase = todayPlan?.phase ?? template.weeks[Math.max(0, week) % template.weeks.length].phase;
+  const block = blockPosition(plan, today);
+  const blockSpec = block ? template.blocks?.[block.type].weeks[block.week] : undefined;
+  const retest = block && !inDeload && isRetestWeek(template, block);
   const subtitle = finished
     ? '计划已完成'
     : daysBetween(plan.startDate, today) < 0
       ? `${shortDate(plan.startDate)} 开始`
       : inDeload
         ? '插入的减量周 · 之后的计划顺延一周'
-        : `第 ${week + 1}${total ? ` / ${total}` : ''} 周 · ${PHASE_NAMES[phase]}`;
+        : block
+          ? blockLabel(block, blockSpec)
+          : `第 ${week + 1}${total ? ` / ${total}` : ''} 周 · ${PHASE_NAMES[phase]}`;
   // One suggestion per fatigue spell: not while a deload is running or right after one.
   const recentDeload = (plan.deloads ?? []).some((d) => daysBetween(d, today) < DELOAD_DAYS * 2);
   const suggestDeload = readiness.streak >= DELOAD_STREAK && !finished && !recentDeload;
@@ -151,6 +176,16 @@ function PlanView({
         </View>
         <Icon name="chevronRight" size={18} color={colors.textMuted} />
       </Pressable>
+
+      {block && plan.blocks && <BlockReason block={plan.blocks[block.index]} />}
+
+      {advice.suggestion && (
+        <SuggestionCard suggestion={advice.suggestion} busy={starting} onAccept={() => onSuggestion(true)} onDecline={() => onSuggestion(false)} />
+      )}
+
+      {retest && template.blocks && (
+        <RetestCard codes={template.blocks[block.type].retest} diagnosis={advice.diagnosis} nextStart={nextBlockStart(plan, today)} />
+      )}
 
       <WeekStrip
         days={weekDays(selected)}
@@ -185,7 +220,7 @@ function PlanView({
                 {planned.session.code} · {planned.session.name}
               </Text>
               <Text style={text.muted}>
-                {planned.session.focus} · {PHASE_NAMES[planned.phase]}
+                {planned.session.focus} · {planned.block && !planned.inserted && template.blocks?.[planned.block.type].weeks[planned.block.week].retest ? '减量复测周' : PHASE_NAMES[planned.phase]}
                 {planned.inserted ? '（疲劳后插入）' : ''}
               </Text>
             </View>
