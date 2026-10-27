@@ -76,19 +76,23 @@ const SPRINT: CaptureGuide = {
   maxSeconds: 30,
 };
 
+/** How to film a set for automatic bar tracking: normal 60 fps video, side-on, with a 45 cm plate as the scale. */
+export const LIFT_SETUP = [
+  { title: '相机设成 60 fps', text: '设置 → 相机 → 录制视频，选「1080p，60 fps」。用普通视频拍，不用慢动作。' },
+  { title: '最外侧挂 45 cm 的标准片', text: '对着镜头的最外面一片要是直径 45 cm 的标准片（20/25 kg 片，或同样大小的 10/15 kg 保护片）。App 用它当尺子，小片会算错。' },
+  { title: '侧面放稳，正对杠铃端头', text: '三脚架或凳子上放稳，别手持。离杠铃片 1.5–2 米，镜头正对杠铃的一端，左右偏不超过 25°；镜头高度在膝盖到胸口之间。' },
+  { title: '竖着拍，上下留空', text: '整组里杠铃片要一直完整地在画面里，上下各留出一片杠铃片的空。光线要足，别对着窗户或灯。' },
+  { title: '先开拍再起杠', text: '开始录再起杠，做完放回架子再停。一个视频拍一组。' },
+];
+
 const LIFT: CaptureGuide = {
-  steps: [
-    SLOW_MO_SETUP,
-    { title: '侧面拍杠铃', text: '三脚架放在侧面 2–3 米，镜头和杠铃同高，杠铃片的整个上下行程都要在画面里。' },
-    { title: '用「慢动作」拍一组', text: '开拍后再开始这一组，做完再停。' },
-    { title: '导入并逐帧标记', text: '选最快的一次，标出杠铃开始上升和到最高点的两帧。' },
-  ],
-  checks: ['手机放稳，侧对杠铃', '杠铃整个行程都在画面里'],
+  steps: LIFT_SETUP,
+  checks: ['手机放稳，侧对杠铃端头', '外侧是 45 cm 标准片，整个行程都在画面里'],
   feetOverlay: false,
   recordingHint: '做完这一组后，点击停止',
-  doneHint: '下一步逐帧找到向心开始和结束。',
-  tips: '1. 三脚架放在侧面，镜头和杠铃同高。\n2. 杠铃的整个行程都要在画面里。\n3. 行程用卷尺量一次：杠铃最低点到最高点的距离。',
-  maxSeconds: 30,
+  doneHint: '下一步圈出杠铃片，自动分析。',
+  tips: '1. 三脚架放在侧面 1.5–2 米，正对杠铃一端。\n2. 外侧挂 45 cm 标准片。\n3. 杠铃片的整个行程都要在画面里。',
+  maxSeconds: 60,
 };
 
 export function captureGuide(category: Category, code?: string): CaptureGuide {

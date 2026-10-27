@@ -7,7 +7,7 @@ import { migrate } from '@/db/migrations';
 import { listSessionResults } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { getActivePlan, startPlan } from '@/db/training';
-import { addVbtSet } from '@/db/vbt';
+import { addVbtSet, listVbtSets } from '@/db/vbt';
 import { addDays, toISODate } from '@/domain/dates';
 
 import Home from '../(tabs)/index';
@@ -201,19 +201,36 @@ describe('VBT', () => {
   it('logs sets, warns on velocity loss and estimates 1RM', async () => {
     mockParams = { lift: 'vbt_squat', session: 'vbt-a' };
     const r = await render(<VbtSession />);
-    for (const [kg, v] of [['60', '0.9'], ['80', '0.7'], ['100', '0.5'], ['100', '0.38']]) {
-      await type(r.root, '重量（kg）', kg);
-      await type(r.root, '平均速度（m/s）', v);
-      await press(r.root, '记一组');
-    }
+    const speed = '平均速度（多次用空格隔开）（m/s）';
+    await type(r.root, '重量（kg）', '60');
+    await type(r.root, speed, '0.9');
+    await press(r.root, '记一组');
+    await type(r.root, '重量（kg）', '80');
+    await type(r.root, speed, '0.7');
+    await press(r.root, '记一组');
+    // Two loads, both fast: a line, but no 1RM from it.
+    expect(texts(r.root)).toContain('不估 1RM：至少要 3 个不同重量才估 1RM。');
+    expect(texts(r.root)).not.toMatch(/估算 1RM \d/);
+
+    // Copied from VBTgo, one speed per rep: logged at the fastest, with the rep count.
+    await press(r.root, '照抄 VBTgo');
+    await type(r.root, '重量（kg）', '100');
+    await type(r.root, '每次的 Mean V（空格隔开）（m/s）', '0.5 0.47 0.44');
+    expect(texts(r.root)).toContain('3 次，按最快一次 0.50 m/s 记这一组');
+    await press(r.root, '记一组');
+    await type(r.root, '每次的 Mean V（空格隔开）（m/s）', '0.38');
+    await press(r.root, '记一组');
     const t = texts(r.root);
     expect(t).toContain('加速力量'); // 0.7 m/s
     expect(t).toContain('速度损失 24%，建议停组');
     expect(t).toMatch(/估算 1RM 1\d\d/);
+    const sets = await listVbtSets(mockDb, 1, 'vbt_squat');
+    expect(sets.map((s) => [s.load, s.v, s.reps])).toEqual([[60, 0.9, 3], [80, 0.7, 3], [100, 0.5, 3], [100, 0.38, 3]]);
   });
 
   it('suggests the squat weight in today’s workout from that 1RM', async () => {
     await addVbtSet(mockDb, 1, 'vbt-b', 'vbt_squat', { load: 60, v: 0.9, reps: 3, source: 'manual' });
+    await addVbtSet(mockDb, 1, 'vbt-b', 'vbt_squat', { load: 80, v: 0.7, reps: 3, source: 'manual' });
     await addVbtSet(mockDb, 1, 'vbt-b', 'vbt_squat', { load: 100, v: 0.5, reps: 3, source: 'manual' });
     mockParams = { date: today };
     const r = await render(<WorkoutScreen />);
@@ -221,6 +238,20 @@ describe('VBT', () => {
     expect(texts(r.root)).toContain('按 VBT 估算 1RM 120 kg，5 次 @ RPE 5 建议 90 kg');
     const kg = r.root.findAll((n) => n.type === TextInput && n.props.accessibilityLabel === 'kg')[0];
     expect(kg.props.placeholder).toBe('90');
+  });
+
+  it('prefers a lifted 1RM over the velocity estimate, and flags an estimate far from it', async () => {
+    mockParams = { lift: 'vbt_squat', session: 'vbt-c' };
+    const v = await render(<VbtSession />);
+    await type(v.root, '深蹲 1RM（kg）', '150');
+    await press(v.root, '保存');
+    // The latest profile still says 120 kg.
+    expect(texts(v.root)).toContain('比你实测的 150 kg 低了 20%：多半是速度测慢了。训练计划仍按实测 1RM 推荐重量。');
+
+    mockParams = { date: today };
+    const r = await render(<WorkoutScreen />);
+    // 150 / (1 + 10/30) = 112.5 kg.
+    expect(texts(r.root)).toContain('按实测 1RM 150 kg，5 次 @ RPE 5 建议 112.5 kg');
   });
 });
 

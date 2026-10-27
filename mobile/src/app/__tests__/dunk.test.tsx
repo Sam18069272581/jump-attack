@@ -108,6 +108,7 @@ describe('with results', () => {
     await jumps('approach_touch', 'touch-1', [290, 292]);
     // 60 kg @ 1.0 m/s and 100 kg @ 0.6 m/s: 130 kg at 0.3 m/s, 1.73× body mass.
     await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 60, v: 1.0, reps: 3, source: 'manual' });
+    await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 80, v: 0.8, reps: 3, source: 'manual' });
     await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 100, v: 0.6, reps: 2, source: 'manual' });
     await addDropJump(mockDb, 1, 'dj-1', { boxCm: 30, rsi: 1.6, contactMs: 210, heightCm: 34, flightS: 0.53 });
   });

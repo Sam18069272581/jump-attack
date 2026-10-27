@@ -25,11 +25,11 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
 }
 
 export default function Mark() {
-  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; reps?: string; rom?: string; box?: string }>();
+  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; box?: string }>();
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const def = getMetric(params.metric);
-  const profile = def ? markProfile(def, { romCm: Number(params.rom) || undefined, reachCm: current?.standing_reach_cm ?? undefined }) : null;
+  const profile = def ? markProfile(def, { reachCm: current?.standing_reach_cm ?? undefined }) : null;
   const player = useVideoPlayer(params.uri, (p) => {
     p.muted = true;
     p.pause();
@@ -95,14 +95,10 @@ export default function Mark() {
         takeoff_frame: marked.at(-2),
         landing_frame: marked.at(-1),
         video_uri: videoUri,
-        ...(params.from === 'vbt'
-          ? { load_kg: Number(params.load) || 0, detail: { source: 'video', rom_cm: Number(params.rom), ...(Number(params.reps) ? { reps: Number(params.reps) } : {}) } }
-          : params.load != null
-            ? { load_kg: Number(params.load) || 0 }
-            : {}),
+        ...(params.load != null ? { load_kg: Number(params.load) || 0 } : {}),
         ...(result.detail || params.box ? { detail: { source: 'video', ...result.detail, ...(params.box ? { box_cm: Number(params.box) } : {}) } } : {}),
       });
-      // A VBT set or a profile jump goes straight back to its log (capture and marking are the two screens above it).
+      // A profile jump goes straight back to its log (capture and marking are the two screens above it).
       if (returnsToLogger(params.from)) return router.dismiss(2);
       router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
     } catch (e) {

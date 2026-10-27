@@ -4,7 +4,7 @@ import { migrate } from '../migrations';
 import { addTrial, ensureSession, getAthlete, updateAthlete } from '../repo';
 import { openMemoryDb } from '../testing/memoryDb';
 import { logSet, startPlan, startWorkout } from '../training';
-import { addVbtSet } from '../vbt';
+import { addTested1rm, addVbtSet } from '../vbt';
 
 async function setup() {
   const db = openMemoryDb();
@@ -27,12 +27,18 @@ it('estimates the squat 1RM from bar speed and from logged sets', async () => {
   await logSet(db, w.id, { exercise_code: 'back_squat', set_no: 1, reps: 5, load_kg: 100, rpe: 8 });
   // Too far from failure to say anything about a 1RM.
   await logSet(db, w.id, { exercise_code: 'back_squat', set_no: 2, reps: 12, load_kg: 110, rpe: 6 });
-  // Line through 60 kg @ 1.0 m/s and 100 kg @ 0.6 m/s reaches 0.3 m/s at 130 kg.
+  // Line through 60, 80 and 100 kg at 1.0, 0.8 and 0.6 m/s reaches 0.3 m/s at 130 kg.
   await addVbtSet(db, 1, 'vbt-1', 'vbt_squat', { load: 60, v: 1.0, reps: 3, source: 'manual' });
+  await addVbtSet(db, 1, 'vbt-1', 'vbt_squat', { load: 80, v: 0.8, reps: 3, source: 'manual' });
   await addVbtSet(db, 1, 'vbt-1', 'vbt_squat', { load: 100, v: 0.6, reps: 2, source: 'manual' });
+  // Two light loads: too far from 1RM to extrapolate, so left out.
+  await addVbtSet(db, 1, 'vbt-2', 'vbt_squat', { load: 60, v: 1.2, reps: 3, source: 'manual' });
+  await addVbtSet(db, 1, 'vbt-2', 'vbt_squat', { load: 80, v: 1.0, reps: 3, source: 'manual' });
+  // And one actually lifted.
+  await addTested1rm(db, 1, 'max-1', 165);
 
   const history = await squat1rmHistory(db, 1);
-  expect(history.map((h) => Math.round(h.kg * 10) / 10)).toEqual([123.3, 130]);
+  expect(history.map((h) => Math.round(h.kg * 10) / 10).sort()).toEqual([123.3, 130, 165]);
 });
 
 it('gathers every result the diagnosis reads', async () => {
@@ -41,6 +47,7 @@ it('gathers every result the diagnosis reads', async () => {
   await jumps(db, 'sj', 'sj-1', [40]);
   await jumps(db, 'approach_touch', 'touch-1', [290, 292]);
   await addVbtSet(db, 1, 'vbt-1', 'vbt_squat', { load: 60, v: 1.0, reps: 3, source: 'manual' });
+  await addVbtSet(db, 1, 'vbt-1', 'vbt_squat', { load: 80, v: 0.8, reps: 3, source: 'manual' });
   await addVbtSet(db, 1, 'vbt-1', 'vbt_squat', { load: 100, v: 0.6, reps: 2, source: 'manual' });
   await addDropJump(db, 1, 'dj-1', { boxCm: 30, rsi: 1.8, contactMs: 190, heightCm: 34, flightS: 0.53 });
   await addDropJump(db, 1, 'dj-1', { boxCm: 40, rsi: 2.1, contactMs: 200, heightCm: 42, flightS: 0.59 });

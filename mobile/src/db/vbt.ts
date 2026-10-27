@@ -1,8 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { estimate1rm, lvProfile, MVT, type LvProfile } from '@/domain/vbt';
+import { SQUAT_1RM } from '@/domain/metrics';
+import { checkedOneRm, MVT, type LvProfile, type OneRmProblem } from '@/domain/vbt';
 
-import { addTrial, ensureSession } from './repo';
+import { addTrial, ensureSession, listSessionResults } from './repo';
 
 /** One logged VBT set: a trial whose value is the mean velocity. */
 export type VbtSet = { id: number; session_id: string; started_at: string; load: number; v: number; reps: number | null };
@@ -31,34 +32,74 @@ export async function addVbtSet(
   athleteId: number,
   sessionId: string,
   code: string,
-  set: { load: number; v: number; reps: number | null; source: 'manual' | 'video'; romCm?: number },
+  set: {
+    load: number;
+    v: number;
+    reps: number | null;
+    /** Typed in, tracked from video, or copied from the VBTgo app. */
+    source: 'manual' | 'video' | 'vbtgo';
+    romCm?: number;
+    /** Mean velocity of every rep, in order, when known. */
+    repV?: number[];
+    peakV?: number;
+    videoUri?: string;
+  },
 ): Promise<number> {
   await ensureSession(db, sessionId, athleteId, code);
   return addTrial(db, {
     session_id: sessionId,
     value: set.v,
     load_kg: set.load,
-    detail: { source: set.source, ...(set.reps != null ? { reps: set.reps } : {}), ...(set.romCm != null ? { rom_cm: set.romCm } : {}) },
+    video_uri: set.videoUri,
+    detail: {
+      source: set.source,
+      ...(set.reps != null ? { reps: set.reps } : {}),
+      ...(set.romCm != null ? { rom_cm: set.romCm } : {}),
+      ...(set.repV ? { rep_v: set.repV } : {}),
+      ...(set.peakV != null ? { peak_v: set.peakV } : {}),
+    },
   });
 }
 
-export type LiftEstimate = { profile: LvProfile; oneRm: number | null; sessionId: string; startedAt: string };
+export type LiftEstimate = { profile: LvProfile; oneRm: number | null; problem: OneRmProblem | null; sessionId: string; startedAt: string };
+
+/** Every session's load-velocity profile, oldest first, with the 1RM it implies when the profile is good enough. */
+export function sessionEstimates(sets: VbtSet[], code: string): LiftEstimate[] {
+  const out: LiftEstimate[] = [];
+  for (const id of new Set(sets.map((s) => s.session_id))) {
+    const inSession = sets.filter((s) => s.session_id === id && s.load > 0);
+    const est = checkedOneRm(
+      inSession.map((s) => ({ load: s.load, v: s.v })),
+      MVT[code],
+    );
+    if (est) out.push({ ...est, sessionId: id, startedAt: inSession[0].started_at });
+  }
+  return out;
+}
 
 /**
  * The load-velocity profile from the most recent session that has one (sets at two or more loads,
- * usually the warm-up), with the 1RM it implies for lifts that have a minimum velocity threshold.
+ * usually the warm-up), with the 1RM it implies for lifts that have a minimum velocity threshold, if the
+ * profile passes the checks in `checkedOneRm`.
  */
 export function latestEstimate(sets: VbtSet[], code: string): LiftEstimate | null {
-  const sessions = [...new Set(sets.map((s) => s.session_id))].reverse();
-  for (const id of sessions) {
-    const inSession = sets.filter((s) => s.session_id === id && s.load > 0);
-    const profile = lvProfile(inSession.map((s) => ({ load: s.load, v: s.v })));
-    if (!profile) continue;
-    const mvt = MVT[code];
-    return { profile, oneRm: mvt != null ? estimate1rm(profile, mvt) : null, sessionId: id, startedAt: inSession[0].started_at };
-  }
-  return null;
+  return sessionEstimates(sets, code).at(-1) ?? null;
 }
+
+export type Tested1rm = { kg: number; at: string };
+
+/** Back-squat 1RMs the athlete actually lifted, oldest first. */
+export async function listTested1rm(db: SQLiteDatabase, athleteId: number): Promise<Tested1rm[]> {
+  return (await listSessionResults(db, athleteId, SQUAT_1RM.code)).map((r) => ({ kg: r.best, at: r.started_at }));
+}
+
+export async function addTested1rm(db: SQLiteDatabase, athleteId: number, sessionId: string, kg: number): Promise<void> {
+  await ensureSession(db, sessionId, athleteId, SQUAT_1RM.code);
+  await addTrial(db, { session_id: sessionId, value: kg, detail: { source: 'tested' } });
+}
+
+/** A lifted 1RM older than this no longer stands in for today's strength. */
+export const TESTED_MAX_AGE_DAYS = 120;
 
 /** Load of each session's fastest set, keyed by session. */
 export function fastestSetLoads(sets: VbtSet[]): Record<string, number> {

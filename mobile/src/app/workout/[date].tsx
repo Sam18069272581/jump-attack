@@ -113,7 +113,7 @@ export default function WorkoutScreen() {
             {p.cue ? <Text style={text.caption}>{p.cue}</Text> : null}
             {suggested[p.code] && (
               <Text style={styles.suggest}>
-                按 VBT 估算 1RM {Math.round(suggested[p.code].oneRm)} kg，{p.reps} 次 @ RPE {formatRpe(p.rpe ?? 8)} 建议 {suggested[p.code].kg} kg
+                按{suggested[p.code].source === 'tested' ? '实测' : ' VBT 估算'} 1RM {Math.round(suggested[p.code].oneRm)} kg，{p.reps} 次 @ RPE {formatRpe(p.rpe ?? 8)} 建议 {suggested[p.code].kg} kg
               </Text>
             )}
             {Array.from({ length: p.sets }, (_, i) => {

@@ -9,8 +9,9 @@ export type Category = 'jump' | 'conditioning' | 'speed' | 'vbt' | 'mobility' | 
  * How a result can be recorded, first one is the default.
  * - `flight`: take-off and landing frames in a video (jump height).
  * - `contact`: touch-down, take-off and landing frames of a drop jump (reactive strength index).
- * - `interval`: start and finish frames in a video (sprint time, bar velocity).
- * - `manual`: typed in, from a stopwatch, timing gates, a VBT device or Apple Health.
+ * - `interval`: start and finish frames in a video (sprint time).
+ * - `manual`: typed in, from a stopwatch, timing gates, a VBT device or app, or Apple Health.
+ * VBT lifts are typed in or tracked from video on their own screen, not marked frame by frame.
  */
 export type CaptureKind = 'flight' | 'contact' | 'interval' | 'manual';
 
@@ -198,15 +199,18 @@ export const SPEED_TESTS: MetricDef[] = SPRINT_DISTANCES.map(sprintMetric);
 
 /** One logged set per trial: mean concentric velocity, with the load in `trial.load_kg`. */
 export const VBT_LIFTS: MetricDef[] = [
-  { code: 'vbt_squat', name: '深蹲', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual', 'interval'], range: [0.05, 4] },
-  { code: 'vbt_clean_floor', name: '高翻 · 地面', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual', 'interval'], range: [0.05, 4] },
-  { code: 'vbt_clean_hang', name: '高翻 · 悬垂', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual', 'interval'], range: [0.05, 4] },
-  { code: 'vbt_clean_power', name: '高翻 · 发力位', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual', 'interval'], range: [0.05, 4] },
-  { code: 'vbt_pull_floor', name: '高拉 · 地面', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual', 'interval'], range: [0.05, 4] },
-  { code: 'vbt_pull_hang', name: '高拉 · 悬垂', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual', 'interval'], range: [0.05, 4] },
-  { code: 'vbt_pull_power', name: '高拉 · 发力位', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual', 'interval'], range: [0.05, 4] },
-  { code: 'vbt_squat_jump', name: '深蹲跳', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual', 'interval'], range: [0.05, 4] },
+  { code: 'vbt_squat', name: '深蹲', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual'], range: [0.05, 4] },
+  { code: 'vbt_clean_floor', name: '高翻 · 地面', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual'], range: [0.05, 4] },
+  { code: 'vbt_clean_hang', name: '高翻 · 悬垂', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual'], range: [0.05, 4] },
+  { code: 'vbt_clean_power', name: '高翻 · 发力位', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual'], range: [0.05, 4] },
+  { code: 'vbt_pull_floor', name: '高拉 · 地面', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual'], range: [0.05, 4] },
+  { code: 'vbt_pull_hang', name: '高拉 · 悬垂', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual'], range: [0.05, 4] },
+  { code: 'vbt_pull_power', name: '高拉 · 发力位', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual'], range: [0.05, 4] },
+  { code: 'vbt_squat_jump', name: '深蹲跳', category: 'vbt', unit: 'm/s', decimals: 2, capture: ['manual'], range: [0.05, 4] },
 ];
+
+/** A back-squat 1RM actually lifted: it overrides velocity estimates for working weights and the strength ratio. */
+export const SQUAT_1RM: MetricDef = { code: 'squat_1rm', name: '深蹲 1RM（实测）', short: '深蹲 1RM', category: 'vbt', unit: 'kg', decimals: 1, capture: ['manual'], range: [20, 400] };
 
 function sides(code: string, name: string, unit: string, decimals: number, use: string, range: [number, number], lowerIsBetter?: boolean): MetricDef[] {
   const base = { category: 'mobility' as const, unit, decimals, use, range, capture: ['manual' as const], ...(lowerIsBetter ? { lowerIsBetter } : {}) };
@@ -236,7 +240,7 @@ export const RECOVERY_METRICS: MetricDef[] = [
   { code: 'rec_resp', name: '呼吸频率', category: 'recovery', unit: '次/分', decimals: 1, neutral: true, capture: ['manual'], range: [5, 40] },
 ];
 
-export const METRICS: MetricDef[] = [APPROACH_TOUCH, ...JUMP_TESTS, LOADED_SJ, DROP_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
+export const METRICS: MetricDef[] = [APPROACH_TOUCH, ...JUMP_TESTS, LOADED_SJ, DROP_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, SQUAT_1RM, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
 
 export function getMetric(code: string): MetricDef | undefined {
   const known = METRICS.find((m) => m.code === code);

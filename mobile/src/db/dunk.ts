@@ -4,11 +4,11 @@ import { ladder } from '@/domain/dropJump';
 import { diagnose, type DunkDiagnosis, type DunkInput } from '@/domain/dunk';
 import { fvProfile, pushOff } from '@/domain/fvp';
 import { APPROACH_TOUCH } from '@/domain/metrics';
-import { estimate1rm, lvProfile, MVT, pctOf1rm } from '@/domain/vbt';
+import { pctOf1rm } from '@/domain/vbt';
 
 import { listDropJumps, listLoadedJumps, profileSessions } from './jumps';
 import { listSessionResults, type Athlete } from './repo';
-import { listVbtSets } from './vbt';
+import { listTested1rm, listVbtSets, sessionEstimates } from './vbt';
 
 const SQUAT_LIFT = 'vbt_squat';
 /** The plan exercise whose logged sets (load, reps, RPE) also give a squat 1RM. */
@@ -17,18 +17,14 @@ const SQUAT_EXERCISE = 'back_squat';
 const MAX_REPS_FOR_1RM = 10;
 
 /**
- * Back-squat 1RM estimates, oldest first: one per VBT session with a load-velocity profile, and one per workout
- * from its heaviest logged set, so athletes who don't track bar speed still get a strength ratio.
+ * Back-squat 1RMs, oldest first: every one actually lifted, one per VBT session whose load-velocity profile passed
+ * its checks, and one per workout from its heaviest logged set, so athletes who don't track bar speed still get a
+ * strength ratio.
  */
 export async function squat1rmHistory(db: SQLiteDatabase, athleteId: number): Promise<{ at: string; kg: number }[]> {
-  const out: { at: string; kg: number }[] = [];
-  const sets = await listVbtSets(db, athleteId, SQUAT_LIFT);
-  for (const id of new Set(sets.map((s) => s.session_id))) {
-    const inSession = sets.filter((s) => s.session_id === id && s.load > 0);
-    const profile = lvProfile(inSession.map((s) => ({ load: s.load, v: s.v })));
-    if (!profile) continue;
-    const kg = estimate1rm(profile, MVT[SQUAT_LIFT]);
-    if (Number.isFinite(kg) && kg > 0) out.push({ at: inSession[0].started_at, kg });
+  const out: { at: string; kg: number }[] = await listTested1rm(db, athleteId);
+  for (const e of sessionEstimates(await listVbtSets(db, athleteId, SQUAT_LIFT), SQUAT_LIFT)) {
+    if (e.oneRm != null) out.push({ at: e.startedAt, kg: e.oneRm });
   }
 
   const logged = await db.getAllAsync<{ date: string; load_kg: number; reps: number; rpe: number }>(
