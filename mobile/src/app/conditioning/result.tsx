@@ -7,11 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
 import { listMetricResults, listTrials } from '@/db/repo';
 import { rsaRating, rsaSummary, vo2maxBand, yoyoLabel, YOYO_SHUTTLE_M } from '@/domain/conditioning';
-import { toISODate } from '@/domain/dates';
+import { trendBaseline } from '@/domain/assess';
 import { CONDITIONING_TESTS, formatValue } from '@/domain/metrics';
 import { assess, type Assessment } from '@/domain/verdict';
 import { useAthlete } from '@/state/athlete';
-import { countedTrend, POOR_DAY_NOTE } from '@/state/training';
+import { loadPoorDaysOf, POOR_DAY_NOTE } from '@/state/training';
 import { colors, fonts, radius } from '@/theme';
 
 export default function ConditioningResult() {
@@ -33,9 +33,8 @@ export default function ConditioningResult() {
       const values = (await listTrials(db, session)).map((t) => t.value);
       const all = await listMetricResults(db, current.id, def);
       const mine = all.find((r) => r.session_id === session);
-      const { counted, poor } = await countedTrend(db, current.id, def.code, all);
-      const previous = counted.filter((r) => r.session_id !== session).map((r) => r.best);
-      if (alive && mine) setData({ values, result: mine.best, assessment: assess(def, previous, mine.best), poorDay: poor.has(toISODate(new Date(mine.started_at))) });
+      const { previous, poorDay } = trendBaseline(all, session, await loadPoorDaysOf(db, current.id, def.code, all));
+      if (alive && mine) setData({ values, result: mine.best, assessment: assess(def, previous, mine.best), poorDay });
     })();
     return () => {
       alive = false;

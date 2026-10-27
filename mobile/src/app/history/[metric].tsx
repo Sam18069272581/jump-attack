@@ -7,12 +7,12 @@ import { TrendChart } from '@/components/TrendChart';
 import { Empty } from '@/components/ui';
 import { listMetricResults, listSessionValues, type SessionResult } from '@/db/repo';
 import { fastestSetLoads, listVbtSets } from '@/db/vbt';
-import { judgeChange } from '@/domain/assess';
-import { toISODate, type ISODate } from '@/domain/dates';
+import { judgeChange, onPoorDay, trendBaseline } from '@/domain/assess';
+import type { ISODate } from '@/domain/dates';
 import { dunkLine } from '@/domain/dunk';
 import { APPROACH_TOUCH, changeTone, formatValue, getMetric, metricColor, resultNote } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
-import { countedTrend } from '@/state/training';
+import { loadPoorDaysOf } from '@/state/training';
 import { colors, fonts } from '@/theme';
 
 function shortDate(iso: string) {
@@ -44,7 +44,7 @@ export default function MetricHistory() {
       if (!current || !def) return;
       listMetricResults(db, current.id, def).then(async (rows) => {
         setResults(rows);
-        setPoor((await countedTrend(db, current.id, def.code, rows)).poor);
+        setPoor(await loadPoorDaysOf(db, current.id, def.code, rows));
       });
       if (def.aggregate === 'mean') listSessionValues(db, current.id, def.code).then(setAttempts);
       if (def.category === 'vbt') listVbtSets(db, current.id, def.code).then((sets) => setLoads(fastestSetLoads(sets)));
@@ -52,14 +52,13 @@ export default function MetricHistory() {
   );
 
   if (!def) return <Empty title="找不到这个指标" />;
-  const isPoor = (r: SessionResult) => poor.has(toISODate(new Date(r.started_at)));
   const baseNote = (r: SessionResult) => resultNote(def, r.best, attempts[r.session_id]) ?? (loads[r.session_id] != null ? `@ ${loads[r.session_id]} kg` : null);
-  const note = (r: SessionResult) => [baseNote(r), isPoor(r) ? '状态差，不计入趋势' : null].filter(Boolean).join(' · ') || null;
+  const note = (r: SessionResult) => [baseNote(r), onPoorDay(r, poor) ? '状态差，不计入趋势' : null].filter(Boolean).join(' · ') || null;
 
   const latest = results.at(-1);
   const sinceFirst = results.length > 1 ? latest!.best - results[0].best : null;
   const tone = (d: number) => ({ good: colors.good, bad: colors.warn, flat: colors.textMuted })[changeTone(def, d)];
-  const verdict = latest ? judgeChange(results.slice(0, -1).filter((r) => !isPoor(r)).map((r) => r.best), latest.best, def.lowerIsBetter) : null;
+  const verdict = latest ? judgeChange(trendBaseline(results, latest.session_id, poor).previous, latest.best, def.lowerIsBetter) : null;
   const recent = results.slice(-12);
   // Touch heights are read against the dunk line.
   const line = def.code === APPROACH_TOUCH.code && current ? dunkLine(current.rim_height_cm, current.dunk_clearance_cm) : null;

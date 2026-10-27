@@ -4,7 +4,7 @@ import { listRecoveryDays } from '@/db/recovery';
 import { listSessionResults } from '@/db/repo';
 import { getActivePlan, listWorkouts, startWorkout, type Plan, type Workout } from '@/db/training';
 import { latestEstimate, listVbtSets } from '@/db/vbt';
-import { countedResults, type Readiness } from '@/domain/assess';
+import { type Readiness } from '@/domain/assess';
 import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
 import { worstState, type BlockType, type DayState } from '@/domain/dunk';
 import { adjustForReadiness, blockOn, planDay, type Adjustment, type PlannedSession, type PlanTemplate, type Prescription, type SessionTemplate } from '@/domain/plan';
@@ -92,15 +92,9 @@ export async function loadPoorDays(db: SQLiteDatabase, athleteId: number, metric
   return poorDays(await loadDayInputs(db, athleteId), dates, selfSignal(metricCode, WARMUP_LIFTS));
 }
 
-/** A metric's results split into those that count toward progress and the poor days left out. */
-export async function countedTrend<T extends { started_at: string }>(
-  db: SQLiteDatabase,
-  athleteId: number,
-  metricCode: string,
-  results: T[],
-): Promise<{ counted: T[]; poor: Set<ISODate> }> {
-  const poor = await loadPoorDays(db, athleteId, metricCode, results.map((r) => toISODate(new Date(r.started_at))));
-  return { counted: countedResults(results, poor), poor };
+/** The poor days among a metric's results, judged without the metric's own signal. */
+export function loadPoorDaysOf(db: SQLiteDatabase, athleteId: number, metricCode: string, results: { started_at: string }[]): Promise<Set<ISODate>> {
+  return loadPoorDays(db, athleteId, metricCode, results.map((r) => toISODate(new Date(r.started_at))));
 }
 
 /** Shown with a result from a poor day. */
