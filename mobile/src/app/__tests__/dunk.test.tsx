@@ -134,6 +134,8 @@ describe('with results', () => {
     expect(t).toContain('反应块');
     expect(t).toContain('1.73×');
     expect(t).not.toContain('还不知道离扣篮多远');
+    // 292 cm on a ruler from the 240 cm standing reach to the 320 cm line.
+    expect(r.root.findByProps({ accessibilityRole: 'progressbar' }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 65 });
     await press(r.root, '测助跑摸高');
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/measure/capture', params: { metric: 'approach_touch', session: expect.any(String) } });
   });

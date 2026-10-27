@@ -5,7 +5,7 @@ import { STATUS_COLOR } from '@/components/dunk';
 import { Icon } from '@/components/Icon';
 import { Card } from '@/components/ui';
 import { openDunkTest } from '@/components/dunkTests';
-import { BLOCKS, MISSING_TEXT, RIM_CM, type DunkDiagnosis, type DunkMetric, type Missing } from '@/domain/dunk';
+import { BLOCKS, MISSING_TEXT, RIM_CM, reachRuler, type DunkDiagnosis, type DunkMetric, type Missing } from '@/domain/dunk';
 import { colors, fonts, radius, text } from '@/theme';
 
 function statusLabel(m: DunkMetric): string {
@@ -35,19 +35,14 @@ function targetText(m: DunkMetric): string {
   return m.low === m.threshold ? `目标 ≥ ${fixed(m.threshold)}${unit}` : `目标 ≥ ${fixed(m.threshold)}${unit}，< ${fixed(m.low)}${unit} 偏低`;
 }
 
-/** Where `x` sits between the standing reach and the dunk line, 0–1. */
-function along(x: number, from: number, to: number): number {
-  return Math.max(0, Math.min(1, (x - from) / (to - from)));
-}
-
 /**
  * The gap to the dunk line, drawn as a reach ruler: from the standing reach on the left to the dunk line on the right,
  * with the rim marked and the latest touch filled in.
  */
 export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagnosis; standingReach: number | null }) {
-  const ruler = standingReach != null && d.touch.value != null && d.line > standingReach;
-  const progress = ruler ? along(d.touch.value!, standingReach!, d.line) : 0;
-  const rim = ruler && RIM_CM > standingReach! && RIM_CM < d.line ? along(RIM_CM, standingReach!, d.line) : null;
+  const ruler = reachRuler(d.touch.value, standingReach, d.line);
+  const progress = ruler?.progress ?? 0;
+  const rim = ruler?.rim ?? null;
 
   const [fill] = useState(() => new Animated.Value(0));
   const [width] = useState(() => fill.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }));
