@@ -56,31 +56,32 @@ export default function Home() {
         <View style={{ gap: 12 }}>
           <Text style={text.section}>训练和测试</Text>
           {goal && <DayStateRow state={goal.state} />}
-          <View style={styles.grid}>
+          <View style={styles.list}>
             {CATEGORIES.map((c) => {
               const href = c.href as Href | null;
-              const card = (
+              const row = (
                 <View style={[styles.module, !href && styles.moduleDisabled]}>
                   <View style={[styles.tile, { backgroundColor: c.tile }]}>
                     <Icon name={c.icon} size={22} color={c.color} />
                   </View>
-                  <View style={{ gap: 2 }}>
+                  <View style={{ flex: 1, gap: 2 }}>
                     <Text style={styles.moduleTitle}>{c.name}</Text>
-                    <Text style={styles.moduleSub} numberOfLines={2}>
-                      {href ? c.subtitle : '即将上线'}
+                    <Text style={styles.moduleSub} numberOfLines={1}>
+                      {c.subtitle}
                     </Text>
                   </View>
+                  {href ? <Icon name="chevronRight" size={18} color={colors.textMuted} /> : <Text style={styles.moduleSub}>即将上线</Text>}
                 </View>
               );
               return href ? (
                 <Link key={c.key} href={href} asChild>
-                  <Pressable accessibilityRole="button" accessibilityLabel={c.name} style={({ pressed }) => [styles.cell, pressed && { opacity: 0.75 }]}>
-                    {card}
+                  <Pressable accessibilityRole="button" accessibilityLabel={c.name}>
+                    {row}
                   </Pressable>
                 </Link>
               ) : (
-                <View key={c.key} accessibilityState={{ disabled: true }} style={styles.cell}>
-                  {card}
+                <View key={c.key} accessibilityState={{ disabled: true }}>
+                  {row}
                 </View>
               );
             })}
@@ -98,11 +99,10 @@ const styles = StyleSheet.create({
   athlete: { height: 44, maxWidth: 150, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
   athleteName: { color: colors.text, fontSize: 13, flexShrink: 1 },
   goal: { gap: 12 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6, rowGap: 12 },
-  cell: { width: '50%', paddingHorizontal: 6 },
-  module: { flex: 1, backgroundColor: colors.surface, borderRadius: radius.card, padding: 14, gap: 12 },
+  list: { gap: 10 },
+  module: { backgroundColor: colors.surface, borderRadius: radius.row, minHeight: 68, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 14 },
   moduleDisabled: { opacity: 0.5 },
-  tile: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  tile: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   moduleTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  moduleSub: { color: colors.textMuted, fontSize: 11, lineHeight: 15 },
+  moduleSub: { color: colors.textMuted, fontSize: 12 },
 });
