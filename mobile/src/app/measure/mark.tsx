@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AutoMarker } from '@/components/AutoMarker';
 import { Button, Chip, Empty } from '@/components/ui';
 import { addTrial, ensureSession } from '@/db/repo';
 import { recalibrateTouches, touchOffsetFor } from '@/db/touch';
@@ -155,6 +156,21 @@ export default function Mark() {
             <Text style={[styles.phaseText, { color: phaseColor }]}>{phase}</Text>
           </View>
         </View>
+
+        {def && (def.capture.includes('flight') || def.capture.includes('contact')) && total > 0 && (
+          <AutoMarker
+            key={`${params.uri}@${fps}`}
+            uri={params.uri}
+            fileFps={fileFps}
+            captureFps={fps}
+            frames={total}
+            kind={profile.marks.length === 3 ? 'drop' : 'jump'}
+            onPick={(found) => {
+              setMarks(found);
+              show(found[0]);
+            }}
+          />
+        )}
 
         <View style={styles.fpsRow}>
           <Text style={styles.label}>拍摄帧率{detectedFps ? `（视频 ${detectedFps} fps）` : ''}</Text>
