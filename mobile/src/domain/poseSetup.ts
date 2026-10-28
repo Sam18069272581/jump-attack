@@ -83,16 +83,24 @@ const EAR_SHARE = 0.93;
 
 /** The horizon may lean this much in the picture, degrees: the analysis fits the floor line anyway. */
 export const LEVEL_DEG = 3;
-/** The lens may point this far up or down, degrees, before perspective bends heights across the picture. */
-export const PITCH_DEG = 10;
+/**
+ * The lens may point this far up or down, degrees. A tipped phone sees the run-up's plane at a slant, so the scale
+ * changes with height in the picture: about 0.5 % across a flight's rise at 5°, a fifth of the take-off velocity's
+ * pass line.
+ */
+export const PITCH_DEG = 5;
 /** Wobble of gravity's direction over a second (RMS, degrees) above which the phone is being held, not set down. */
 export const STEADY_DEG = 0.5;
-/** Mean brightness in the athlete's box (0–255): below `DARK` the exposure has run out, below `DIM` fast feet blur. */
+/**
+ * Mean brightness in the athlete's box (0–255). The camera's automatic exposure keeps most scenes near the middle by
+ * lengthening the exposure, which blurs fast feet, so a box that still comes out dim means it has run out of room.
+ * Starting points, not published limits: no app or paper gives numbers for these.
+ */
 export const DARK_LUMA = 40;
-export const DIM_LUMA = 70;
+export const DIM_LUMA = 60;
 export const BRIGHT_LUMA = 220;
-/** The picture this much brighter than a dim athlete: lit from behind. */
-export const BACKLIT_LUMA = 60;
+/** The athlete less than this share of the picture's brightness: lit from behind, which the pose model handles badly. */
+export const BACKLIT_SHARE = 0.5;
 /** The pose model's visibility (0–1) each part needs on at least one side. */
 export const CLEAR_VISIBILITY = 0.6;
 /** Shoulder spread over torso length: side-on is near 0, facing the phone about 0.7. */
@@ -258,7 +266,7 @@ function pictureChecks(frames: SetupFrame[]): { checks: SetupCheck[]; athlete: S
   const luma = med((m) => m.luma);
   const scene = median(recent.map((f) => f.luma));
   // A dark figure in a bright picture: the exposure is set by a window or the sun behind them.
-  if (luma < DIM_LUMA && scene > luma + BACKLIT_LUMA) checks.push({ key: 'light', state: 'fix', hint: '逆光了：别对着窗户或太阳拍，换个方向' });
+  if (luma < BACKLIT_SHARE * scene) checks.push({ key: 'light', state: 'fix', hint: '逆光了：别对着窗户或太阳拍，换个方向' });
   else if (luma < DARK_LUMA) checks.push({ key: 'light', state: 'fix', hint: '太暗了：开灯，或者换亮一点的地方' });
   else if (luma > BRIGHT_LUMA) checks.push({ key: 'light', state: 'fix', hint: '太亮了：别对着窗户、太阳或灯拍' });
   else if (luma < DIM_LUMA) checks.push({ key: 'light', state: 'warn', hint: '光线偏暗，脚快的时候可能会糊' });

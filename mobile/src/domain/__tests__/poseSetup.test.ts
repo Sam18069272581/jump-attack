@@ -1,54 +1,9 @@
-import { LANDMARK_COUNT, LM, SIDE, type Pose } from '../pose';
+import { LM } from '../pose';
 import { AHEAD_S, BEHIND_S, checkSetup, HEADROOM_S, SETUP_CHECKS, type GravitySample, type SetupCheckKey, type SetupFrame } from '../poseSetup';
+import { standing, type Stand } from '../testing/standing';
 
 const W = 1280;
 const H = 720;
-
-type Stand = {
-  /** Mid-hip, picture px. */
-  x: number;
-  /** Where the feet meet the floor, picture px. */
-  floor: number;
-  /** Floor to the top of the head, px. */
-  stature: number;
-  /** +1: toes point right (runs left to right); −1: toes point left. */
-  facing?: 1 | -1;
-  /** Turned this far from side-on, degrees: 0 is side-on, 90 faces the phone. */
-  yaw?: number;
-  /** The pose model's visibility for every point, or per side. */
-  vis?: number;
-  footVis?: number;
-};
-
-/**
- * A person standing on the take-off spot with Drillis and Contini's proportions (Winter fig. 4.1), heights as shares
- * of stature: ear 0.93, shoulder 0.818, elbow 0.63, wrist 0.485, hip 0.53, knee 0.285, ankle 0.039; foot 0.152 long.
- */
-function standing({ x, floor, stature: S, facing = 1, yaw = 0, vis = 0.95, footVis = vis }: Stand): Pose {
-  const p: Pose = Array.from({ length: LANDMARK_COUNT }, () => ({ x, y: floor - 0.93 * S, z: 0, v: vis }));
-  const at = (share: number) => floor - share * S;
-  // Left and right sit apart in the picture by how far the body is turned.
-  const apart = Math.sin((yaw * Math.PI) / 180);
-  const half = { shoulder: 0.1, hip: 0.07, knee: 0.05, ankle: 0.05 };
-  for (const [side, sign] of [['left', -1], ['right', 1]] as const) {
-    const k = SIDE[side];
-    const off = (w: number) => x + sign * w * S * apart;
-    p[k.shoulder] = { x: off(half.shoulder), y: at(0.818), z: 0, v: vis };
-    p[k.elbow] = { x: off(half.shoulder), y: at(0.63), z: 0, v: vis };
-    p[k.wrist] = { x: off(half.shoulder), y: at(0.485), z: 0, v: vis };
-    p[k.index] = { x: off(half.shoulder), y: at(0.43), z: 0, v: vis };
-    p[k.pinky] = { x: off(half.shoulder), y: at(0.43), z: 0, v: vis };
-    p[k.hip] = { x: off(half.hip), y: at(0.53), z: 0, v: vis };
-    p[k.knee] = { x: off(half.knee), y: at(0.285), z: 0, v: vis };
-    p[k.ankle] = { x: off(half.ankle), y: at(0.039), z: 0, v: footVis };
-    p[k.heel] = { x: off(half.ankle) - facing * 0.04 * S, y: floor, z: 0, v: footVis };
-    p[k.toe] = { x: off(half.ankle) + facing * 0.112 * S, y: floor, z: 0, v: footVis };
-  }
-  p[LM.leftEar] = { x, y: at(0.93), z: 0, v: vis };
-  p[LM.rightEar] = { x, y: at(0.93), z: 0, v: vis };
-  p[LM.nose] = { x: x + facing * 0.05 * S, y: at(0.93), z: 0, v: vis };
-  return p;
-}
 
 /**
  * The phone 7 m from the take-off spot and 1 m up, on its side, 16:9 at 1280 × 720 with a 41° vertical view: the
@@ -120,10 +75,10 @@ describe('checkSetup', () => {
       expect(stateOf(checkSetup(frames(GOOD), gravity({ roll: 2.5 })), 'phone').state).toBe('ok');
     });
 
-    it('tipped 15° forwards or back (10° is allowed)', () => {
-      expect(stateOf(checkSetup(frames(GOOD), gravity({ pitch: 15 })), 'phone')).toMatchObject({ state: 'fix', hint: expect.stringContaining('15 度') });
-      expect(stateOf(checkSetup(frames(GOOD), gravity({ pitch: -15 })), 'phone').state).toBe('fix');
-      expect(stateOf(checkSetup(frames(GOOD), gravity({ pitch: 8 })), 'phone').state).toBe('ok');
+    it('tipped 8° forwards or back (5° is allowed)', () => {
+      expect(stateOf(checkSetup(frames(GOOD), gravity({ pitch: 8 })), 'phone')).toMatchObject({ state: 'fix', hint: expect.stringContaining('8 度') });
+      expect(stateOf(checkSetup(frames(GOOD), gravity({ pitch: -8 })), 'phone').state).toBe('fix');
+      expect(stateOf(checkSetup(frames(GOOD), gravity({ pitch: 4 })), 'phone').state).toBe('ok');
     });
 
     it('held in the hand (it wobbles a degree or two): set it down', () => {
@@ -226,13 +181,14 @@ describe('checkSetup', () => {
   describe('how well the athlete shows', () => {
     it('dark: more light; dim: a warning that fast feet blur; blown out: turn away', () => {
       expect(stateOf(checkSetup(frames(GOOD, { luma: 30 }), gravity()), 'light')).toMatchObject({ state: 'fix', hint: expect.stringContaining('太暗') });
-      expect(stateOf(checkSetup(frames(GOOD, { luma: 60 }), gravity()), 'light')).toMatchObject({ state: 'warn', hint: expect.stringContaining('糊') });
+      expect(stateOf(checkSetup(frames(GOOD, { luma: 50 }), gravity()), 'light')).toMatchObject({ state: 'warn', hint: expect.stringContaining('糊') });
       expect(stateOf(checkSetup(frames(GOOD, { luma: 235 }), gravity()), 'light')).toMatchObject({ state: 'fix', hint: expect.stringContaining('太亮') });
     });
 
-    it('lit from behind: a dark figure in a bright picture', () => {
-      const f = frames(GOOD).map((x) => ({ ...x, lumas: [50], luma: 150 }));
-      expect(stateOf(checkSetup(f, gravity()), 'light').hint).toContain('逆光');
+    it('lit from behind: the athlete under half as bright as the picture', () => {
+      const lit = (athlete: number, picture: number) => stateOf(checkSetup(frames(GOOD).map((x) => ({ ...x, lumas: [athlete], luma: picture })), gravity()), 'light');
+      expect(lit(70, 150).hint).toContain('逆光');
+      expect(lit(80, 150).state).toBe('ok');
     });
 
     it('the pose model unsure of the feet: names them', () => {
