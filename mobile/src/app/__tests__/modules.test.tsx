@@ -152,6 +152,23 @@ describe('speed', () => {
     expect(mockRouter.dismissTo).toHaveBeenCalledWith('/speed');
   });
 
+  it('celebrates a time that beats every earlier session, and only then', async () => {
+    // sprint-a above holds the best so far, 4.36 s.
+    mockParams = { metric: 'sprint_30', session: 'sprint-c' };
+    const entry = await render(<ManualEntry />);
+    await type(entry.root, '30 m 冲刺（s）', '4.30');
+    await press(entry.root, '保存这一次');
+    const record = await render(<Result />);
+    expect(texts(record.root)).toContain('新纪录');
+    expect(texts(record.root)).toContain('快了 0.06 s');
+
+    mockParams = { metric: 'sprint_30', session: 'sprint-d' };
+    const slower = await render(<ManualEntry />);
+    await type(slower.root, '30 m 冲刺（s）', '4.40');
+    await press(slower.root, '保存这一次');
+    expect(texts((await render(<Result />)).root)).not.toContain('新纪录');
+  });
+
   it('asks how a typed time was taken, and compares it only with times taken the same way', async () => {
     for (const [session, at, value] of [['sp-v1', '2026-10-01T10:00:00.000Z', 1.82], ['sp-v2', '2026-10-08T10:00:00.000Z', 1.8]] as const) {
       await ensureSession(mockDb, session, 1, 'sprint_10');
@@ -202,6 +219,15 @@ describe('speed', () => {
     expect(filmed.root.findAll((n) => n.props.accessibilityLabel === '删除第 1 次').length).toBeGreaterThan(0);
     await press(filmed.root, '返回');
     expect(mockRouter.back).toHaveBeenCalled();
+  });
+
+  it('does not call a stopwatch time a record against filmed ones, nor an old result opened from the history', async () => {
+    // sp-hand: 1.65 s on a stopwatch; the filmed sprints were 1.82 and 1.80 s.
+    mockParams = { metric: 'sprint_10', session: 'sp-hand' };
+    expect(texts((await render(<Result />)).root)).not.toContain('新纪录');
+
+    mockParams = { metric: 'sprint_30', session: 'sprint-c', from: 'history' };
+    expect(texts((await render(<Result />)).root)).not.toContain('新纪录');
   });
 
   it('rejects an impossible time', async () => {
