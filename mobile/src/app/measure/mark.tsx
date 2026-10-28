@@ -4,7 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -13,6 +13,7 @@ import { addTrial, ensureSession } from '@/db/repo';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
 import { markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
+import { probeFrameRate } from '@/media/frameRate';
 import { persistVideo } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
@@ -48,6 +49,18 @@ export default function Mark() {
     const rate = availableVideoTracks[0]?.frameRate;
     if (rate && rate > 0) setDetectedFps(Math.round(rate));
   });
+
+  // The web player sends no sourceLoad: take the length once it can play, and time the frames for the rate.
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (status === 'readyToPlay') setDuration((d) => d || player.duration);
+  });
+  useEffect(() => {
+    let alive = true;
+    probeFrameRate(params.uri).then((rate) => alive && rate != null && setDetectedFps((d) => d ?? rate));
+    return () => {
+      alive = false;
+    };
+  }, [params.uri]);
 
   // Frames are stepped at the file's own rate and measured at the rate they were captured.
   const { file: fileFps, capture: fps } = markingRates({ detected: detectedFps, chosen: captureOverride, reported: Number(params.fps) || 0 });

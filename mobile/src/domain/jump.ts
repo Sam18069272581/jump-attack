@@ -76,3 +76,23 @@ export function markingRates({ detected, chosen, reported }: { detected: number 
   const capture = Math.max(chosen ?? file, file);
   return { file, capture };
 }
+
+/** Frame rates cameras and phones record at; a measured rate within 3% snaps to one of these (29.97 → 30). */
+const NOMINAL_FPS = [24, 25, 30, 48, 50, 60, 100, 120, 240];
+
+/**
+ * A clip's own frame rate from the presentation times of frames as they were shown, for players that
+ * don't report it (the web). The shortest gap is one frame; skipped frames only add longer gaps, so the
+ * median of the gaps close to the shortest one is used. Null with fewer than 5 gaps to go on.
+ */
+export function fileFpsFromFrameTimes(times: number[]): number | null {
+  const gaps = times
+    .slice(1)
+    .map((t, i) => t - times[i])
+    .filter((g) => g > 1e-6);
+  if (gaps.length < 5) return null;
+  const shortest = Math.min(...gaps);
+  const oneFrame = gaps.filter((g) => g < shortest * 1.5).sort((a, b) => a - b);
+  const fps = 1 / oneFrame[Math.floor(oneFrame.length / 2)];
+  return NOMINAL_FPS.find((n) => Math.abs(fps - n) / n < 0.03) ?? Math.round(fps);
+}

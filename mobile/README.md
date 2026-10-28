@@ -26,6 +26,21 @@ Expo（SDK 58）+ React Native，iOS 优先。数据存在手机本地 SQLite。
 
 首页所有板块都能用了。历史页按板块列出每个有记录的指标。
 
+## 不开电脑也能用
+
+两种方式，都免费，合并到 main 后由 GitHub Actions 自动更新：
+
+- **网页版**：https://sam18069272581.github.io/jump-attack/ ，任何浏览器都能打开。iPhone 用 Safari 打开后点「分享 → 添加到主屏幕」，之后像 App 一样全屏打开，断网也能用。数据存在这个浏览器里，和 Expo Go 里的数据互不相通。网页版录像只能从相册导入，帧率靠播放测出，逐帧定位不如 App 精确；量角度要先点「允许使用运动传感器」。微信、QQ 内置浏览器打不开，请用 Safari 或 Chrome。
+- **Expo Go 云端版**：在 Expo Go 里用自己的 Expo 账号登录，打开 `exp://u.expo.dev/589a8a7c-8269-46a9-a6f1-a9fa25be2636?channel-name=main`（iPhone 相机扫这个链接的二维码也行）。打开过一次后会留在 Expo Go 的「最近打开」里。Expo Go 只能打开自己账号（或所在组织）的项目，给别人看请发网页版。
+
+第一次要做的设置（只做一次）：
+
+1. 仓库 Settings → Pages → Source 选「GitHub Actions」，网页版就会发布。
+2. Expo 项目 `jump-attack`（属于 `sam-lis-team`）已写进 `app.json`。
+3. expo.dev → Account settings → Access tokens 新建一个 token，填到仓库 Settings → Secrets and variables → Actions，名字 `EXPO_TOKEN`。
+
+也可以在电脑上手动发布一次：`npx eas-cli@latest login`，然后 `npm run update`。
+
 ## 装到 iPhone 上（不用 Xcode）
 
 用 **Expo Go** 运行：Intel Mac、Apple 芯片 Mac、Windows 电脑都行，不用 Xcode，也不用付费的开发者账号。
@@ -92,6 +107,7 @@ Expo Go 不带高帧率相机模块，所以先用 iPhone 自带相机的慢动�
 npm test            # 单元测试（计算公式、评估、数据库、Expo Go 兼容）
 npm run typecheck
 npm run lint
+npm run build:web   # 网页版导出到 dist/（npx expo start --web 可本地预览）
 ```
 
 目录：
