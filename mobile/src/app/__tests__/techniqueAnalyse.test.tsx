@@ -1,0 +1,234 @@
+// Drives the take-off technique analysis end to end: the pose page in the WebView is replaced by one that answers each
+// request with the poses of a synthetic run-up jump, so the flow runs from tapping the athlete and the floor lines to
+// the saved take.
+import { Text } from 'react-native';
+import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
+
+import { migrate } from '@/db/migrations';
+import { addTrial, ensureSession, listTrials } from '@/db/repo';
+import { listTechniqueTakes } from '@/db/technique';
+import { openMemoryDb } from '@/db/testing/memoryDb';
+import { LM, type Pt } from '@/domain/pose';
+import { FLAG_TEXT, PROBLEM_TEXT } from '@/domain/techniqueText';
+import { asWire, poseScene, type PoseScene } from '@/domain/testing/poseScene';
+
+import TechniqueAnalyse from '../technique/analyse';
+
+const mockDb = openMemoryDb();
+const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), dismiss: jest.fn() };
+const mockWeb: { props: Record<string, any> | null; inject: jest.Mock; reload: jest.Mock } = { props: null, inject: jest.fn(), reload: jest.fn() };
+const mockState: { scene: PoseScene | null; fileFps: number; params: Record<string, string> } = { scene: null, fileFps: 240, params: {} };
+
+jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
+jest.mock('@/state/athlete', () => ({ useAthlete: () => ({ current: { id: 1, name: '我自己', standing_reach_cm: 240 } }) }));
+jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn() }));
+jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
+jest.mock('expo-router', () => ({
+  get router() {
+    return mockRouter;
+  },
+  useLocalSearchParams: () => mockState.params,
+}));
+jest.mock('expo-video', () => ({
+  useVideoPlayer: (uri: string) => jest.requireActual('react').useMemo(() => ({ uri, currentTime: 0 }), [uri]),
+  VideoView: () => null,
+}));
+jest.mock('expo', () => {
+  const React = jest.requireActual('react');
+  return {
+    ...jest.requireActual('expo'),
+    // The clip reports its length and its own frame rate as soon as it loads.
+    useEventListener: (p: unknown, _e: string, cb: (x: unknown) => void) =>
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- like the real hook, it listens per player, not per callback
+      React.useEffect(() => cb({ duration: mockState.scene!.frames.length / mockState.fileFps, availableVideoTracks: [{ frameRate: mockState.fileFps }] }), [p]),
+  };
+});
+jest.mock('@/media/poseLib', () => ({
+  ...jest.requireActual('@/media/poseLib'),
+  stagePosePage: async () => ({ page: 'file:///app/Documents/pose/run-1/page.html', dir: 'file:///app/Documents/pose/run-1', root: 'file:///app/Documents/pose' }),
+  unstagePosePage: jest.fn(),
+}));
+jest.mock('react-native-webview', () => {
+  const React = jest.requireActual('react');
+  const { View } = jest.requireActual('react-native');
+  const WebView = React.forwardRef((props: Record<string, any>, ref: unknown) => {
+    mockWeb.props = props;
+    React.useImperativeHandle(ref, () => ({ injectJavaScript: mockWeb.inject, reload: mockWeb.reload }));
+    return <View />;
+  });
+  WebView.displayName = 'WebView';
+  return { WebView };
+});
+
+function texts(root: ReactTestInstance): string {
+  return root
+    .findAllByType(Text)
+    .map((t) => [t.props.children].flat(Infinity).filter((c) => typeof c === 'string' || typeof c === 'number').join(''))
+    .join('\n');
+}
+
+const byLabel = (root: ReactTestInstance, label: string, prop = 'onPress') =>
+  root.find((x) => typeof x.props[prop] === 'function' && (x.props.accessibilityLabel === label || x.findAllByType(Text).some((t) => t.props.children === label)));
+
+function press(root: ReactTestInstance, label: string) {
+  const n = byLabel(root, label);
+  // Not waiting for what the press starts: the analysis waits for the poses `answerReads` hands in.
+  return act(async () => {
+    n.props.onPress({ nativeEvent: {} });
+  });
+}
+
+async function post(m: unknown) {
+  await act(async () => mockWeb.props!.onMessage({ nativeEvent: { data: JSON.stringify(m) } }));
+}
+
+/** Answers each read the screen asks of the page, the way the page does, until it stops asking. */
+async function answerReads() {
+  const wire = asWire(mockState.scene!);
+  for (let n = 0; n < mockWeb.inject.mock.calls.length; n++) {
+    const call = /window\.(follow|crops)\((.*)\); true;/.exec(mockWeb.inject.mock.calls[n][0]);
+    if (!call) continue;
+    const req = JSON.parse(call[2]);
+    const items = req.frames.map((f: number) => [f, f / req.fps, ...(wire[f]?.values ?? [])]);
+    for (let i = 0; i < items.length; i += 40) await post({ type: 'poses', id: req.id, items: items.slice(i, i + 40) });
+    await post({ type: 'done', id: req.id });
+  }
+}
+
+// The video box on screen: 360 pt wide, the clip's shape.
+const BOX_W = 360;
+const geometry = (scene: PoseScene) => {
+  const fit = BOX_W / scene.width;
+  return { fit, w: BOX_W, h: scene.height * fit, toScreen: (p: Pt) => ({ x: p.x * fit, y: p.y * fit }) };
+};
+
+async function open(scene: PoseScene, params: Record<string, string>, fileFps = scene.options.fps) {
+  mockState.scene = scene;
+  mockState.fileFps = fileFps;
+  mockState.params = params;
+  mockWeb.inject.mockClear();
+  await act(async () => {
+    r = create(<TechniqueAnalyse />);
+  });
+  await act(async () => {});
+  await post({ type: 'ready', duration: scene.frames.length / fileFps, width: scene.width, height: scene.height });
+  const g = geometry(scene);
+  const box = r.root.find((n) => typeof n.props.onLayout === 'function' && n.props.accessibilityLabel === '视频');
+  await act(async () => box.props.onLayout({ nativeEvent: { layout: { width: g.w, height: g.h } } }));
+}
+
+async function tapScreen(p: Pt) {
+  const area = byLabel(r.root, '点画面');
+  await act(async () => area.props.onPress({ nativeEvent: { locationX: p.x, locationY: p.y } }));
+}
+
+/** Scrubs to `frame` and taps the athlete's hips there. */
+async function tapAthlete(scene: PoseScene, frame: number) {
+  const slider = byLabel(r.root, '画面位置', 'onValueChange');
+  await act(async () => slider.props.onValueChange(frame));
+  const p = scene.frames[frame].poses[0];
+  await tapScreen(geometry(scene).toScreen({ x: (p[LM.leftHip].x + p[LM.rightHip].x) / 2, y: (p[LM.leftHip].y + p[LM.rightHip].y) / 2 }));
+}
+
+/** Taps a floor line roughly, then on the zoomed picture exactly where it is. */
+async function tapLine(scene: PoseScene, at: Pt) {
+  const g = geometry(scene);
+  const exact = g.toScreen(at);
+  const rough = { x: exact.x + 2.5, y: exact.y - 1.5 };
+  await tapScreen(rough);
+  expect(texts(r.root)).toContain('放大了');
+  // Zoomed 4× around the rough tap, which now sits in the middle of the box.
+  const c = { x: g.w / 2, y: g.h / 2 };
+  await tapScreen({ x: c.x + 4 * (exact.x - rough.x), y: c.y + 4 * (exact.y - rough.y) });
+}
+
+let r: ReactTestRenderer;
+
+beforeAll(async () => {
+  await migrate(mockDb);
+  // Today's run-up touch, shown beside the take.
+  await ensureSession(mockDb, 'touch-1', 1, 'approach_touch');
+  for (const v of [316, 318, 317]) await addTrial(mockDb, { session_id: 'touch-1', value: v });
+});
+
+afterEach(async () => {
+  await act(async () => r?.unmount());
+  mockRouter.back.mockClear();
+});
+
+it('measures a slow-motion run-up jump from the athlete and the two floor lines tapped, and saves it beside the day’s touch', async () => {
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0009.MOV', fps: '0', source: 'import', session: 'tt-1' });
+  expect(texts(r.root)).toContain('拍摄帧率');
+
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await tapLine(scene, scene.markers!.b);
+  await tapLine(scene, scene.markers!.a);
+
+  await press(r.root, '开始分析');
+  await answerReads();
+  const shown = texts(r.root);
+  expect(shown).toContain('单脚起跳（右脚）');
+  for (const name of ['起跳垂直速度', '起跳角度', '助跑速度', '最后一步触地', '最后一步步长']) expect(shown).toContain(name);
+  expect(shown).toMatch(/\d\.\d\d ± \d\.\d\d m\/s/);
+  expect(shown).toContain('今天助跑摸高 317.0 cm');
+  expect(shown).not.toContain(FLAG_TEXT['no-markers']);
+
+  await press(r.root, '保存');
+  const [take] = await listTechniqueTakes(mockDb, 1);
+  expect(take).toMatchObject({ sessionId: 'tt-1', source: 'import', captureFps: 240, videoUri: null });
+  expect(Math.abs(take.metrics.vz!.value - scene.truth.vz)).toBeLessThan(take.metrics.vz!.error);
+  expect(Math.abs(take.metrics.approach!.value - scene.truth.approachSpeed!)).toBeLessThan(take.metrics.approach!.error);
+  // The lines where they were tapped on the zoomed picture.
+  const [trial] = await listTrials(mockDb, 'tt-1');
+  const markers = (trial.detail as { markers: { a: Pt; b: Pt; distanceM: number } }).markers;
+  expect(markers.distanceM).toBe(3);
+  expect(markers.b.x).toBeCloseTo(scene.markers!.b.x, 3);
+  expect(markers.a.y).toBeCloseTo(scene.markers!.a.y, 3);
+  expect(mockRouter.back).toHaveBeenCalled();
+});
+
+it('measures a take filmed in the app without the floor lines, says what that leaves out, and keeps its video', async () => {
+  const scene = poseScene({ fps: 60 });
+  const uri = 'file:///app/Documents/technique/take-1.mp4';
+  await open(scene, { uri, fps: '60', source: 'camera', session: 'tt-2' });
+  // The app's own camera films at its real rate: nothing to choose.
+  expect(texts(r.root)).not.toContain('拍摄帧率');
+
+  await tapAthlete(scene, scene.truth.takeoffFrame - 10);
+  await press(r.root, '没贴线，跳过');
+  await press(r.root, '开始分析');
+  await answerReads();
+  const shown = texts(r.root);
+  expect(shown).toContain(FLAG_TEXT['low-fps']);
+  expect(shown).toContain(FLAG_TEXT['no-markers']);
+  expect(r.root.findAll((n) => n.props.accessibilityLabel === '助跑速度')).toHaveLength(0);
+  expect(shown).toContain('（不够准）');
+
+  await press(r.root, '保存');
+  const takes = await listTechniqueTakes(mockDb, 1);
+  expect(takes[0]).toMatchObject({ sessionId: 'tt-2', source: 'camera', captureFps: 60, videoUri: uri });
+});
+
+it('says when it never found the athlete, and what to change', async () => {
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0010.MOV', fps: '0', source: 'import', session: 'tt-3' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await press(r.root, '没贴线，跳过');
+  await press(r.root, '开始分析');
+  // The page finds nobody in any frame.
+  mockState.scene = { ...scene, frames: scene.frames.map((f) => ({ ...f, poses: [] })) };
+  await answerReads();
+  const shown = texts(r.root);
+  expect(shown).toContain(PROBLEM_TEXT['no-athlete'].what);
+  expect(shown).toContain(PROBLEM_TEXT['no-athlete'].advice);
+  await press(r.root, '重新点选');
+  expect(texts(r.root)).toContain('开始分析');
+});
+
+it('says so when the page can’t read the clip', async () => {
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0011.MOV', fps: '0', source: 'import', session: 'tt-4' });
+  await post({ type: 'error', stage: 'video', message: '视频打不开：格式不支持' });
+  expect(texts(r.root)).toContain('视频打不开：格式不支持');
+});
