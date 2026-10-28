@@ -1,5 +1,6 @@
 import { acceptSuggestion, advanceSuggestion, blockExtras, declineSuggestion, firstBlock, NO_DIAGNOSIS_REASON, retestCodes, switchSuggestion } from '../blocks';
 import { diagnose, type DunkInput } from '../dunk';
+import { DEFERRED_STRENGTH_REASON } from '../goal';
 import { blockOn, blockPosition, planDay, type PlanSettings } from '../plan';
 import { BLOCK_PLAN_CODE, getTemplate } from '../templates';
 
@@ -79,6 +80,36 @@ describe('switchSuggestion', () => {
     expect(switchSuggestion(t, declined, '2026-11-13', transfer)).toBeNull();
     // The block runs again as the same type; its next retest week asks again.
     expect(switchSuggestion(t, declined, '2026-12-09', transfer)).toMatchObject({ type: 'transfer', start: '2026-12-14' });
+  });
+});
+
+describe('the goal date', () => {
+  // Squat 1.25× body mass, twice: a confirmed strength limiter.
+  const strength = diagnose(input({ squat1rm: [100, 100] }));
+  const goal = '2026-12-01';
+
+  it('starts with transfer instead of strength less than 6 weeks before the goal, keeping two squat days', () => {
+    expect(strength.limiter).toBe('strength');
+    expect(firstBlock(strength, '2026-10-26', undefined, goal)).toMatchObject({ type: 'transfer', reason: DEFERRED_STRENGTH_REASON, extras: ['heavy_squat'] });
+    expect(firstBlock(null, '2026-10-26', undefined, goal).type).toBe('transfer');
+    expect(firstBlock(strength, '2026-10-12', undefined, goal).type).toBe('strength'); // 7 weeks out
+    expect(firstBlock(strength, '2026-10-26', 'strength', goal).type).toBe('strength'); // the athlete's own pick stands
+  });
+
+  it('switches a strength block to transfer when the next one would start too close to the goal', () => {
+    const p = { ...plan([{ start: '2026-10-19', type: 'strength' as const }]), goalDate: goal };
+    expect(switchSuggestion(t, plan(p.blocks), '2026-11-11', strength)).toBeNull(); // no goal: strength again
+    const s = switchSuggestion(t, p, '2026-11-11', strength);
+    expect(s).toMatchObject({ kind: 'switch', from: 'strength', type: 'transfer', start: '2026-11-16', reasons: [DEFERRED_STRENGTH_REASON] });
+    expect(switchSuggestion(t, p, '2026-11-11', null)).toMatchObject({ type: 'transfer' });
+    const next = { ...p, blocks: acceptSuggestion(p, s!, strength, '2026-11-11') };
+    expect(next.blocks[1]).toMatchObject({ type: 'transfer', reason: DEFERRED_STRENGTH_REASON, extras: ['heavy_squat'] });
+  });
+
+  it('leaves the other blocks to the diagnosis', () => {
+    const p = { ...plan([{ start: '2026-10-19', type: 'reactive' as const }]), goalDate: goal };
+    expect(switchSuggestion(t, p, '2026-11-11', transfer)).toMatchObject({ type: 'transfer', reasons: transfer.reasons });
+    expect(switchSuggestion(t, p, '2026-11-11', strength)).toMatchObject({ type: 'transfer', reasons: [DEFERRED_STRENGTH_REASON] });
   });
 });
 

@@ -118,6 +118,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX dunk_attempt_athlete ON dunk_attempt (athlete_id, at);
   `,
+  `
+  -- The day the dunk goal is due (YYYY-MM-DD): the plan tapers before it and makes it the dunk test day. Null: none set.
+  ALTER TABLE athlete ADD COLUMN goal_date TEXT;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

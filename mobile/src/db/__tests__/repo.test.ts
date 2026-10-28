@@ -20,7 +20,7 @@ describe('migrate', () => {
     await migrate(db);
     const v = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
     expect(v?.user_version).toBe(LATEST_VERSION);
-    expect(await listAthletes(db)).toEqual([{ id: 1, name: '我自己', body_mass_kg: null, standing_reach_cm: null, leg_length_cm: null, squat_height_cm: null, rim_height_cm: null, dunk_clearance_cm: null }]);
+    expect(await listAthletes(db)).toEqual([{ id: 1, name: '我自己', body_mass_kg: null, standing_reach_cm: null, leg_length_cm: null, squat_height_cm: null, rim_height_cm: null, dunk_clearance_cm: null, goal_date: null }]);
   });
 });
 
