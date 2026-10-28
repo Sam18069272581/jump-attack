@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <!-- viewport-fit=cover lets safe-area insets work under the iPhone notch; maximum-scale stops iOS zooming into inputs. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+    <title>%WEB_TITLE%</title>
+    <!-- Added to the home screen, the site opens full screen like an app. -->
+    <link rel="manifest" href="%BASE_URL%manifest.json" />
+    <link rel="apple-touch-icon" href="%BASE_URL%icons/icon-180.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Jump Attack" />
+    <script>
+      // The local database (expo-sqlite on WebAssembly) needs SharedArrayBuffer, which browsers only allow
+      // with COOP/COEP headers. GitHub Pages can't send them, so sw.js adds them and also keeps the app working offline.
+      (function () {
+        var base = '%BASE_URL%';
+        if (navigator.storage && navigator.storage.persist) navigator.storage.persist();
+        // Unreplaced placeholder: `expo start --web`, whose dev server sends the headers itself.
+        if (base.charAt(0) === '%' || !('serviceWorker' in navigator)) return;
+        var key = 'jump-attack-isolation-reload';
+        if (self.crossOriginIsolated) sessionStorage.removeItem(key);
+        navigator.serviceWorker.register(base + 'sw.js', { scope: base }).then(function () {
+          // First visit: this page arrived before the worker could add the headers. Reload once, never in a loop.
+          if (self.crossOriginIsolated || sessionStorage.getItem(key)) return;
+          function reload() {
+            sessionStorage.setItem(key, '1');
+            location.reload();
+          }
+          if (navigator.serviceWorker.controller) reload();
+          else navigator.serviceWorker.addEventListener('controllerchange', reload);
+        });
+      })();
+    </script>
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+        background-color: #0f1115;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <noscript>需要开启 JavaScript 才能使用 Jump Attack。</noscript>
+    <div id="root"></div>
+  </body>
+</html>

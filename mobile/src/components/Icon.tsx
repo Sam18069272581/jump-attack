@@ -21,6 +21,7 @@ const PATHS = {
   plus: ['M12 5v14M5 12h14'],
   trash: ['M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'],
   plan: ['M3 10h18M8 3v4M16 3v4M8 14h2M14 14h2M8 18h2'],
+  cloud: ['M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z'],
 } as const;
 
 export type IconName = keyof typeof PATHS | 'gallery';

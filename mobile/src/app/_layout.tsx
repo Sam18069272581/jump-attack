@@ -4,11 +4,16 @@ import { useFonts } from 'expo-font';
 import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
+import { StyleSheet, Text, View } from 'react-native';
 
 import { KeyboardDoneBar } from '@/components/KeyboardDoneBar';
 import { migrate } from '@/db/migrations';
 import { AthleteProvider } from '@/state/athlete';
+import { SyncProvider } from '@/state/sync';
 import { colors } from '@/theme';
+import { setupWeb, webDatabaseBlocked } from '@/web/setup';
+
+setupWeb();
 
 const theme = {
   ...DarkTheme,
@@ -18,11 +23,20 @@ const theme = {
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ BarlowCondensed_600SemiBold, BarlowCondensed_700Bold });
   if (!fontsLoaded) return null;
+  if (webDatabaseBlocked()) {
+    return (
+      <View style={styles.blocked}>
+        <Text style={styles.blockedTitle}>正在准备本地数据库…</Text>
+        <Text style={styles.blockedText}>如果一直停在这里，请用最新版 Safari 或 Chrome 打开这个网址（微信、QQ 里的内置浏览器不支持）。</Text>
+      </View>
+    );
+  }
 
   return (
     <ThemeProvider value={theme}>
       <SQLiteProvider databaseName="jump-attack.db" onInit={migrate}>
-        <AthleteProvider>
+        {/* SyncProvider remounts everything below after a restore, so every screen reads the new data. */}
+        <SyncProvider><AthleteProvider>
           <StatusBar style="light" />
           <Stack
             screenOptions={{
@@ -58,10 +72,17 @@ export default function RootLayout() {
             <Stack.Screen name="plan/index" options={{ title: '训练计划' }} />
             <Stack.Screen name="plan/new" options={{ title: '选择训练计划' }} />
             <Stack.Screen name="workout/[date]" options={{ title: '' }} />
+            <Stack.Screen name="backup" options={{ title: '数据备份与同步' }} />
           </Stack>
           <KeyboardDoneBar />
-        </AthleteProvider>
+        </AthleteProvider></SyncProvider>
       </SQLiteProvider>
     </ThemeProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  blocked: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 32, backgroundColor: colors.bg },
+  blockedTitle: { color: colors.text, fontSize: 17, fontWeight: '700' },
+  blockedText: { color: colors.textMuted, fontSize: 14, lineHeight: 21, textAlign: 'center' },
+});

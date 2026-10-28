@@ -1,0 +1,53 @@
+# Builds the web version on every PR and publishes main to GitHub Pages:
+# https://sam18069272581.github.io/jump-attack/
+# One-time setup: repo Settings → Pages → Source: "GitHub Actions".
+name: Web
+
+on:
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/web.yml']
+  pull_request:
+    paths: ['mobile/**', '.github/workflows/web.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: web-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - run: npm ci
+      # Served from https://<owner>.github.io/<repo>/, so every URL gets the repo name in front.
+      - run: node scripts/webBuild.js --base "/${{ github.event.repository.name }}"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: mobile/dist
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
