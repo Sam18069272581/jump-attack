@@ -22,13 +22,13 @@ jest.mock('react-native-safe-area-context', () => jest.requireActual('react-nati
 jest.mock('@react-native-community/slider', () => () => null);
 jest.mock('@/media/videos', () => ({ persistVideo: jest.fn(async (uri: string) => uri) }));
 jest.mock('expo-video', () => ({ useVideoPlayer: () => ({ currentTime: 0 }), VideoView: () => null }));
-// The clip reports a 2 s, 240 fps track as soon as it loads.
+// The clip reports a 4 s, 240 fps track as soon as it loads.
 jest.mock('expo', () => {
   const React = jest.requireActual('react');
   return {
     useEventListener: (_player: unknown, event: string, cb: (e: unknown) => void) =>
       React.useEffect(() => {
-        if (event === 'sourceLoad') cb({ duration: 2, availableVideoTracks: [{ frameRate: 240 }] });
+        if (event === 'sourceLoad') cb({ duration: 4, availableVideoTracks: [{ frameRate: 240 }] });
         // Once, like a real load event.
         // eslint-disable-next-line react-hooks/exhaustive-deps
       }, []),
@@ -101,6 +101,48 @@ it('marks a CMJ frame by frame and saves it as a trial', async () => {
   expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/measure/result', params: { metric: 'cmj', session: 'cmj-1' } });
 });
 
+it('marks several jumps in one clip', async () => {
+  mockParams = { metric: 'cmj', session: 'cmj-2', uri: 'file:///three.mov', fps: '0' };
+  const r = await render();
+  await step(r.root, 120);
+  await press(byLabel(r.root, '把当前帧标为起跳帧'));
+  await step(r.root, 132);
+  await press(byLabel(r.root, '把当前帧标为落地帧'));
+  await press(pressable(r.root, '保存，接着标这段视频的下一跳'));
+  expect(mockRouter.replace).not.toHaveBeenCalled();
+  // The marks are cleared and the frame stays where the first jump landed.
+  expect(texts(r.root)).toContain('已存 1 次');
+  expect(texts(r.root)).toContain('#252');
+  expect(texts(r.root)).toContain('标记起跳帧和落地帧后显示结果');
+
+  // Second jump: 128 frames = 533 ms = 34.9 cm.
+  await step(r.root, 148);
+  await press(byLabel(r.root, '把当前帧标为起跳帧'));
+  await step(r.root, 128);
+  await press(byLabel(r.root, '把当前帧标为落地帧'));
+  expect(texts(r.root)).toContain('34.9');
+  await press(pressable(r.root, '保存这一次'));
+
+  expect((await listTrials(mockDb, 'cmj-2')).map((t) => [t.takeoff_frame, t.landing_frame, t.value])).toEqual([
+    [120, 252, 37.1],
+    [400, 528, 34.9],
+  ]);
+  expect(mockRouter.replace).toHaveBeenCalledTimes(1);
+});
+
+it('goes to the result after the last saved jump without marking another', async () => {
+  mockParams = { metric: 'cmj', session: 'cmj-3', uri: 'file:///one.mov', fps: '0' };
+  const r = await render();
+  await step(r.root, 120);
+  await press(byLabel(r.root, '把当前帧标为起跳帧'));
+  await step(r.root, 132);
+  await press(byLabel(r.root, '把当前帧标为落地帧'));
+  await press(pressable(r.root, '保存，接着标这段视频的下一跳'));
+  await press(pressable(r.root, '看结果'));
+  expect(await listTrials(mockDb, 'cmj-3')).toHaveLength(1);
+  expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/measure/result', params: { metric: 'cmj', session: 'cmj-3' } });
+});
+
 it('saves a drop jump with its box height and goes straight back to the box ladder', async () => {
   mockParams = { metric: 'dj_rsi', session: 'dj-1', uri: 'file:///dj.mov', fps: '0', from: 'dj', box: '40' };
   const r = await render();
@@ -114,4 +156,6 @@ it('saves a drop jump with its box height and goes straight back to the box ladd
   const [t] = await listTrials(mockDb, 'dj-1');
   expect(t).toMatchObject({ value: 1.53, takeoff_frame: 48, landing_frame: 168, detail: { source: 'video', contact_ms: 200, box_cm: 40 } });
   expect(mockRouter.dismiss).toHaveBeenCalledWith(2);
+  // Each drop jump needs its own box height, so the clip can't be reused for the next one here.
+  expect(texts(r.root)).not.toContain('接着标这段视频的下一跳');
 });

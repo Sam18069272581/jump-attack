@@ -41,6 +41,8 @@ export default function Mark() {
   // The marks, in the profile's order: take-off/landing for a jump, start/finish for a sprint, touch-down/take-off/landing for a drop jump.
   const [marks, setMarks] = useState<(number | null)[]>([]);
   const [saving, setSaving] = useState(false);
+  // Attempts already saved from this clip.
+  const [saved, setSaved] = useState(0);
 
   useEventListener(player, 'sourceLoad', ({ duration: d, availableVideoTracks }) => {
     setDuration(d);
@@ -79,7 +81,13 @@ export default function Mark() {
   const marked = profile.marks.map((_, i) => marks[i] ?? null);
   const result = profile.measure(marked, fps);
 
-  async function save() {
+  // A logger needs new settings (load, box) for every attempt, so only plain tests mark several jumps in one clip.
+  const logger = returnsToLogger(params.from);
+  const goResult = () =>
+    router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
+
+  /** Saves the marked attempt; `next` stays on this clip to mark the next jump from where this one landed. */
+  async function save(next = false) {
     if (!result.ok || !current) return;
     setSaving(true);
     try {
@@ -87,8 +95,11 @@ export default function Mark() {
       // The clip stays in the photo library (its id is in the detail); copying every one filled the phone.
       await addTrial(db, { session_id: params.session, ...markedTrial(result, marked, fps, params) });
       // A VBT set or a profile jump goes straight back to its log (capture and marking are the two screens above it).
-      if (returnsToLogger(params.from)) return router.dismiss(2);
-      router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
+      if (logger) return router.dismiss(2);
+      if (!next) return goResult();
+      setSaved((n) => n + 1);
+      setMarks([]);
+      setSaving(false);
     } catch (e) {
       Alert.alert('保存失败', String(e));
       setSaving(false);
@@ -174,7 +185,13 @@ export default function Mark() {
         </View>
       </ScrollView>
       <View style={styles.footer}>
-        <Button label="保存这一次" onPress={save} disabled={!result.ok} busy={saving} />
+        {saved > 0 && <Text style={styles.savedNote}>这段视频已存 {saved} 次，可以接着往后标下一跳</Text>}
+        {saved > 0 && !result.ok ? (
+          <Button label="看结果" onPress={goResult} />
+        ) : (
+          <Button label="保存这一次" onPress={() => save()} disabled={!result.ok} busy={saving} />
+        )}
+        {!logger && result.ok && <Button label="保存，接着标这段视频的下一跳" variant="ghost" onPress={() => save(true)} disabled={saving} />}
       </View>
     </SafeAreaView>
   );
@@ -220,5 +237,6 @@ const styles = StyleSheet.create({
   resultValue: { color: colors.text, fontFamily: fonts.numericBold, fontSize: 36 },
   unit: { color: colors.textMuted, fontSize: 15 },
   problem: { color: colors.textMuted, fontSize: 13, textAlign: 'center', flex: 1 },
-  footer: { paddingHorizontal: 16, paddingTop: 8 },
+  footer: { paddingHorizontal: 16, paddingTop: 8, gap: 6 },
+  savedNote: { color: colors.textMuted, fontSize: 12, textAlign: 'center' },
 });
