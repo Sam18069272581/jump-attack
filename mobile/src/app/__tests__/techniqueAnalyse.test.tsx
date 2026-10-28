@@ -18,10 +18,12 @@ const mockDb = openMemoryDb();
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), dismiss: jest.fn() };
 const mockWeb: { props: Record<string, any> | null; inject: jest.Mock; reload: jest.Mock } = { props: null, inject: jest.fn(), reload: jest.fn() };
 const mockState: { scene: PoseScene | null; fileFps: number; params: Record<string, string> } = { scene: null, fileFps: 240, params: {} };
+const mockAwake = jest.fn();
 
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
 jest.mock('@/state/athlete', () => ({ useAthlete: () => ({ current: { id: 1, name: '我自己', standing_reach_cm: 240 } }) }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn() }));
+jest.mock('expo-keep-awake', () => ({ useKeepAwake: (tag?: string) => mockAwake(tag) }));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 jest.mock('expo-router', () => ({
   get router() {
@@ -231,4 +233,38 @@ it('says so when the page can’t read the clip', async () => {
   await open(scene, { uri: 'file:///picked/IMG_0011.MOV', fps: '0', source: 'import', session: 'tt-4' });
   await post({ type: 'error', stage: 'video', message: '视频打不开：格式不支持' });
   expect(texts(r.root)).toContain('视频打不开：格式不支持');
+});
+
+it('keeps the phone awake while it reads the clip, and no longer once it is done', async () => {
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0012.MOV', fps: '0', source: 'import', session: 'tt-5' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await press(r.root, '没贴线，跳过');
+  mockAwake.mockClear();
+  await act(async () => byLabel(r.root, '画面位置', 'onValueChange').props.onValueChange(20));
+  expect(mockAwake).not.toHaveBeenCalled();
+  // Nobody touches the phone for the half minute to a minute it reads: Auto-Lock would end the page.
+  await press(r.root, '开始分析');
+  expect(mockAwake).toHaveBeenCalled();
+  await answerReads();
+  mockAwake.mockClear();
+  await act(async () => byLabel(r.root, '画面位置', 'onValueChange').props.onValueChange(10));
+  expect(mockAwake).not.toHaveBeenCalled();
+});
+
+it('says, in its own words, that the phone closed the reading page, and lets it be read again', async () => {
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0013.MOV', fps: '0', source: 'import', session: 'tt-6' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await press(r.root, '没贴线，跳过');
+  await press(r.root, '开始分析');
+  await act(async () => mockWeb.props!.onContentProcessDidTerminate({ nativeEvent: {} }));
+  const shown = texts(r.root);
+  expect(shown).toContain('手机把识别页面关掉了');
+  expect(shown).not.toContain('pose reader stopped');
+  // The clip is fine: trying again is the advice, not another clip first.
+  expect(shown).toContain('再分析一次');
+  expect(mockWeb.reload).toHaveBeenCalled();
+  await press(r.root, '重新点选');
+  expect(texts(r.root)).toContain('开始分析');
 });

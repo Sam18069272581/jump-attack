@@ -1,5 +1,6 @@
 import Slider from '@react-native-community/slider';
 import { useEventListener } from 'expo';
+import { useKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
@@ -46,7 +47,14 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
   player.currentTime = frameToSeconds(frame, fps);
 }
 
-const READ_FAILED = { what: '读不到视频画面', advice: '换一段视频试试；还不行就重新打开这一页。' };
+// The page says why (it can't decode the clip, the model won't start, iOS closed it): trying again comes first.
+const READ_FAILED = { what: '没分析完', advice: '点「重新点选」再分析一次，分析时别切到别的 App；还不行就换一段视频。' };
+
+/** Keeps the screen on while it is shown: nobody touches the phone during a read, and Auto-Lock would end the page. */
+function StayAwake() {
+  useKeepAwake('technique-analyse');
+  return null;
+}
 
 function styleText(s: TechniqueResult['style']): string {
   return s.kind === 'two' ? '双脚起跳' : `单脚起跳（${s.foot === 'left' ? '左' : '右'}脚）`;
@@ -310,6 +318,7 @@ export default function TechniqueAnalyse() {
         )}
 
         {running && <PulseProgress progress={phase.done / phase.total} label={phase.label} />}
+        {running && <StayAwake />}
 
         {failure && phase.name === 'failed' && (
           <View style={styles.card}>

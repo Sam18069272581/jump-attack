@@ -76,11 +76,13 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
     /** iOS ended the page (memory, or the app in the background): a read under way has failed; load it again for the next. */
     function died() {
       const reading = job.current != null;
+      const message = '手机把识别页面关掉了';
       if (timer.current) clearTimeout(timer.current);
-      job.current?.reject(new Error('pose reader stopped'));
+      // The read's own failure says the same as onError: whichever the screen hears last is what the athlete reads.
+      job.current?.reject(new Error(message));
       job.current = null;
       web.current?.reload();
-      if (reading) handlers.current.onError('手机把识别页面关掉了，再试一次');
+      if (reading) handlers.current.onError(message);
     }
 
     function hear() {
