@@ -274,6 +274,12 @@ function bridge(xs: number[], maxGap: number): number[] {
   return out;
 }
 
+/**
+ * The highest cut-off a low-pass gets, as a share of the frame rate (barPath keeps its own to the same): past 0.4 the
+ * filter's pre-warp passes Nyquist and it blows up, as a 10 Hz cut-off would on a 24 fps clip.
+ */
+const MAX_CUTOFF_SHARE = 0.2;
+
 /** Zero-lag low-pass of a series that may have NaN gaps: each stretch between gaps is filtered on its own. */
 function smoothSeries(xs: number[], fps: number, cutoff: number): number[] {
   const out = [...xs];
@@ -286,7 +292,7 @@ function smoothSeries(xs: number[], fps: number, cutoff: number): number[] {
     let j = i;
     while (j < xs.length && !Number.isNaN(xs[j])) j++;
     if (j - i >= 4) {
-      const f = lowPass(xs.slice(i, j), fps, cutoff);
+      const f = lowPass(xs.slice(i, j), fps, min(cutoff, MAX_CUTOFF_SHARE * fps));
       for (let k = i; k < j; k++) out[k] = f[k - i];
     }
     i = j;

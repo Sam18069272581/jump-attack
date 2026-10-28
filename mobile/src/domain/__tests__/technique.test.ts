@@ -250,6 +250,17 @@ describe('what the clip lacks or gets wrong', () => {
     expect(wrong).toEqual([]);
   });
 
+  it('a 24 or 25 fps clip (a phone’s video mode): the plant is found, and knee and trunk come out as angles', () => {
+    for (const fps of [24, 25]) {
+      const { scene, r } = analyse({ fps });
+      const result = resultOf(r);
+      expect(result.metrics.knee!.value).toBeGreaterThan(60);
+      expect(result.metrics.knee!.value).toBeLessThanOrEqual(180);
+      expect(Math.abs(result.metrics.trunk!.value)).toBeLessThan(45);
+      expect(grossMisses(scene, result)).toEqual([]);
+    }
+  });
+
   it('a 240 fps clip read as 120 fps: the scales disagree hugely', () => {
     const scene = poseScene();
     const frames = scene.frames.map((f) => ({ ...f, t: f.frame / 120 }));
