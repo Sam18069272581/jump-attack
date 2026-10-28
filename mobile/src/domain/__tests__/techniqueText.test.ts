@@ -1,5 +1,5 @@
 import { PASS_LINE } from '../technique';
-import { formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT } from '../techniqueText';
+import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT } from '../techniqueText';
 
 describe('formatMeasured', () => {
   it('writes the figure with its 95 % error, to the figure’s own precision', () => {
@@ -26,4 +26,10 @@ it('names every figure the analysis reports, the take-off first', () => {
   expect(METRIC_ORDER[0]).toBe('vz');
   // Enough decimals to show each pass line: a figure must be able to show a change of that size.
   for (const k of METRIC_ORDER) expect(10 ** -METRIC_TEXT[k].decimals).toBeLessThanOrEqual(PASS_LINE[k]);
+});
+
+it('says why the speeds, times and lengths are missing when the scales disagree, and what to do', () => {
+  // With the frame rate or a line wrong, only the angles are given.
+  expect(FLAG_TEXT['scale-broken']).toMatch(/速度.*时间.*长度.*不给/);
+  expect(FLAG_TEXT['scale-broken']).toMatch(/再分析/);
 });

@@ -1045,8 +1045,15 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // Only at a touch it saw: one before the clip's first frame has no lean to state.
   if (at >= 0 && !Number.isNaN(lean[at])) metrics.trunk = measured('trunk', lean[at], Number.isFinite(firstPlant.downErr) ? TRUNK_ERROR_DEG : Infinity);
 
-  // Scales off by more than a wrong frame rate or a wrong tap could explain: no figure is one to trust.
-  if (flags.includes('scale-broken')) for (const m of Object.values(metrics)) m!.status = 'imprecise';
+  // Scales off by more than a wrong frame rate or a wrong tap could explain, and which of the two is off can't be told:
+  // a figure that rests on the frame rate or on the lines has no error to state, so it is left out. The angles rest on
+  // neither, but none is one to trust.
+  if (flags.includes('scale-broken')) {
+    for (const k of Object.keys(metrics) as MetricKey[]) {
+      if (k === 'angle' || k === 'knee' || k === 'trunk') metrics[k]!.status = 'imprecise';
+      else delete metrics[k];
+    }
+  }
 
   // A figure resting on a moment that couldn't be timed has no error to state (and JSON would save an endless one as
   // null): it is left out, and the flag says why.

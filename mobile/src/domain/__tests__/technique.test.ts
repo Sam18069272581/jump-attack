@@ -334,6 +334,18 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     expect(Object.entries(result.metrics).flatMap(([k, m]) => (m!.status === 'ok' ? [k] : []))).toEqual([]);
   });
 
+  it('the frame rate or a line wrong: no figure it still gives misses the truth by more than its stated error', () => {
+    // Which of the two is off can't be told, so a figure resting on either has no error to state.
+    const scene = poseScene();
+    const { a, b } = scene.markers!;
+    const wrongFps = resultOf(analyseTechnique({ frames: scene.frames.map((f) => ({ ...f, t: f.frame / 120 })), captureFps: 120, markers: scene.markers }));
+    const wrongLine = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { a: { x: a.x + (b.x - a.x) / 3, y: a.y + (b.y - a.y) / 3 }, b, distanceM: 3 } }));
+    for (const result of [wrongFps, wrongLine]) {
+      expect(result.flags).toContain('scale-broken');
+      expect(misses(scene, result)).toEqual([]);
+    }
+  });
+
   it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
     const scene = poseScene();
     const b = scene.markers!.b;
