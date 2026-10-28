@@ -117,6 +117,24 @@ export function dunkLine(rimCm?: number | null, clearanceCm?: number | null): nu
   return (rimCm ?? RIM_CM) + (clearanceCm ?? CLEARANCE_CM);
 }
 
+/** Where `x` sits between `from` and `to`, pinned to 0–1. */
+function along(x: number, from: number, to: number): number {
+  return Math.max(0, Math.min(1, (x - from) / (to - from)));
+}
+
+/**
+ * The reach ruler on the home screen runs from the standing reach (0) to the dunk line (1): how far along it the touch
+ * is, and where the regulation rim falls when it is between the two. Null without a standing reach or a touch, or when
+ * the standing reach is already at the line.
+ */
+export function reachRuler(touch: number | null, standingReach: number | null, line: number): { progress: number; rim: number | null } | null {
+  if (touch == null || standingReach == null || line <= standingReach) return null;
+  return {
+    progress: along(touch, standingReach, line),
+    rim: RIM_CM > standingReach && RIM_CM < line ? along(RIM_CM, standingReach, line) : null,
+  };
+}
+
 type Snapshot = { squatRatio: number | null; rsi: number | null; contactMs: number | null };
 
 /** The deciding results as of the latest test (`back` 0) or the one before (`back` 1), each metric on its own. */

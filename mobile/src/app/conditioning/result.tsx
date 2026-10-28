@@ -7,9 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button } from '@/components/ui';
 import { listMetricResults, listTrials } from '@/db/repo';
 import { rsaRating, rsaSummary, vo2maxBand, yoyoLabel, YOYO_SHUTTLE_M } from '@/domain/conditioning';
+import { trendBaseline } from '@/domain/assess';
 import { CONDITIONING_TESTS, formatValue } from '@/domain/metrics';
 import { assess, type Assessment } from '@/domain/verdict';
 import { useAthlete } from '@/state/athlete';
+import { loadPoorDaysOf, POOR_DAY_NOTE } from '@/state/training';
 import { colors, fonts, radius } from '@/theme';
 
 export default function ConditioningResult() {
@@ -17,7 +19,12 @@ export default function ConditioningResult() {
   const def = CONDITIONING_TESTS.find((m) => m.code === metric);
   const db = useSQLiteContext();
   const { current } = useAthlete();
-  const [data, setData] = useState<{ values: number[]; result: number | null; assessment: Assessment | null }>({ values: [], result: null, assessment: null });
+  const [data, setData] = useState<{ values: number[]; result: number | null; assessment: Assessment | null; poorDay: boolean }>({
+    values: [],
+    result: null,
+    assessment: null,
+    poorDay: false,
+  });
 
   useEffect(() => {
     let alive = true;
@@ -26,8 +33,8 @@ export default function ConditioningResult() {
       const values = (await listTrials(db, session)).map((t) => t.value);
       const all = await listMetricResults(db, current.id, def);
       const mine = all.find((r) => r.session_id === session);
-      const previous = all.filter((r) => r.session_id !== session).map((r) => r.best);
-      if (alive && mine) setData({ values, result: mine.best, assessment: assess(def, previous, mine.best) });
+      const { previous, poorDay } = trendBaseline(all, session, await loadPoorDaysOf(db, current.id, def.code, all));
+      if (alive && mine) setData({ values, result: mine.best, assessment: assess(def, previous, mine.best), poorDay });
     })();
     return () => {
       alive = false;
@@ -35,7 +42,7 @@ export default function ConditioningResult() {
   }, [db, session, def, current]);
 
   if (!def) return null;
-  const { values, result, assessment } = data;
+  const { values, result, assessment, poorDay } = data;
   const vo2 = def.estimate && result != null ? def.estimate.from(result) : null;
   const rsa = def.code === 'rsa' && values.length > 1 ? rsaSummary(values) : null;
   const rating = rsa ? rsaRating(rsa.sdec) : null;
@@ -91,6 +98,7 @@ export default function ConditioningResult() {
                 {assessment.change.text}
               </Text>
             )}
+            {poorDay && <Text style={[styles.assessText, { color: colors.textMuted }]}>{POOR_DAY_NOTE}</Text>}
           </View>
         )}
 
