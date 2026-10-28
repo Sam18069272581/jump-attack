@@ -6,6 +6,7 @@ import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { ErrorScreen } from '@/components/ErrorScreen';
 import { KeyboardDoneBar } from '@/components/KeyboardDoneBar';
 import { migrate } from '@/db/migrations';
 import { AthleteProvider } from '@/state/athlete';
@@ -19,6 +20,9 @@ const theme = {
   ...DarkTheme,
   colors: { ...DarkTheme.colors, background: colors.bg, card: colors.bg, text: colors.text, border: colors.divider, primary: colors.accent },
 };
+
+// Expo Router renders this instead of the layout when it throws, e.g. when the database fails to open or migrate.
+export { ErrorScreen as ErrorBoundary };
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({ BarlowCondensed_600SemiBold, BarlowCondensed_700Bold });

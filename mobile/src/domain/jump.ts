@@ -13,7 +13,10 @@ export function heightFromFlightTime(flightS: number): number {
   return (G * flightS * flightS) / 8;
 }
 
-/** Flight time between the last frame on the ground and the first frame back on the ground. */
+/**
+ * Flight time from the first frame in the air (toes just off the ground) to the first frame back on the ground. Each
+ * moment falls somewhere in the frame before its mark, so the span is unbiased on average.
+ */
 export function flightTimeFromFrames(takeoffFrame: number, landingFrame: number, fps: number): number {
   if (fps <= 0) throw new Error('fps must be positive');
   return (landingFrame - takeoffFrame) / fps;

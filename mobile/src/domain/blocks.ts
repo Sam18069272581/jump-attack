@@ -1,6 +1,7 @@
 import { judgeChange, mean } from './assess';
 import { type ISODate } from './dates';
-import { THRESHOLDS, type BlockType, type DunkDiagnosis } from './dunk';
+import { APPROACH_TOUCH } from './metrics';
+import { THRESHOLDS, type BlockType, type DunkDiagnosis, type Missing } from './dunk';
 import { blockPosition, calendarDate, PHASE_NAMES, planPosition, withBlock, type BlockPosition, type PlanBlock, type PlanSettings, type PlanTemplate } from './plan';
 
 /** The block template additions a diagnosis calls for (see BLOCK_TEMPLATES extras in templates.ts). */
@@ -47,6 +48,25 @@ export type BlockSuggestion =
 /** A later block entry is already scheduled: the athlete has decided what comes next. */
 function decided(plan: PlanSettings, pos: BlockPosition): boolean {
   return (plan.blocks?.length ?? 0) > pos.index + 1;
+}
+
+/** The test that fills in each missing diagnosis input; body mass and standing reach are typed in 我的. */
+const MISSING_TEST: Partial<Record<Missing, string>> = { squat: 'vbt_squat', drop_jump: 'dj_rsi', approach: APPROACH_TOUCH.code, cmj: 'cmj' };
+
+/**
+ * The tests for a retest week: the run-up touch every time, the block's own tests, then whatever the diagnosis still
+ * needs to decide the next block. Without that, a strength block that got the squat past 1.5× never asked for the
+ * drop jump that tells reactive from transfer, and the block repeated.
+ */
+export function retestCodes(t: PlanTemplate, type: BlockType, d: DunkDiagnosis | null): string[] {
+  const needed = d
+    ? [
+        ...d.missing.flatMap((m) => MISSING_TEST[m] ?? []),
+        // An unconfirmed reactive or transfer call hinges on the squat and drop jump being tested again.
+        ...(d.limiter != null && d.limiter !== 'strength' && !d.confirmed ? ['vbt_squat', 'dj_rsi'] : []),
+      ]
+    : [];
+  return [...new Set([APPROACH_TOUCH.code, ...(t.blocks?.[type].retest ?? []), ...needed])];
 }
 
 export function isRetestWeek(t: PlanTemplate, pos: BlockPosition): boolean {

@@ -131,7 +131,7 @@ npm test && npm run typecheck && npm run lint  # 提交前全部要过
 
 - [系统方案](docs/system-design.md)：闭环设计、数据模型、开源选型
 - [UI 设计稿](https://claude.ai/artifact/TdA5bEMuYhctBQhrrQeKv9)：源文件在 [design/](design/)
-- [隐私说明](docs/privacy.md) · [发布步骤](docs/release/README.md)
+- [隐私说明](docs/privacy.md)
 
 <div align="center">
 <br>

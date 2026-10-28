@@ -1,4 +1,4 @@
-import { acceptSuggestion, advanceSuggestion, blockExtras, declineSuggestion, firstBlock, NO_DIAGNOSIS_REASON, switchSuggestion } from '../blocks';
+import { acceptSuggestion, advanceSuggestion, blockExtras, declineSuggestion, firstBlock, NO_DIAGNOSIS_REASON, retestCodes, switchSuggestion } from '../blocks';
 import { diagnose, type DunkInput } from '../dunk';
 import { blockOn, blockPosition, planDay, type PlanSettings } from '../plan';
 import { BLOCK_PLAN_CODE, getTemplate } from '../templates';
@@ -114,5 +114,29 @@ describe('advanceSuggestion', () => {
   it('has nothing to skip to in the retest week', () => {
     const touches = [...earlier, { date: '2026-11-09', value: 294 }, { date: '2026-11-11', value: 295 }];
     expect(advanceSuggestion(t, p, '2026-11-11', touches)).toBeNull();
+  });
+});
+
+describe('retestCodes', () => {
+  it('always retests the run-up touch, the number the plan works towards', () => {
+    const strong = diagnose(input({ squat1rm: [100, 100], approachTouch: [290] }));
+    expect(strong.limiter).toBe('strength');
+    expect(retestCodes(t, 'strength', strong)).toEqual(['approach_touch', 'vbt_squat', 'sj', 'cmj']);
+    expect(retestCodes(t, 'reactive', reactive)).toEqual(['approach_touch', 'dj_rsi', 'cmj']);
+    expect(retestCodes(t, 'transfer', transfer)).toEqual(['approach_touch', 'cmj']);
+  });
+
+  it('adds the drop jump to a strength block once the squat is past 1.5× and the next block hinges on it', () => {
+    // No drop jump yet: the diagnosis can't tell reactive from transfer.
+    const noJump = diagnose(input({ squat1rm: [125, 130], dropJumps: [], approachTouch: [290] }));
+    expect(retestCodes(t, 'strength', noJump)).toEqual(['approach_touch', 'vbt_squat', 'sj', 'cmj', 'dj_rsi']);
+    // One drop jump says reactive but needs a second to confirm.
+    const once = diagnose(input({ squat1rm: [125, 130], dropJumps: [{ rsi: 1.8, contactMs: 200 }], approachTouch: [290] }));
+    expect(once.confirmed).toBe(false);
+    expect(retestCodes(t, 'strength', once)).toEqual(['approach_touch', 'vbt_squat', 'sj', 'cmj', 'dj_rsi']);
+  });
+
+  it('keeps to the block’s own tests without a diagnosis', () => {
+    expect(retestCodes(t, 'reactive', null)).toEqual(['approach_touch', 'dj_rsi', 'cmj']);
   });
 });

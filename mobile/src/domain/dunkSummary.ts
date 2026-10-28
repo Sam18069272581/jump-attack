@@ -24,7 +24,11 @@ export function stateLine(s: DayState): string {
 
 export type TouchPoint = { at: string; value: number };
 
-/** Standing touch estimates over time: the standing reach on file plus each CMJ session's best. */
-export function standingTouches(cmj: { started_at: string; best: number }[], standingReach: number | null): TouchPoint[] {
-  return standingReach == null ? [] : cmj.map((r) => ({ at: r.started_at, value: standingReach + r.best }));
+/**
+ * Standing touch estimates over time: the standing reach on file plus each CMJ session's best, plus the athlete's
+ * wall-vs-video calibration (domain/touch.ts) when there is one.
+ */
+export function standingTouches(cmj: { started_at: string; best: number }[], standingReach: number | null, offsetCm: number | null = null): TouchPoint[] {
+  if (standingReach == null) return [];
+  return cmj.map((r) => ({ at: r.started_at, value: Math.round((standingReach + r.best + (offsetCm ?? 0)) * 10) / 10 }));
 }
