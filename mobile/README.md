@@ -31,12 +31,12 @@ Expo（SDK 58）+ React Native，iOS 优先。数据存在手机本地 SQLite。
 两种方式，都免费，合并到 main 后由 GitHub Actions 自动更新：
 
 - **网页版**：https://sam18069272581.github.io/jump-attack/ ，任何浏览器都能打开。iPhone 用 Safari 打开后点「分享 → 添加到主屏幕」，之后像 App 一样全屏打开，断网也能用。数据存在这个浏览器里，和 Expo Go 里的数据互不相通。网页版录像只能从相册导入，帧率靠播放测出，逐帧定位不如 App 精确；量角度要先点「允许使用运动传感器」。微信、QQ 内置浏览器打不开，请用 Safari 或 Chrome。
-- **Expo Go 云端版**：在 Expo Go 里用自己的 Expo 账号登录，打开 `exp://u.expo.dev/<项目 ID>?channel-name=main`（项目 ID 见 `app.json` 的 `extra.eas.projectId`）。打开过一次后会留在 Expo Go 的「最近打开」里。Expo Go 只能打开自己账号（或所在组织）的项目，给别人看请发网页版。
+- **Expo Go 云端版**：在 Expo Go 里用自己的 Expo 账号登录，打开 `exp://u.expo.dev/589a8a7c-8269-46a9-a6f1-a9fa25be2636?channel-name=main`（iPhone 相机扫这个链接的二维码也行）。打开过一次后会留在 Expo Go 的「最近打开」里。Expo Go 只能打开自己账号（或所在组织）的项目，给别人看请发网页版。
 
 第一次要做的设置（只做一次）：
 
 1. 仓库 Settings → Pages → Source 选「GitHub Actions」，网页版就会发布。
-2. 注册 [Expo 账号](https://expo.dev/signup)，在 expo.dev 新建项目 `jump-attack`，把项目 ID 和 Expo 用户名发给 Claude 写进 `app.json`。
+2. Expo 项目 `jump-attack`（属于 `sam-lis-team`）已写进 `app.json`。
 3. expo.dev → Account settings → Access tokens 新建一个 token，填到仓库 Settings → Secrets and variables → Actions，名字 `EXPO_TOKEN`。
 
 也可以在电脑上手动发布一次：`npx eas-cli@latest login`，然后 `npm run update`。
