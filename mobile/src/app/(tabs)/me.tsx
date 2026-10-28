@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -53,7 +54,11 @@ export default function Me() {
           {/* Keyed so the form starts fresh when switching athlete. */}
           {current && <ProfileForm key={current.id} athlete={current} onSaved={reload} />}
 
-          <Text style={styles.footnote}>数据只保存在这台手机上。Apple 健康、训练计划和云同步会在后续版本加入。</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/backup')} style={styles.athlete}>
+            <Icon name="cloud" size={18} color={colors.textMuted} />
+            <Text style={styles.athleteName}>数据备份与同步</Text>
+            <Icon name="chevronRight" size={18} color={colors.textMuted} />
+          </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

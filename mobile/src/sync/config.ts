@@ -1,0 +1,9 @@
+/**
+ * The person's own Supabase project (see supabase/backups.sql). The publishable (anon) key is meant to
+ * ship inside apps: row-level security on the backups table is what keeps each account's data private.
+ * Left empty, the app runs as before and only offers backup files.
+ */
+export const SUPABASE_URL = '';
+export const SUPABASE_KEY = '';
+
+export const cloudConfigured = SUPABASE_URL !== '' && SUPABASE_KEY !== '';
