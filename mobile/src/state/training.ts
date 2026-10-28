@@ -1,13 +1,25 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { listDropJumps } from '@/db/jumps';
 import { listRecoveryDays } from '@/db/recovery';
 import { listSessionResults } from '@/db/repo';
 import { getActivePlan, listWorkouts, startWorkout, type Plan, type Workout } from '@/db/training';
 import { latestEstimate, listVbtSets } from '@/db/vbt';
 import { type Readiness } from '@/domain/assess';
 import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
+import { ladder } from '@/domain/dropJump';
 import { worstState, type BlockType, type DayState } from '@/domain/dunk';
-import { adjustForReadiness, blockOn, planDay, type Adjustment, type PlannedSession, type PlanTemplate, type Prescription, type SessionTemplate } from '@/domain/plan';
+import {
+  adjustForReadiness,
+  blockOn,
+  planDay,
+  type Adjustment,
+  type PersonalNumbers,
+  type PlannedSession,
+  type PlanTemplate,
+  type Prescription,
+  type SessionTemplate,
+} from '@/domain/plan';
 import { dayReadiness, fatigueStreak, type DayReadiness } from '@/domain/readiness';
 import { poorDays, readDay, selfSignal, setTarget, type DayInputs, type DayReading, type SetTarget } from '@/domain/target';
 import { getTemplate } from '@/domain/templates';
@@ -67,6 +79,18 @@ export async function loadSuggestions(
     out[p.code] = { ...setTarget(base, est.profile, day.state, day.block), oneRm: est.oneRm, lift };
   }
   return out;
+}
+
+/**
+ * The tested numbers exercise cues point at (domain/plan.ts personalNote): the best box of the latest drop-jump
+ * ladder, and the squat 1RM estimate while it is recent enough to load from.
+ */
+export async function loadPersonalNumbers(db: SQLiteDatabase, athleteId: number, date: ISODate): Promise<PersonalNumbers> {
+  const [drops, squats] = await Promise.all([listDropJumps(db, athleteId), listVbtSets(db, athleteId, 'vbt_squat')]);
+  const lastLadder = drops.filter((j) => j.session_id === drops.at(-1)?.session_id);
+  const est = latestEstimate(squats, 'vbt_squat');
+  const fresh = est?.oneRm != null && daysBetween(toISODate(new Date(est.startedAt)), date) <= ESTIMATE_MAX_AGE_DAYS;
+  return { bestBoxCm: ladder(lastLadder).best?.boxCm ?? null, squat1rmKg: fresh ? est!.oneRm! : null };
 }
 
 /** VBT lifts whose sets double as the strength-day warm-up. */

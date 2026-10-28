@@ -7,6 +7,7 @@ import {
   formatPrescription,
   isJump,
   nextSession,
+  personalNote,
   planDay,
   planFinished,
   planPosition,
@@ -219,5 +220,22 @@ describe('block plans', () => {
     const r1 = planDay(blocks, s, '2026-10-19')!.session;
     expect(summarizeWorkout(r1, [{ exercise_code: 'pogo', set_no: 1, reps: 15, load_kg: null, rpe: null }]).jumps).toBe(15);
     expect(isJump({ code: 'sprint_20', name: '20 m 冲刺', kind: 'transfer', sets: 1, reps: 1 })).toBe(false);
+  });
+});
+
+describe('personalNote', () => {
+  it('names the best box from the drop-jump test for depth jumps', () => {
+    expect(personalNote('depth_jump', { bestBoxCm: 40, squat1rmKg: null })).toBe('你的最佳箱高 40 cm');
+    expect(personalNote('depth_jump', { bestBoxCm: null, squat1rmKg: 130 })).toBeNull();
+  });
+
+  it('turns the 20–30% of the squat 1RM for trap-bar jumps into kilos', () => {
+    // 130 × 0.2 = 26 → 25 kg, 130 × 0.3 = 39 → 40 kg, to the nearest 2.5 kg plate step.
+    expect(personalNote('trap_bar_jump', { bestBoxCm: null, squat1rmKg: 130 })).toBe('建议 25–40 kg（后蹲 1RM 130 kg 的 20–30%）');
+    expect(personalNote('trap_bar_jump', { bestBoxCm: 40, squat1rmKg: null })).toBeNull();
+  });
+
+  it('has nothing for other exercises', () => {
+    expect(personalNote('pogo', { bestBoxCm: 40, squat1rmKg: 130 })).toBeNull();
   });
 });

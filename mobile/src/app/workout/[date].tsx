@@ -12,11 +12,11 @@ import { finishWorkout, getWorkout, lastLoads, listSets, logSet, unlogSet, type 
 import { addVbtSet, listVbtSets } from '@/db/vbt';
 import { shortDate } from '@/domain/dates';
 import { parseNumber } from '@/domain/entry';
-import { formatPrescription, formatRpe, isLoaded, planDay, summarizeWorkout, type LoggedSet, type Prescription } from '@/domain/plan';
+import { formatPrescription, formatRpe, isLoaded, personalNote, planDay, summarizeWorkout, type LoggedSet, type PersonalNumbers, type Prescription } from '@/domain/plan';
 import { allowanceText, checkSet, setTarget, STATE_LABEL, usualWarmupLoad, type DayReading } from '@/domain/target';
 import { LOAD_FROM_VBT } from '@/domain/vbt';
 import { useAthlete } from '@/state/athlete';
-import { beginWorkout, loadDay, loadSuggestions, loadTraining, sessionFor, type Day, type LoadSuggestion, type TrainingData } from '@/state/training';
+import { beginWorkout, loadDay, loadPersonalNumbers, loadSuggestions, loadTraining, sessionFor, type Day, type LoadSuggestion, type TrainingData } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
 
 type Loaded =
@@ -29,6 +29,7 @@ type Loaded =
       day: Day & DayReading;
       /** Usual warm-up load per VBT lift. */
       warmupKg: Record<string, number | null>;
+      personal: PersonalNumbers;
     }
   | 'none';
 
@@ -49,13 +50,14 @@ export default function WorkoutScreen() {
     const items = planned ? sessionFor(planned, workout, null).session.items : [];
     const day = await loadDay(db, data.plan, date, workout);
     const lifts = [...new Set(items.map((p) => LOAD_FROM_VBT[p.code]).filter((l): l is string => l != null))];
-    const [sets, loads, suggested, warmups] = await Promise.all([
+    const [sets, loads, suggested, warmups, personal] = await Promise.all([
       listSets(db, workout.id),
       lastLoads(db, current.id),
       loadSuggestions(db, current.id, items, date, day),
       Promise.all(lifts.map(async (l) => [l, usualWarmupLoad(await listVbtSets(db, current.id, l), date)] as const)),
+      loadPersonalNumbers(db, current.id, date),
     ]);
-    setLoaded({ data, workout, sets, loads, suggested, day, warmupKg: Object.fromEntries(warmups) });
+    setLoaded({ data, workout, sets, loads, suggested, day, warmupKg: Object.fromEntries(warmups), personal });
   }, [db, current, date]);
 
   useFocusEffect(
@@ -74,7 +76,7 @@ export default function WorkoutScreen() {
     );
   }
 
-  const { workout, sets, loads, suggested, day, warmupKg } = loaded;
+  const { workout, sets, loads, suggested, day, warmupKg, personal } = loaded;
   const { session } = sessionFor(planned, workout, null);
   const summary = summarizeWorkout(session, sets);
   const done = workout.finishedAt != null;
@@ -161,6 +163,7 @@ export default function WorkoutScreen() {
               <Text style={styles.dose}>{formatPrescription(p)}</Text>
             </View>
             {p.cue ? <Text style={text.caption}>{p.cue}</Text> : null}
+            {personalNote(p.code, personal) && <Text style={styles.suggest}>{personalNote(p.code, personal)}</Text>}
             {suggested[p.code] && <SuggestionLine p={p} s={suggested[p.code]} />}
             {!suggested[p.code] && isLoaded(p) && (fromLast(p.code)?.loadFactor ?? 1) < 1 && (
               <Text style={styles.suggest}>
