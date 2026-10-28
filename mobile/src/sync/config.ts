@@ -4,6 +4,6 @@
  * Left empty, the app runs as before and only offers backup files.
  */
 export const SUPABASE_URL: string = 'https://yegllbhyqrkdhzduqnew.supabase.co';
-export const SUPABASE_KEY: string = '';
+export const SUPABASE_KEY: string = 'sb_publishable_E9xmuSJRke4IA_4tiPbXng_uiv3dYWL';
 
 export const cloudConfigured = SUPABASE_URL !== '' && SUPABASE_KEY !== '';
