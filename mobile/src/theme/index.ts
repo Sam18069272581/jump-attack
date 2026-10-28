@@ -1,34 +1,51 @@
 import { StyleSheet } from 'react-native';
 
-// Tokens taken from the design canvas (design/*.dc.html).
+// "Paper court" palette: a light, print-like ground, court blue for actions and the gap, rim orange for the basket.
+// Text colours clear 4.5:1 on bg and surface; textFaint is only for placeholders and disabled labels.
 export const colors = {
-  bg: '#0F1115',
-  surface: '#191C22',
-  surfaceRaised: '#2A2F38',
-  tabBar: '#13161A',
-  border: '#2E333C',
-  divider: '#22262E',
-  text: '#F2F3F5',
-  textSoft: '#D5D8DE',
-  textMuted: '#9AA1AD',
-  textFaint: '#5A616D',
-  accent: '#D4FF3F',
-  accentTile: '#2A3312',
-  onAccent: '#0F1115',
-  good: '#6EE7B7',
-  warn: '#FF9F43',
-  record: '#FF5A4E',
-  blue: '#4FD1FF',
-  purple: '#C9A7FF',
+  bg: '#F1ECE2',
+  surface: '#FFFFFF',
+  surfaceRaised: '#E8E1D4',
+  tabBar: '#F7F3EC',
+  border: '#D9CFBE',
+  divider: '#E3DBCD',
+  text: '#17130E',
+  textSoft: '#3A332A',
+  textMuted: '#665D52',
+  textFaint: '#8F8474',
+  accent: '#2340C8',
+  accentTile: '#E1E6FA',
+  onAccent: '#FFFFFF',
+  good: '#1A6E3D',
+  warn: '#985100',
+  record: '#B92F1C',
+  blue: '#0B6F6E',
+  purple: '#6A46BE',
+  /** The basket: rim, net and anything about the hoop. */
+  rim: '#D9541E',
+  /** Vanes and pole of the reach tester drawn behind the home screen. */
+  vane: '#17130E',
+  pole: '#C9BEAA',
 };
 
 export const fonts = {
-  /** Numbers and short codes. */
-  numeric: 'BarlowCondensed_600SemiBold',
-  numericBold: 'BarlowCondensed_700Bold',
+  /** Numbers and short codes: Big Shoulders, Chicago's street-sign face. Chinese stays on the system font (PingFang). */
+  numeric: 'BigShouldersDisplay_700Bold',
+  numericBold: 'BigShouldersDisplay_800ExtraBold',
 };
 
 export const radius = { card: 20, row: 18, button: 16, chip: 14 };
+
+/** Motion timing shared by every screen (ms), so entrances and presses feel like one app. */
+export const motion = {
+  enter: 420,
+  stagger: 60,
+  rise: 14,
+  pressScale: 0.97,
+  count: 1100,
+  countDelay: 250,
+  press: { speed: 40, bounciness: 6 },
+};
 
 export const text = StyleSheet.create({
   title: { color: colors.text, fontSize: 26, fontWeight: '700' },

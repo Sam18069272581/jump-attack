@@ -3,6 +3,16 @@
 Expo SDK 58 + React Native，本地 SQLite，iOS 优先。代码都在 `mobile/`，命令都在 `mobile/` 下跑。
 Expo 相关规则：@mobile/AGENTS.md
 
+## 项目原则（取舍时以此为准）
+
+- 北极星：12 月前无对抗扣进一个干脆的篮。现在助跑摸高约 318 cm，扣篮线 320（篮筐 305 + 过筐 15）。
+- App 只回答三个问题：离扣篮线差多少、差在哪块、今天练什么。不服务这三问的功能降级或收起。
+- 准确比功能多重要：每个测量先验证误差，测不准的指标不进诊断。
+- 记录要省事：能自动的不让人手动选（例如起跳和落地帧）。
+- 数据不能丢：迁移只追加，历史记录不能因为升级或换设备消失。
+- 现在自用，之后推广到队内并公开宣传：代码、文案和文档都要能见人。
+- 灵活度、体能耐力（VO2max、RSA）对弹跳贡献小，首页收在「辅助」里（页面和数据保留），以后可能拆成单独的项目。
+
 ## 分层（改代码前先找对层）
 
 - `src/domain/`：纯计算，不 import React 或 expo。用户输入有问题时返回 `{ ok: false, problem }`，只有编程错误才 throw。
@@ -23,6 +33,12 @@ Expo 相关规则：@mobile/AGENTS.md
 3. 只改和任务相关的文件，不顺手重构。
 4. 加依赖用 `npx expo install`。
 5. 数据本地优先：健康和训练数据先存本机，只在用户登录自己的云端账号后整库同步过去（Supabase，见 `mobile/src/sync/`）。不传给任何第三方，不加统计或分析上报。
+
+## Git 工作流（严格遵守）
+
+- **Conventional Commits**：提交信息写成 `<type>(<scope>): <描述>`，scope 可省。type 只用 `feat`（新功能）、`fix`（修 bug）、`docs`、`refactor`、`test`、`perf`、`style`、`build`、`ci`、`chore`、`revert`。破坏性改动在 type 后加 `!`，正文写 `BREAKING CHANGE:`。例：`feat(home): 灵活度和体能耐力收进「辅助」`。
+- **Feature Branch**：每项工作一个分支，从最新的 `main` 拉出来，不直接往 `main` 推。
+- **Squash merge**：PR 一律 squash 合并，一个 PR 在 `main` 上只留一个提交。PR 标题就是 squash 后的提交信息，所以 PR 标题也必须符合 Conventional Commits。
 
 ## 完成标准
 

@@ -5,11 +5,13 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
+import { RecordHero } from '@/components/RecordHero';
 import { Button } from '@/components/ui';
-import { deleteTrial, listSessionResults, listTrials, updateTrialValue, type Trial } from '@/db/repo';
+import { deleteTrial, listSessionResults, listTrials, sessionTimings, updateTrialValue, type Trial } from '@/db/repo';
 import { trendBaseline } from '@/domain/assess';
 import { manualProblem, parseNumber } from '@/domain/entry';
 import { best as bestOf, getCategory, getMetric } from '@/domain/metrics';
+import { personalRecord, recordable } from '@/domain/record';
 import { assess, type Assessment } from '@/domain/verdict';
 import { useAthlete } from '@/state/athlete';
 import { loadPoorDaysOf, POOR_DAY_NOTE } from '@/state/training';
@@ -20,12 +22,12 @@ export default function Result() {
   const def = getMetric(metric);
   const db = useSQLiteContext();
   const { current } = useAthlete();
-  const [data, setData] = useState<{ trials: Trial[]; assessment: Assessment | null; poorDay: boolean }>({ trials: [], assessment: null, poorDay: false });
+  const [data, setData] = useState<{ trials: Trial[]; assessment: Assessment | null; poorDay: boolean; record: { by: number } | null }>({ trials: [], assessment: null, poorDay: false, record: null });
   const [version, setVersion] = useState(0);
   // The typed-in attempt being corrected, opened from the history.
   const [editing, setEditing] = useState<{ id: number; n: number; raw: string } | null>(null);
   const fromHistory = from === 'history';
-  const { trials, assessment, poorDay } = data;
+  const { trials, assessment, poorDay, record } = data;
 
   useEffect(() => {
     let alive = true;
@@ -33,19 +35,26 @@ export default function Result() {
       const t = await listTrials(db, session);
       let a: Assessment | null = null;
       let poorDay = false;
+      let record: { by: number } | null = null;
       if (def && current && t.length > 0) {
         const best = bestOf(def, t.map((x) => x.value))!;
         const all = await listSessionResults(db, current.id, def.code, def.lowerIsBetter);
         const baseline = trendBaseline(all, session, await loadPoorDaysOf(db, current.id, def.code, all));
         a = assess(def, baseline.previous, best);
         poorDay = baseline.poorDay;
+        if (recordable(def) && !fromHistory) {
+          // Sprint times only compare within one timing method (domain/timing.ts).
+          const timings = def.category === 'speed' ? await sessionTimings(db, current.id, def.code) : null;
+          const earlier = all.filter((r) => r.session_id !== session && (!timings || timings[r.session_id] === timings[session]));
+          record = personalRecord(earlier.map((r) => r.best), best, def.lowerIsBetter);
+        }
       }
-      if (alive) setData({ trials: t, assessment: a, poorDay });
+      if (alive) setData({ trials: t, assessment: a, poorDay, record });
     })();
     return () => {
       alive = false;
     };
-  }, [db, session, def, current, version]);
+  }, [db, session, def, current, version, fromHistory]);
 
   function remove(t: Trial, n: number) {
     Alert.alert(`删除第 ${n} 次？`, '这次的成绩会从记录中去掉。', [
@@ -75,12 +84,21 @@ export default function Result() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.hero}>
-          <Text style={styles.heroLabel}>{def.name} · 最好成绩</Text>
-          <Text style={styles.heroValue}>
-            {best != null ? best.toFixed(def.decimals) : '—'} <Text style={styles.heroUnit}>{def.unit}</Text>
-          </Text>
-        </View>
+        {record && best != null ? (
+          <RecordHero
+            label={`${def.name} · 最好成绩`}
+            value={best.toFixed(def.decimals)}
+            unit={def.unit}
+            gain={def.lowerIsBetter ? `快了 ${record.by.toFixed(def.decimals)} ${def.unit}` : `+${record.by.toFixed(def.decimals)} ${def.unit}`}
+          />
+        ) : (
+          <View style={styles.hero}>
+            <Text style={styles.heroLabel}>{def.name} · 最好成绩</Text>
+            <Text style={styles.heroValue}>
+              {best != null ? best.toFixed(def.decimals) : '—'} <Text style={styles.heroUnit}>{def.unit}</Text>
+            </Text>
+          </View>
+        )}
 
         <View style={styles.card}>
           {trials.map((t, i) => (
