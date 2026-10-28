@@ -110,7 +110,7 @@ it('logs sets with the prescribed reps and finishes with a report', async () => 
 
   const plan = await mockDb.getFirstAsync<{ id: number }>('SELECT id FROM plan');
   const workout = (await getWorkout(mockDb, plan!.id, today))!;
-  expect(await listSets(mockDb, workout.id)).toEqual([{ exercise_code: 'squat_jump', set_no: 1, reps: 5, load_kg: null, rpe: null }]);
+  expect(await listSets(mockDb, workout.id)).toEqual([{ exercise_code: 'squat_jump', set_no: 1, reps: 5, load_kg: null, rpe: null, mean_velocity: null }]);
 
   jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => buttons?.find((b) => b.text === '结束')?.onPress?.());
   await act(async () => pressable(r.root, '完成训练').props.onPress());
