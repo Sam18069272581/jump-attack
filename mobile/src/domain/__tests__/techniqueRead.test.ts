@@ -1,6 +1,6 @@
 import { LM, type Pose } from '../pose';
 import { analyseTechnique, findJumpWindow, type PoseFrame } from '../technique';
-import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, MARKER_GAP_M, squareAround, windowOf, type WireFrame } from '../techniqueRead';
+import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, squareAround, TAP_REACH_S, windowOf, type WireFrame } from '../techniqueRead';
 import { asWire, poseScene, type PoseScene } from '../testing/poseScene';
 
 /** The scene's frames as the page would send them, for the frames asked. */
@@ -18,6 +18,23 @@ describe('the coarse pass', () => {
 
   it('goes both ways from the tapped frame, each half starting on it', () => {
     expect(coarseFrames(10, 20, 4)).toEqual({ forward: [10, 14, 18], backward: [10, 6, 2] });
+  });
+
+  it('goes no further than `reach` frames each way when given: a take filmed in the app runs on long after the jump', () => {
+    expect(coarseFrames(100, 1000, 4, 10)).toEqual({ forward: [100, 104, 108], backward: [100, 96, 92] });
+  });
+});
+
+describe('how much of the clip is read', () => {
+  it('holds the last 3 m of a slow run-up, the plant and the rise before the top of the jump, and the landing after it', () => {
+    // 3 m at 4.5 m/s, a 0.2 s plant, and 3.3 m/s of take-off velocity rising for vz / g.
+    expect(JUMP_WINDOW.before).toBeGreaterThanOrEqual(3 / 4.5 + 0.2 + 3.3 / 9.81);
+    // Falling back takes as long as the rise; the landing's contact needs a little after it.
+    expect(JUMP_WINDOW.after).toBeGreaterThanOrEqual(3.3 / 9.81 + 0.3);
+  });
+
+  it('reads far enough each way from a tap anywhere within a second of the jump to hold the whole window', () => {
+    expect(TAP_REACH_S).toBeGreaterThanOrEqual(Math.max(JUMP_WINDOW.before, JUMP_WINDOW.after) + 1);
   });
 });
 
@@ -81,7 +98,7 @@ describe('reading a clip this way', () => {
     const target = hipOf(scene.frames[tapAt].poses[0]);
     const { forward, backward } = coarseFrames(tapAt, total, coarseStep(fps));
     const coarse = framesFromWire(read(scene, [...forward, ...backward]), scene.width, scene.height, fps);
-    const win = findJumpWindow(coarse, fps, { before: 1.2, after: 0.8, target })!;
+    const win = findJumpWindow(coarse, fps, { ...JUMP_WINDOW, target })!;
     const more = denseFrames(win, total, coarse.map((f) => f.frame));
     expect(more.length).toBeGreaterThan(0);
     expect(more.every((f) => f >= win.from && f <= win.to && f % 4 !== tapAt % 4)).toBe(true);

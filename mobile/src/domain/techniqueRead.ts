@@ -18,6 +18,20 @@ export const COARSE_HZ = 60;
 /** The two floor markers along the run-up are this far apart (m): at the take-off spot, and 3 m back. */
 export const MARKER_GAP_M = 3;
 
+/**
+ * What is read closely around the top of the jump, s of real time: before it, the last 3 m of a run-up as slow as
+ * 4.5 m/s (0.67 s), the plant (about 0.2 s) and the rise (vz / g, 0.34 s at 3.3 m/s), with 0.4 s to spare for the
+ * smoothing at the stretch's ends; after it, the fall and the landing's contact.
+ */
+export const JUMP_WINDOW = { before: 1.6, after: 0.8 };
+
+/**
+ * How far the coarse pass reads each way from the tapped frame, s of real time. The athlete is asked to tap themselves
+ * near the take-off; a take filmed in the app also holds the walk back to the start of the run-up and back to the phone,
+ * which isn't worth reading.
+ */
+export const TAP_REACH_S = 3;
+
 /** A square of the picture, px: what the page reads a frame in. */
 export type Square = { x: number; y: number; s: number };
 
@@ -29,12 +43,15 @@ export function coarseStep(captureFps: number): number {
   return Math.max(1, Math.round(captureFps / COARSE_HZ));
 }
 
-/** The coarse pass's frames, each way from the tapped frame `at` (both start there, so each can lock on to the tap). */
-export function coarseFrames(at: number, total: number, step: number): { forward: number[]; backward: number[] } {
+/**
+ * The coarse pass's frames, each way from the tapped frame `at` (both start there, so each can lock on to the tap), at
+ * most `reach` frames away from it.
+ */
+export function coarseFrames(at: number, total: number, step: number, reach = Infinity): { forward: number[]; backward: number[] } {
   const forward: number[] = [];
   const backward: number[] = [];
-  for (let f = at; f < total; f += step) forward.push(f);
-  for (let f = at; f >= 0; f -= step) backward.push(f);
+  for (let f = at; f < total && f - at < reach; f += step) forward.push(f);
+  for (let f = at; f >= 0 && at - f < reach; f -= step) backward.push(f);
   return { forward, backward };
 }
 
