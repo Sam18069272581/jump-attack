@@ -1,12 +1,7 @@
 import { Platform } from 'react-native';
 
-function load(env: string, os: typeof Platform.OS): typeof import('@/media/runtime') {
+function load(os: typeof Platform.OS): typeof import('@/media/runtime') {
   jest.resetModules();
-  jest.doMock('expo-constants', () => ({
-    __esModule: true,
-    default: { executionEnvironment: env },
-    ExecutionEnvironment: { Bare: 'bare', Standalone: 'standalone', StoreClient: 'storeClient' },
-  }));
   let mod!: typeof import('@/media/runtime');
   jest.isolateModules(() => {
     /* eslint-disable @typescript-eslint/no-require-imports -- a fresh copy of the module for each platform */
@@ -20,6 +15,6 @@ function load(env: string, os: typeof Platform.OS): typeof import('@/media/runti
 afterEach(() => jest.restoreAllMocks());
 
 it('flags the web build', () => {
-  expect(load('bare', 'web').isWeb).toBe(true);
-  expect(load('storeClient', 'ios').isWeb).toBe(false);
+  expect(load('web').isWeb).toBe(true);
+  expect(load('ios').isWeb).toBe(false);
 });

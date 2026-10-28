@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { colors, text } from '@/theme';
@@ -14,7 +14,7 @@ export function ErrorScreen({ error, retry }: { error: Error; retry: () => Promi
     <SafeAreaView style={styles.screen}>
       <View style={styles.body}>
         <Text style={text.heading}>出错了</Text>
-        <Text style={text.body}>App 没能打开。记录都还在手机上，可以先重试；还不行的话，把下面这行发给开发者。</Text>
+        <Text style={text.body}>App 没能打开。{Platform.OS === 'web' ? '记录都还在这个浏览器里' : '记录都还在手机上'}，可以先重试；还不行的话，把下面这行发给开发者。</Text>
         <Text selectable style={styles.message}>
           {error.message}
         </Text>
