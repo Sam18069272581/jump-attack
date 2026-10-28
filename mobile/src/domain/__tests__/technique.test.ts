@@ -183,6 +183,13 @@ describe('what the clip lacks or gets wrong', () => {
     expect(grossMisses(scene, result)).toEqual([]);
   });
 
+  it('at 60 fps, the app’s own camera: a hand on the rim is still found, and the jitter of a short stretch isn’t taken for one', () => {
+    for (const seed of [1, 2, 3]) expect(resultOf(analyse({ fps: 60, hangAfterS: 0.34, seed }).r).flags).toContain('hang');
+    // tools/pose-validation found 5 in 100 of these flagged, each with its velocities fitted on the rise alone.
+    const flagged = Array.from({ length: 100 }, (_, i) => 1000 + i).filter((seed) => resultOf(analyse({ fps: 60, seed }).r).flags.includes('hang'));
+    expect(flagged).toEqual([]);
+  });
+
   it('a clip that ends in the air', () => {
     const scene = poseScene();
     const end = scene.truth.takeoffFrame + Math.round(0.5 * scene.options.fps);

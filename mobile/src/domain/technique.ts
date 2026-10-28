@@ -237,6 +237,21 @@ function invert(m: number[][]): number[][] {
   return a.map((row) => row.slice(n));
 }
 
+/**
+ * The jitter (SD) of a path sampled every frame, from its second differences, which take out any parabola: for white
+ * noise of SD σ they have SD √6·σ. Their median absolute deviation keeps a few odd frames (or a hang's bend) out of it.
+ */
+function flightJitter(ts: number[], ys: number[], fps: number): number {
+  const d2: number[] = [];
+  for (let i = 1; i + 1 < ts.length; i++) {
+    // Only three frames in a row: a frame the model missed would make the step uneven.
+    if (abs((ts[i] - ts[i - 1]) * fps - 1) < 0.01 && abs((ts[i + 1] - ts[i]) * fps - 1) < 0.01) d2.push(ys[i + 1] - 2 * ys[i] + ys[i - 1]);
+  }
+  if (d2.length < 5) return 0;
+  const m = median(d2);
+  return (1.4826 * median(d2.map((d) => abs(d - m)))) / sqrt(6);
+}
+
 /** Fills runs of NaN up to `maxGap` long by straight lines between their neighbours. */
 function bridge(xs: number[], maxGap: number): number[] {
   const out = [...xs];
@@ -837,6 +852,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // drifts off the parabola by degrees, so the fit ends half a stretch earlier.
   const block = max(6, round(0.05 * fps));
   const start = max(8, all.ts.filter((t) => t <= 0.15).length);
+  // The jitter, from the whole flight rather than the few points before a stretch: at 60 fps the first fits rest on
+  // a dozen points, whose own scatter can come out small enough by chance to make plain jitter look like a hang.
+  const jitter = flightJitter(all.ts, all.ys, fps);
   let n = all.ts.length;
   for (let m = start; m + block <= all.ts.length; m++) {
     const f = polyFit(all.ts.slice(0, m), all.ys.slice(0, m), 2);
@@ -845,8 +863,10 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     for (let j = m; j < m + block; j++) sum += all.ys[j] - (f.c[0] + f.c[1] * all.ts[j] + f.c[2] * all.ts[j] ** 2);
     const tm = (all.ts[m] + all.ts[m + block - 1]) / 2;
     const p = [1, tm, tm * tm];
-    const predVar = p.reduce((acc, pi, i) => acc + pi * p.reduce((a2, pj, j) => a2 + f.cov[i][j] * pj, 0), 0);
-    if (abs(sum / block) > max(4 * sqrt(f.sd ** 2 / block + predVar), 0.01 / roughScale)) {
+    const sd = max(f.sd, jitter);
+    // The fit's covariance scales with the jitter it assumed.
+    const predVar = p.reduce((acc, pi, i) => acc + pi * p.reduce((a2, pj, j) => a2 + f.cov[i][j] * pj, 0), 0) * (f.sd > 0 ? (sd / f.sd) ** 2 : 1);
+    if (abs(sum / block) > max(4 * sqrt(sd ** 2 / block + predVar), 0.01 / roughScale)) {
       n = max(start, m - (block >> 1));
       flags.push('hang');
       break;
