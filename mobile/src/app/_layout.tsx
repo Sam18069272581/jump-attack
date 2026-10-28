@@ -64,6 +64,7 @@ export default function RootLayout() {
             <Stack.Screen name="jumps/fvp" options={{ title: '力-速度曲线' }} />
             <Stack.Screen name="jumps/dj" options={{ title: 'DJ 跳深 · 找最佳箱高' }} />
             <Stack.Screen name="test-day" options={{ title: '测试日' }} />
+            <Stack.Screen name="team" options={{ title: '团队' }} />
             <Stack.Screen name="speed/index" options={{ title: '速度训练' }} />
             <Stack.Screen name="mobility/index" options={{ title: '灵活度' }} />
             <Stack.Screen name="mobility/[test]" options={{ title: '' }} />
