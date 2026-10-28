@@ -76,6 +76,12 @@ it('opens both profile tests from the jump list with a new session', async () =>
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/jumps/dj', params: { session: expect.any(String) } });
 });
 
+it('opens the take-off technique from the dunk section of the jump list', async () => {
+  const r = await render(<JumpTests />);
+  await press(r.root, '起跳技术 · 骨架分析');
+  expect(mockRouter.push).toHaveBeenCalledWith('/technique');
+});
+
 describe('force-velocity profile', () => {
   it('asks for body mass and leg measurements first', async () => {
     mockParams = { session: 'fv-0' };

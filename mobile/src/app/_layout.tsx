@@ -60,6 +60,9 @@ export default function RootLayout() {
             <Stack.Screen name="conditioning/result" options={{ title: '测试结果', headerBackVisible: false, gestureEnabled: false }} />
             <Stack.Screen name="dunk" options={{ title: '扣篮诊断' }} />
             <Stack.Screen name="attempts" options={{ title: '扣篮尝试' }} />
+            <Stack.Screen name="technique/index" options={{ title: '起跳技术' }} />
+            <Stack.Screen name="technique/camera" options={{ headerShown: false, gestureEnabled: false }} />
+            <Stack.Screen name="technique/analyse" options={{ title: '起跳分析' }} />
             <Stack.Screen name="jumps/index" options={{ title: '跳跃测试' }} />
             <Stack.Screen name="jumps/fvp" options={{ title: '力-速度曲线' }} />
             <Stack.Screen name="jumps/dj" options={{ title: 'DJ 跳深 · 找最佳箱高' }} />
