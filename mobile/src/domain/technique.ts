@@ -128,7 +128,10 @@ export type QualityFlag =
   /** The free fall stops early (a hand on the rim): only the rise is used. */
   | 'hang'
   /** The clip ends before the landing. */
-  | 'cut-off';
+  | 'cut-off'
+  /** A moment some figure needs isn't in the clip (before its first frame) or the model lost the athlete there: that
+   *  figure is left out. */
+  | 'unseen';
 
 export type Contact = {
   foot: Side;
@@ -983,6 +986,14 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   });
   const at = s.frame.indexOf(plantDown);
   if (at >= 0 && !Number.isNaN(lean[at])) metrics.trunk = measured('trunk', lean[at], TRUNK_ERROR_DEG);
+
+  // A figure resting on a moment that couldn't be timed has no error to state (and JSON would save an endless one as
+  // null): it is left out, and the flag says why.
+  for (const k of Object.keys(metrics) as MetricKey[]) {
+    if ([metrics[k]!.value, metrics[k]!.error].every(Number.isFinite)) continue;
+    delete metrics[k];
+    if (!flags.includes('unseen')) flags.push('unseen');
+  }
 
   return {
     ok: true,

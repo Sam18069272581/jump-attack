@@ -40,6 +40,7 @@ export const FLAG_TEXT: Record<QualityFlag, string> = {
   curved: '助跑斜着朝手机跑来：沿画面量的速度会偏小。',
   hang: '手碰到篮筐，腾空没有完整的自由落体：起跳速度只用了上升段。',
   'cut-off': '视频在落地前就结束了。',
+  unseen: '有的关键时刻视频里看不到（在视频开始之前，或者那几帧没认出人），靠它算的数就不给了。',
 };
 
 export const PROBLEM_TEXT: Record<TechniqueProblem, { what: string; advice: string }> = {

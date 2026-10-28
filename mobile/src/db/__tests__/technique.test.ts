@@ -43,6 +43,16 @@ it('saves a take as a trial of its own test: the vertical take-off velocity, the
   });
 });
 
+it('lists a take whose saved figure lost its error (JSON writes an endless one as null) without that figure', async () => {
+  const db = await setup();
+  const unbounded = { ...result, metrics: { ...result.metrics, plant: { value: 134, error: Infinity, status: 'imprecise' as const } } };
+  await addTechniqueTake(db, 1, { sessionId: 's1', result: unbounded, captureFps: 240, source: 'import', markers: null });
+
+  const [take] = await listTechniqueTakes(db, 1);
+  expect(take.metrics.plant).toBeUndefined();
+  expect(take.metrics.vz).toEqual(result.metrics.vz);
+});
+
 it('lists each athlete’s own takes, newest first, and deletes one', async () => {
   const db = await setup();
   const other = await createAthlete(db, '队友');

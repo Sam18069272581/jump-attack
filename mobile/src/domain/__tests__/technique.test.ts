@@ -211,6 +211,29 @@ describe('what the clip lacks or gets wrong', () => {
     expect(resultOf(r).flags).toContain('off-line');
   });
 
+  it('a clip that starts inside the plant: leaves out the contact time it can’t see, with no endless error', () => {
+    // A slow-motion clip trimmed in Photos to start 50 ms into the last contact: its touch-down isn't in the clip.
+    const scene = poseScene();
+    const cut = Math.ceil(scene.truth.plantDownS * 240) + 12;
+    const frames = scene.frames.slice(cut).map((f, k) => ({ ...f, frame: k, t: k / 240 }));
+    const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: scene.markers }));
+    expect(result.metrics.plant).toBeUndefined();
+    expect(result.flags).toContain('unseen');
+    for (const m of Object.values(result.metrics)) expect([m!.value, m!.error].every(Number.isFinite)).toBe(true);
+    expect(grossMisses(scene, result)).toEqual([]);
+  });
+
+  it('at 60 fps with the athlete lost for 4 frames at take-off: no endless error, and says why figures are missing', () => {
+    const scene = poseScene({ fps: 60 });
+    const tk = scene.truth.takeoffFrame;
+    const frames = scene.frames.map((f) => (f.frame >= tk - 1 && f.frame < tk + 3 ? { ...f, poses: [] } : f));
+    const result = resultOf(analyseTechnique({ frames, captureFps: 60, markers: scene.markers }));
+    for (const m of Object.values(result.metrics)) expect([m!.value, m!.error].every(Number.isFinite)).toBe(true);
+    // Saved, a figure goes through JSON, which writes an endless number as null.
+    expect(JSON.parse(JSON.stringify(result.metrics))).toEqual(result.metrics);
+    expect(result.flags).toContain('unseen');
+  });
+
   it('a 240 fps clip read as 120 fps: the scales disagree hugely', () => {
     const scene = poseScene();
     const frames = scene.frames.map((f) => ({ ...f, t: f.frame / 120 }));

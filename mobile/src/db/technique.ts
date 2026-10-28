@@ -73,7 +73,9 @@ export async function listTechniqueTakes(db: SQLiteDatabase, athleteId: number):
   );
   return rows.map((r) => {
     const d = JSON.parse(r.detail) as Detail;
-    return { id: r.id, sessionId: r.session_id, at: r.created_at, source: d.source, captureFps: r.fps, style: d.style, metrics: d.metrics, flags: d.flags, videoUri: r.video_uri };
+    // JSON saves an endless number as null: a figure without a finite value and error can't be shown, so it is left out.
+    const metrics = Object.fromEntries(Object.entries(d.metrics).filter(([, m]) => m && Number.isFinite(m.value) && Number.isFinite(m.error)));
+    return { id: r.id, sessionId: r.session_id, at: r.created_at, source: d.source, captureFps: r.fps, style: d.style, metrics, flags: d.flags, videoUri: r.video_uri };
   });
 }
 

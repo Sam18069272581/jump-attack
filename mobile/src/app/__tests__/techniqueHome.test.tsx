@@ -139,3 +139,17 @@ it('lists the takes with the run-up touch of their day, clears films no take kee
   expect(texts(r.root)).not.toContain('单脚起跳（右脚）');
   expect(pruneTakes).toHaveBeenLastCalledWith([]);
 });
+
+it('still opens, and lets the take be deleted, when a saved figure lost its error', async () => {
+  mockLib.ready = true;
+  const unbounded = { ...result, metrics: { ...result.metrics, plant: { value: 134, error: Infinity, status: 'imprecise' as const } } };
+  await addTechniqueTake(mockDb, 1, { sessionId: 'tt-2', result: unbounded, captureFps: 240, source: 'import', markers: null });
+  await open();
+
+  expect(texts(r.root)).toContain('单脚起跳（右脚）');
+  expect(texts(r.root)).not.toContain('最后一步触地 134');
+  jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => buttons?.find((b) => b.style === 'destructive')?.onPress?.());
+  await press('展开第 1 条');
+  await press('删除这条记录');
+  expect(await listTechniqueTakes(mockDb, 1)).toEqual([]);
+});
