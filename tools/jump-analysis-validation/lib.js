@@ -70,4 +70,78 @@ function serve(root, port) {
   });
 }
 
-module.exports = { compile, encode, serve, MOBILE };
+/** Renders and encodes clips on every core: `jobs` are { o, file }; resolves to each clip's frame count. */
+async function encodeAll(scenePath, jobs, onDone = () => {}) {
+  const { Worker } = require('worker_threads');
+  const out = [];
+  let next = 0;
+  const cores = require('os').cpus().length;
+  await Promise.all(
+    [...Array(Math.min(cores, jobs.length)).keys()].map(async () => {
+      while (next < jobs.length) {
+        const i = next++;
+        out[i] = await new Promise((resolve, reject) => {
+          const w = new Worker(path.join(__dirname, 'encodeWorker.js'), { workerData: { scenePath, o: jobs[i].o, file: jobs[i].file } });
+          w.on('message', resolve);
+          w.on('error', reject);
+        });
+        onDone(i);
+      }
+    }),
+  );
+  return out;
+}
+
+/**
+ * Opens the app's frame-reading page for a clip in a browser page and returns a function that runs the app's two
+ * passes against it (coarse, then fine), as the analysis screen does on the phone.
+ */
+async function openReader(page, url) {
+  const inbox = [];
+  let wake = null;
+  await page.exposeFunction('__toNode', (m) => {
+    inbox.push(m);
+    if (wake) wake();
+  });
+  await page.addInitScript(() => (window.onGrabberMessage = (m) => window.__toNode(m)));
+  const next = async (...types) => {
+    for (;;) {
+      const i = inbox.findIndex((m) => types.includes(m.type) || m.type === 'error');
+      if (i >= 0) return inbox.splice(i, 1)[0];
+      await new Promise((r) => (wake = r));
+    }
+  };
+  await page.goto(url);
+  const ready = await next('ready');
+  if (ready.type === 'error') throw new Error(ready.message);
+  let id = 0;
+  const grab = async (req, fileFps) => {
+    await page.evaluate((call) => window.grab(call), { id: ++id, frames: req.frames, fps: fileFps, rect: req.rect, w: req.w, h: req.h });
+    const got = [];
+    for (;;) {
+      const m = await next('frames', 'done');
+      if (m.type === 'error') throw new Error(m.message);
+      if (m.type === 'done') return got;
+      const bytes = Buffer.from(m.data, 'base64');
+      const size = m.w * m.h;
+      for (let k = 0; k * size < bytes.length; k++) got[m.from + k] = { w: m.w, h: m.h, data: new Uint8Array(bytes.subarray(k * size, (k + 1) * size)) };
+    }
+  };
+  return { width: ready.width, height: ready.height, grab };
+}
+
+/** The app's detection on one clip: both passes, with what the athlete chose (range, target, rebound). */
+async function detectClip(A, reader, { frames, fileFps, captureFps, kind, opts }) {
+  const info = { width: reader.width, height: reader.height, frames, captureFps };
+  const req = A.coarseRequest(info, opts);
+  const coarse = A.analyseCoarse(info, req, await reader.grab(req, fileFps), kind === 'drop' ? 'drop' : 'jump', opts);
+  if (!coarse.ok) return coarse;
+  const fine = A.analyseFine(coarse.plan, await reader.grab(coarse.plan.request, fileFps));
+  if (!fine.ok) return fine;
+  return {
+    ok: true,
+    events: fine.jumps.map((j) => (j.marks.length === 3 ? { touchdown: j.marks[0], takeoff: j.marks[1], landing: j.marks[2], flags: j.flags } : { takeoff: j.marks[0], landing: j.marks[1], flags: j.flags })),
+  };
+}
+
+module.exports = { compile, encode, encodeAll, serve, openReader, detectClip, MOBILE };
