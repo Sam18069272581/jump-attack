@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -53,11 +54,16 @@ export default function Me() {
           {/* Keyed so the form starts fresh when switching athlete. */}
           {current && <ProfileForm key={current.id} athlete={current} onSaved={reload} />}
 
-          <Text style={styles.footnote}>
-            {Platform.OS === 'web'
-              ? '网页版的数据只保存在这个浏览器里，换浏览器或清除网站数据就看不到了。iPhone 上用 Safari 点「分享 → 添加到主屏幕」，之后从主屏幕图标打开，数据保存更稳。'
-              : '数据只保存在这台手机上。Apple 健康、训练计划和云同步会在后续版本加入。'}
-          </Text>
+          <Pressable accessibilityRole="button" onPress={() => router.push('/backup')} style={styles.athlete}>
+            <Icon name="cloud" size={18} color={colors.textMuted} />
+            <Text style={styles.athleteName}>数据备份与同步</Text>
+            <Icon name="chevronRight" size={18} color={colors.textMuted} />
+          </Pressable>
+          {Platform.OS === 'web' && (
+            <Text style={styles.footnote}>
+              网页版的数据保存在这个浏览器里，换浏览器或清除网站数据就看不到了，登录上面的云端同步就不怕丢。iPhone 上用 Safari 点「分享 → 添加到主屏幕」，之后从主屏幕图标打开，数据保存更稳。
+            </Text>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
