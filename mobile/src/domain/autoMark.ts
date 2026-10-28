@@ -23,6 +23,7 @@
  */
 import { MAX_CONTACT_S, MIN_CONTACT_S } from './dropJump';
 import { MAX_FLIGHT_S, MIN_FLIGHT_S } from './jump';
+import type { DetectorFlag } from './jumpAnalysis';
 
 // Math's functions as locals: these loops run millions of times, and a global lookup per call is slow under Jest.
 const { abs, ceil, max, min, round } = Math;
@@ -54,8 +55,18 @@ export type DetectKind = 'jump' | 'drop';
 
 export type DetectProblem = 'shaky' | 'no-jump' | 'unsure';
 
-/** One jump found: its marks in the marking profile's order, in file frames. */
-export type DetectedJump = { marks: number[]; flightS: number };
+/** One jump found: its marks in the marking profile's order, in file frames, and what makes it doubtful. */
+export type DetectedJump = { marks: number[]; flightS: number; flags?: DetectorFlag[] };
+
+/** What the athlete chose on the analysis screen. */
+export type CoarseOptions = {
+  /** Only this part of the clip, in file frames. */
+  range?: { from: number; to: number };
+  /** A point on the athlete, in video pixels: follow whoever is there rather than whoever moves most. */
+  target?: { x: number; y: number };
+  /** Rebounds off short contacts (repeated jumps): sample twice as densely, so a 0.15 s contact still spans 7 samples. */
+  rebound?: boolean;
+};
 
 /** Samples per real second in the coarse pass, and the most it takes from one clip. */
 const COARSE_PER_S = 24;
@@ -73,11 +84,13 @@ const FINE_HOLD_S = 0.025;
 /** A pixel differs from the bare floor by more than this many grey levels (or 4 noise sigmas, if larger). */
 const MIN_THRESHOLD = 12;
 
-export function coarseRequest(v: VideoInfo): FrameRequest {
-  let step = max(1, round(v.captureFps / COARSE_PER_S));
-  if (v.frames / step > COARSE_MAX) step = ceil(v.frames / COARSE_MAX);
+export function coarseRequest(v: VideoInfo, opts: CoarseOptions = {}): FrameRequest {
+  const from = max(0, opts.range?.from ?? 0);
+  const to = min(v.frames - 1, opts.range?.to ?? v.frames - 1);
+  let step = max(1, round(v.captureFps / (COARSE_PER_S * (opts.rebound ? 2 : 1))));
+  if ((to - from + 1) / step > COARSE_MAX) step = ceil((to - from + 1) / COARSE_MAX);
   const frames: number[] = [];
-  for (let f = 0; f < v.frames; f += step) frames.push(f);
+  for (let f = from; f <= to; f += step) frames.push(f);
   const scale = min(1, COARSE_SIDE / max(v.width, v.height));
   return {
     frames,
@@ -103,9 +116,19 @@ export type FinePlan = {
   request: FrameRequest;
   eps: number;
   jumps: JumpPlan[];
+  /** The athlete, in video pixels: everything of them that moved during the clip. */
+  box: Rect;
+  /** The strip under the feet runs to the left or right edge of the picture, so a foot there may be cut off. */
+  edge: { left: boolean; right: boolean };
 };
 
-export function analyseCoarse(v: VideoInfo, req: FrameRequest, frames: Grey[], kind: DetectKind): { ok: true; plan: FinePlan } | { ok: false; problem: DetectProblem } {
+export function analyseCoarse(
+  v: VideoInfo,
+  req: FrameRequest,
+  frames: Grey[],
+  kind: DetectKind,
+  opts: CoarseOptions = {},
+): { ok: true; plan: FinePlan } | { ok: false; problem: DetectProblem } {
   const n = frames.length;
   if (n < 8) return { ok: false, problem: 'no-jump' };
   const { w, h } = req;
@@ -127,7 +150,8 @@ export function analyseCoarse(v: VideoInfo, req: FrameRequest, frames: Grey[], k
       activeCount++;
     }
   if (activeCount > 0.5 * w * h) return { ok: false, problem: 'shaky' };
-  const person = keepLargest(active, w, h);
+  const target = opts.target ? { x: (opts.target.x * w) / v.width, y: (opts.target.y * h) / v.height } : undefined;
+  const person = keepPerson(active, w, h, target);
   if (!person) return { ok: false, problem: 'no-jump' };
   const { top, low } = person;
   const tall = low - top + 1;
@@ -162,11 +186,13 @@ export function analyseCoarse(v: VideoInfo, req: FrameRequest, frames: Grey[], k
   const samplesPerS = v.captureFps / step;
   const contact = contactSeries(strips, bareFloor(strips), 1, 3, 0);
   const flights = findFlights(contact, samplesPerS);
-  const f = (k: number) => max(0, min(v.frames - 1, req.frames[max(0, min(n - 1, k))]));
+  const first = req.frames[0];
+  const lastFrame = min(v.frames - 1, req.frames[n - 1] + step - 1);
+  const f = (k: number) => req.frames[max(0, min(n - 1, k))];
   // Two samples either side: the coarse pass can misjudge a sample next to the event.
   const around = (a: number, b: number): Window => ({
-    from: max(0, f(a) - 2 * step),
-    to: min(v.frames - 1, f(b) + 2 * step),
+    from: max(first, f(a) - 2 * step),
+    to: min(lastFrame, f(b) + 2 * step),
   });
 
   const jumps: JumpPlan[] = [];
@@ -216,9 +242,11 @@ export function analyseCoarse(v: VideoInfo, req: FrameRequest, frames: Grey[], k
   };
   // A foot is down when it reaches within a pixel or so (≈ 3 mm) of where it stood.
   const eps = max(1, round(tall * sy * scale * 0.0015));
+  const box: Rect = { x: person.left * sx, y: top * sy, w: (person.right - person.left + 1) * sx, h: tall * sy };
+  const edge = { left: band.x === 0, right: band.x + band.w === w };
   return {
     ok: true,
-    plan: { kind, captureFps: v.captureFps, request, eps, jumps },
+    plan: { kind, captureFps: v.captureFps, request, eps, jumps, box, edge },
   };
 }
 
@@ -257,6 +285,8 @@ export function analyseFine(plan: FinePlan, frames: Grey[]): { ok: true; jumps: 
     const landing = j.landing.from + firstDown;
     const flightS = (landing - takeoff) / plan.captureFps;
     if (flightS < MIN_FLIGHT_S || flightS > MAX_FLIGHT_S) continue;
+    const flags: DetectorFlag[] = [takeoff - 1, landing].some((f) => atEdge(byFrame.get(f)!, empty, plan.edge)) ? ['edge'] : [];
+    const tagged = flags.length ? { flags } : {};
     if (j.touchdown) {
       const td = seq(j.touchdown);
       const up = td.indexOf(false);
@@ -271,13 +301,24 @@ export function analyseFine(plan: FinePlan, frames: Grey[]): { ok: true; jumps: 
         unsure = true;
         continue;
       }
-      jumps.push({ marks: [touchdown, takeoff, landing], flightS });
+      jumps.push({ marks: [touchdown, takeoff, landing], flightS, ...tagged });
     } else {
-      jumps.push({ marks: [takeoff, landing], flightS });
+      jumps.push({ marks: [takeoff, landing], flightS, ...tagged });
     }
   }
   if (!jumps.length) return { ok: false, problem: unsure ? 'unsure' : 'no-jump' };
   return { ok: true, jumps };
+}
+
+/**
+ * Whether a foot on the ground reaches the side of the picture: the footprint runs into the strip's lowest third in one
+ * of the two columns at an edge the strip shares with the picture.
+ */
+function atEdge(img: Grey, empty: Grey, edge: { left: boolean; right: boolean }): boolean {
+  const b = footprint(img, empty);
+  const low = round(img.h * 0.65);
+  const cols = [...(edge.left ? [0, 1] : []), ...(edge.right ? [img.w - 1, img.w - 2] : [])];
+  return cols.some((x) => b[x] >= low);
 }
 
 /**
@@ -659,14 +700,20 @@ function crop(f: Grey, r: Rect): Grey {
   return { w: r.w, h: r.h, data };
 }
 
-/** The biggest group of changing pixels, plus any group at least a sixth its size (arms, the other leg). */
-function keepLargest(mask: Uint8Array, w: number, h: number): { mask: Uint8Array; top: number; low: number } | null {
+/**
+ * The athlete among the groups of changing pixels: the biggest group, or with a `target` the group nearest it. Any
+ * group at least a sixth its size goes with it (arms, the other leg); with a target only those beside it, so someone
+ * else moving in the picture stays out.
+ */
+function keepPerson(mask: Uint8Array, w: number, h: number, target?: { x: number; y: number }): { mask: Uint8Array; top: number; low: number; left: number; right: number } | null {
   const label = new Int32Array(w * h).fill(-1);
   const sizes: number[] = [];
+  const boxes: { x0: number; x1: number; near: number }[] = [];
   for (let p = 0; p < w * h; p++) {
     if (!mask[p] || label[p] >= 0) continue;
     const id = sizes.length;
     let size = 0;
+    const b = { x0: w, x1: -1, near: Infinity };
     const stack = [p];
     label[p] = id;
     while (stack.length) {
@@ -674,6 +721,9 @@ function keepLargest(mask: Uint8Array, w: number, h: number): { mask: Uint8Array
       size++;
       const x = q % w;
       const y = (q - x) / w;
+      b.x0 = min(b.x0, x);
+      b.x1 = max(b.x1, x);
+      if (target) b.near = min(b.near, (x - target.x) ** 2 + (y - target.y) ** 2);
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
           const nx = x + dx;
@@ -688,24 +738,36 @@ function keepLargest(mask: Uint8Array, w: number, h: number): { mask: Uint8Array
       }
     }
     sizes.push(size);
+    boxes.push(b);
   }
   if (!sizes.length) return null;
-  const biggest = max(...sizes);
-  if (biggest < 0.002 * w * h) return null;
-  const keep = sizes.map((s) => s >= max(4, biggest / 6));
+  const big = max(...sizes);
+  if (big < 0.002 * w * h) return null;
+  let chosen = sizes.indexOf(big);
+  if (target) {
+    // Among groups that could be a person, the one closest to where the athlete tapped.
+    for (let i = 0; i < sizes.length; i++) if (sizes[i] >= 0.002 * w * h && boxes[i].near < boxes[chosen].near) chosen = i;
+  }
+  const c = boxes[chosen];
+  const reach = (c.x1 - c.x0 + 1) / 2;
+  const keep = sizes.map((s, i) => i === chosen || (s >= max(4, sizes[chosen] / 6) && (!target || (boxes[i].x1 >= c.x0 - reach && boxes[i].x0 <= c.x1 + reach))));
   const out = new Uint8Array(w * h);
   let top = h;
   let low = -1;
+  let left = w;
+  let right = -1;
   const rowCount = new Uint16Array(h);
   for (let p = 0; p < w * h; p++)
     if (label[p] >= 0 && keep[label[p]]) {
       out[p] = 1;
       rowCount[(p - (p % w)) / w]++;
+      left = min(left, p % w);
+      right = max(right, p % w);
     }
   for (let y = 0; y < h; y++)
     if (rowCount[y] >= 2) {
       top = min(top, y);
       low = y;
     }
-  return low < 0 ? null : { mask: out, top, low };
+  return low < 0 ? null : { mask: out, top, low, left, right };
 }
