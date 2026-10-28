@@ -1,6 +1,8 @@
 import type { ColorValue } from 'react-native';
 import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
+import { colors } from '@/theme';
+
 // Stroke icons from the design canvas, 24×24 viewBox.
 const PATHS = {
   jump: ['M12 3v10M8 7l4-4 4 4M5 21h14M8 17h8'],
@@ -20,13 +22,14 @@ const PATHS = {
   check: ['M5 12l5 5L20 7'],
   plus: ['M12 5v14M5 12h14'],
   trash: ['M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3'],
+  edit: ['M4 20h4L19 9l-4-4L4 16z', 'M13 7l4 4'],
   plan: ['M3 10h18M8 3v4M16 3v4M8 14h2M14 14h2M8 18h2'],
   cloud: ['M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z'],
 } as const;
 
 export type IconName = keyof typeof PATHS | 'gallery';
 
-export function Icon({ name, size = 22, color = '#F2F3F5', strokeWidth = 2 }: { name: IconName; size?: number; color?: ColorValue; strokeWidth?: number }) {
+export function Icon({ name, size = 22, color = colors.text, strokeWidth = 2 }: { name: IconName; size?: number; color?: ColorValue; strokeWidth?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       {name === 'speed' && <Circle cx={13} cy={13} r={8} />}

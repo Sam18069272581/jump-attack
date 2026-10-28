@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type PressableProps, type ViewStyle } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View, type PressableProps, type ViewStyle } from 'react-native';
 
+import { PressScale } from '@/components/motion';
 import { colors, radius } from '@/theme';
 
 type ButtonProps = Omit<PressableProps, 'style' | 'children'> & {
@@ -13,16 +14,9 @@ type ButtonProps = Omit<PressableProps, 'style' | 'children'> & {
 export function Button({ label, variant = 'primary', busy, disabled, style, ...rest }: ButtonProps) {
   const isPrimary = variant === 'primary';
   return (
-    <Pressable
-      accessibilityRole="button"
+    <PressScale
       disabled={disabled || busy}
-      style={({ pressed }) => [
-        styles.button,
-        isPrimary ? styles.primary : variant === 'secondary' ? styles.secondary : styles.ghost,
-        (disabled || busy) && styles.disabled,
-        pressed && styles.pressed,
-        style,
-      ]}
+      style={[styles.button, isPrimary ? styles.primary : variant === 'secondary' ? styles.secondary : styles.ghost, (disabled || busy) && styles.disabled, style]}
       {...rest}
     >
       {busy ? (
@@ -30,7 +24,7 @@ export function Button({ label, variant = 'primary', busy, disabled, style, ...r
       ) : (
         <Text style={[styles.buttonLabel, { color: isPrimary ? colors.onAccent : colors.text }]}>{label}</Text>
       )}
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -40,14 +34,9 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
 
 export function Chip({ label, selected, onPress, color = colors.accent }: { label: string; selected: boolean; onPress: () => void; color?: string }) {
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityState={{ selected }}
-      onPress={onPress}
-      style={[styles.chip, selected && { backgroundColor: color, borderColor: color }]}
-    >
+    <PressScale accessibilityState={{ selected }} onPress={onPress} style={[styles.chip, selected && { backgroundColor: color, borderColor: color }]}>
       <Text style={[styles.chipLabel, { color: selected ? colors.onAccent : colors.textMuted }]}>{label}</Text>
-    </Pressable>
+    </PressScale>
   );
 }
 
@@ -66,7 +55,6 @@ const styles = StyleSheet.create({
   secondary: { borderWidth: 1, borderColor: colors.border, backgroundColor: 'transparent' },
   ghost: { backgroundColor: colors.surface },
   disabled: { opacity: 0.4 },
-  pressed: { opacity: 0.75 },
   buttonLabel: { fontSize: 15, fontWeight: '700' },
   card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16 },
   chip: { minWidth: 48, height: 36, paddingHorizontal: 12, borderRadius: 18, borderWidth: 1, borderColor: colors.border, alignItems: 'center', justifyContent: 'center' },

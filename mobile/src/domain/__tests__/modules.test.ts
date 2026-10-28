@@ -1,7 +1,7 @@
 import { manualProblem, parseNumber } from '../entry';
 import { intervalFromMarks, meanVelocity, sprintDistance, sprintLimits } from '../interval';
 import { markProfile } from '../marking';
-import { best, changeTone, getMetric, METRICS, sprintMetric } from '../metrics';
+import { best, changeTone, getCategory, getMetric, METRICS, sprintMetric } from '../metrics';
 import { angleBetween, asymmetry, getMobilityTest, MOBILITY_PAIRS } from '../mobility';
 import { estimate1rm, loadAt, lvProfile, pctOf1rm, roundLoad, velocityLoss, zoneOf } from '../vbt';
 
@@ -12,6 +12,15 @@ describe('metric registry', () => {
     expect(getMetric('sprint_40')).toMatchObject({ name: '40 m 冲刺', category: 'speed' });
     expect(getMetric('sprint_40')).toBe(getMetric('sprint_40')); // stable, so screens can depend on it
     expect(getMetric('nope')).toBeUndefined();
+  });
+
+  it('names only tests the jump screen has on the home card', () => {
+    // Pogo RSI was listed but never built.
+    expect(getCategory('jump').subtitle.split(' · ')).toEqual(['CMJ', 'SJ', 'DJ', '助跑摸高']);
+  });
+
+  it('lets CMJ and SJ be typed in, so a daily readiness test needs no video', () => {
+    for (const code of ['cmj', 'sj']) expect(getMetric(code)!.capture).toEqual(['flight', 'manual']);
   });
 
   it('picks the best value in the metric’s direction', () => {

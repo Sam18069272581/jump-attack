@@ -1,6 +1,7 @@
 import { type Readiness } from './assess';
 import { addDays, daysBetween, mondayOf, weekday, type ISODate } from './dates';
 import type { BlockType } from './dunk';
+import { roundLoad } from './vbt';
 
 /**
  * What an exercise trains. Block plans tag every exercise strength, reactive, transfer or technique, so a block
@@ -271,6 +272,18 @@ export function nextSession(t: PlanTemplate, s: PlanSettings, from: ISODate, hor
   return null;
 }
 
+/**
+ * This week's training days before `today` that were never started (`started` holds the dates of started
+ * workouts), oldest first: the sessions that can still be made up on a rest day.
+ */
+export function missedThisWeek(t: PlanTemplate, s: PlanSettings, started: Iterable<ISODate>, today: ISODate): PlannedSession[] {
+  const done = new Set(started);
+  return weekDays(today)
+    .filter((d) => d < today && !done.has(d))
+    .map((d) => planDay(t, s, d))
+    .filter((p): p is PlannedSession => p != null);
+}
+
 /** True once a non-repeating plan has no more sessions on or after `date`. */
 export function planFinished(t: PlanTemplate, s: PlanSettings, date: ISODate): boolean {
   if (t.repeat) return false;
@@ -310,6 +323,25 @@ export function adjustForReadiness(session: SessionTemplate, readiness: Readines
 
 export function formatRpe(rpe: number): string {
   return Number.isInteger(rpe) ? String(rpe) : rpe.toFixed(1);
+}
+
+/** What the athlete has tested that sets an exercise's dose. */
+export type PersonalNumbers = { bestBoxCm: number | null; squat1rmKg: number | null };
+
+/** Trap-bar jumps at 20–30% of the back squat 1RM, as the exercise cue says. */
+export const TRAP_BAR_SHARE = [0.2, 0.3] as const;
+
+/**
+ * The athlete's own number for an exercise whose cue points at a test: the best box from the drop-jump test, or
+ * the trap-bar load from the squat 1RM, to the nearest 2.5 kg.
+ */
+export function personalNote(code: string, n: PersonalNumbers): string | null {
+  if (code === 'depth_jump' && n.bestBoxCm != null) return `你的最佳箱高 ${n.bestBoxCm} cm`;
+  if (code === 'trap_bar_jump' && n.squat1rmKg != null) {
+    const [lo, hi] = TRAP_BAR_SHARE.map((f) => roundLoad(n.squat1rmKg! * f));
+    return `建议 ${lo}–${hi} kg（后蹲 1RM ${Math.round(n.squat1rmKg)} kg 的 ${TRAP_BAR_SHARE[0] * 100}–${TRAP_BAR_SHARE[1] * 100}%）`;
+  }
+  return null;
 }
 
 /** e.g. "4 × 5 · RPE 8" or "3 × 5/侧". */

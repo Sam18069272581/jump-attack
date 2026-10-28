@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { best, getMetric, type MetricDef } from '@/domain/metrics';
+import { timingOf, type Timing } from '@/domain/timing';
 
 export type Athlete = {
   id: number;
@@ -111,6 +112,20 @@ export async function deleteTrial(db: SQLiteDatabase, id: number): Promise<void>
   await db.runAsync('DELETE FROM test_session WHERE id NOT IN (SELECT DISTINCT session_id FROM trial)');
 }
 
+/** Corrects a typed-in attempt. */
+export async function updateTrialValue(db: SQLiteDatabase, id: number, value: number): Promise<void> {
+  await db.runAsync('UPDATE trial SET value = ? WHERE id = ?', value, id);
+}
+
+/** Folder the app used to copy every marked video into; see media/videos.ts. */
+export const SAVED_VIDEO_DIR = '/videos/';
+
+/** Drops references to the app's own video copies once they are deleted. Returns how many trials pointed at one. */
+export async function clearSavedVideoUris(db: SQLiteDatabase): Promise<number> {
+  const r = await db.runAsync("UPDATE trial SET video_uri = NULL WHERE instr(video_uri, ?) > 0", SAVED_VIDEO_DIR);
+  return r.changes;
+}
+
 export async function listTrials(db: SQLiteDatabase, sessionId: string): Promise<Trial[]> {
   const rows = await db.getAllAsync<Omit<Trial, 'detail'> & { detail: string | null }>('SELECT * FROM trial WHERE session_id = ? ORDER BY id', sessionId);
   return rows.map((r) => ({ ...r, detail: r.detail ? JSON.parse(r.detail) : null }));
@@ -154,6 +169,20 @@ export async function listSessionValues(db: SQLiteDatabase, athleteId: number, m
   );
   const out: Record<string, number[]> = {};
   for (const r of rows) (out[r.session_id] ??= []).push(r.value);
+  return out;
+}
+
+/** How each session of a metric was timed (domain/timing.ts), read from its first attempt. */
+export async function sessionTimings(db: SQLiteDatabase, athleteId: number, metricCode: string): Promise<Record<string, Timing>> {
+  const rows = await db.getAllAsync<{ session_id: string; detail: string | null }>(
+    `SELECT t.session_id, t.detail FROM trial t JOIN test_session s ON s.id = t.session_id
+     WHERE s.athlete_id = ? AND s.metric_code = ?
+     ORDER BY t.id`,
+    athleteId,
+    metricCode,
+  );
+  const out: Record<string, Timing> = {};
+  for (const r of rows) out[r.session_id] ??= timingOf(r.detail ? JSON.parse(r.detail) : null);
   return out;
 }
 

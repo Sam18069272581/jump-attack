@@ -55,12 +55,12 @@ export type CategoryDef = {
 };
 
 export const CATEGORIES: CategoryDef[] = [
-  { key: 'jump', name: '跳跃测试', color: '#D4FF3F', tile: '#2A3312', subtitle: 'CMJ · SJ · DJ · Pogo RSI', icon: 'jump', href: '/jumps' },
-  { key: 'conditioning', name: '体能耐力', color: '#FF7A6B', tile: '#3A1C19', subtitle: 'VO2max · RSA 反复冲刺', icon: 'conditioning', href: '/conditioning' },
-  { key: 'speed', name: '速度训练', color: '#4FD1FF', tile: '#0F2D38', subtitle: '10 m · 30 m · 50 m · 100 m 冲刺', icon: 'speed', href: '/speed' },
-  { key: 'vbt', name: 'VBT 训练', color: '#FF9F43', tile: '#3A2512', subtitle: '深蹲 · 高翻 · 高拉 · 深蹲跳', icon: 'vbt', href: '/vbt' },
-  { key: 'mobility', name: '灵活度', color: '#C9A7FF', tile: '#2C2240', subtitle: '踝 · 髋 · 腘绳肌 · 胸椎 · 肩', icon: 'mobility', href: '/mobility' },
-  { key: 'recovery', name: '恢复', color: '#6EE7B7', tile: '#123329', subtitle: 'HRV · 静息心率 · 睡眠 · 呼吸频率', icon: 'recovery', href: '/recovery' },
+  { key: 'jump', name: '跳跃测试', color: '#2340C8', tile: '#E1E6FA', subtitle: 'CMJ · SJ · DJ · 助跑摸高', icon: 'jump', href: '/jumps' },
+  { key: 'conditioning', name: '体能耐力', color: '#B92F1C', tile: '#F6E0DB', subtitle: 'VO2max · RSA 反复冲刺', icon: 'conditioning', href: '/conditioning' },
+  { key: 'speed', name: '速度训练', color: '#0B6F6E', tile: '#DCEEEC', subtitle: '10 m · 30 m · 50 m · 100 m 冲刺', icon: 'speed', href: '/speed' },
+  { key: 'vbt', name: 'VBT 训练', color: '#D9541E', tile: '#F8E3D8', subtitle: '深蹲 · 高翻 · 高拉 · 深蹲跳', icon: 'vbt', href: '/vbt' },
+  { key: 'mobility', name: '灵活度', color: '#6A46BE', tile: '#ECE5F7', subtitle: '踝 · 髋 · 腘绳肌 · 胸椎 · 肩', icon: 'mobility', href: '/mobility' },
+  { key: 'recovery', name: '恢复', color: '#1A6E3D', tile: '#DFEEE4', subtitle: 'HRV · 静息心率 · 睡眠 · 呼吸频率', icon: 'recovery', href: '/recovery' },
 ];
 
 export function getCategory(key: Category): CategoryDef {
@@ -82,7 +82,7 @@ export const APPROACH_TOUCH: MetricDef & { short: string; color: string } = {
   category: 'jump',
   unit: 'cm',
   decimals: 1,
-  color: '#FFD84F',
+  color: '#D9541E',
   use: '离扣篮还差多少就看它',
   capture: ['flight', 'manual'],
   plusReach: true,
@@ -90,12 +90,15 @@ export const APPROACH_TOUCH: MetricDef & { short: string; color: string } = {
   range: [150, 420],
 };
 
-/** Jump tests measured by flight time from video. */
+/** Typed-in jumps come from another flight-time app; a jump-and-reach mark measures something else. */
+const JUMP_ENTRY_HINT = '输入跳高：用 My Jump 等按腾空时间计算的 App 测的读数';
+
+/** Jump tests measured by flight time from video, or typed in from another app (CMJ and SJ, for the daily readiness test). */
 export const JUMP_TESTS: (MetricDef & { short: string; color: string })[] = [
-  { code: 'cmj', short: 'CMJ', name: 'CMJ 反向跳', category: 'jump', unit: 'cm', decimals: 1, color: '#D4FF3F', capture: ['flight'], range: [5, 120] },
-  { code: 'sj', short: 'SJ', name: 'SJ 蹲跳', category: 'jump', unit: 'cm', decimals: 1, color: '#4FD1FF', capture: ['flight'], range: [5, 120] },
-  { code: 'sl_cmj_l', short: 'SL-L', name: '单腿 CMJ · 左', category: 'jump', unit: 'cm', decimals: 1, color: '#6EE7B7', capture: ['flight'], range: [3, 80] },
-  { code: 'sl_cmj_r', short: 'SL-R', name: '单腿 CMJ · 右', category: 'jump', unit: 'cm', decimals: 1, color: '#6EE7B7', capture: ['flight'], range: [3, 80] },
+  { code: 'cmj', short: 'CMJ', name: 'CMJ 反向跳', category: 'jump', unit: 'cm', decimals: 1, color: '#2340C8', capture: ['flight', 'manual'], range: [5, 120], entryHint: JUMP_ENTRY_HINT },
+  { code: 'sj', short: 'SJ', name: 'SJ 蹲跳', category: 'jump', unit: 'cm', decimals: 1, color: '#0B6F6E', capture: ['flight', 'manual'], range: [5, 120], entryHint: JUMP_ENTRY_HINT },
+  { code: 'sl_cmj_l', short: 'SL-L', name: '单腿 CMJ · 左', category: 'jump', unit: 'cm', decimals: 1, color: '#1A6E3D', capture: ['flight'], range: [3, 80] },
+  { code: 'sl_cmj_r', short: 'SL-R', name: '单腿 CMJ · 右', category: 'jump', unit: 'cm', decimals: 1, color: '#1A6E3D', capture: ['flight'], range: [3, 80] },
 ];
 
 /**
@@ -109,7 +112,7 @@ export const DROP_JUMP: MetricDef & { short: string; color: string } = {
   category: 'jump',
   unit: '',
   decimals: 2,
-  color: '#C9A7FF',
+  color: '#6A46BE',
   use: '跳高 ÷ 触地时间，反应力量',
   capture: ['contact', 'manual'],
   range: [0.1, 5],
@@ -127,7 +130,7 @@ export const LOADED_SJ: MetricDef & { short: string; color: string } = {
   category: 'jump',
   unit: 'cm',
   decimals: 1,
-  color: '#4FD1FF',
+  color: '#0B6F6E',
   use: '每次测试最高的一跳，通常是徒手那级',
   capture: ['flight', 'manual'],
   range: [1, 120],
@@ -144,7 +147,7 @@ export const CONDITIONING_TESTS: (MetricDef & { short: string; color: string; su
     category: 'conditioning',
     unit: 'm',
     decimals: 0,
-    color: '#FF7A6B',
+    color: '#B92F1C',
     summary: '20 m 往返跑，每趟后 10 秒恢复，越来越快，跑不动为止',
     kit: '20 m 场地 · 3 个标志桶 · 约 6–20 分钟',
     estimate: { ...VO2MAX, from: yoyoVo2max },
@@ -157,7 +160,7 @@ export const CONDITIONING_TESTS: (MetricDef & { short: string; color: string; su
     category: 'conditioning',
     unit: 'm',
     decimals: 0,
-    color: '#FFB86B',
+    color: '#985100',
     summary: '12 分钟内跑尽量远，按距离估算 VO2max',
     kit: '田径场或已知距离的环线 · 12 分钟',
     estimate: { ...VO2MAX, from: cooperVo2max },
@@ -172,7 +175,7 @@ export const CONDITIONING_TESTS: (MetricDef & { short: string; color: string; su
     decimals: 2,
     lowerIsBetter: true,
     aggregate: 'mean',
-    color: '#4FD1FF',
+    color: '#0B6F6E',
     summary: '6 趟 20 m 折返冲刺，每趟间休 20 秒，看平均时间和掉速',
     kit: '20 m 场地 · 2 个标志桶 · 最好有同伴按表 · 约 3 分钟',
     capture: ['manual'],

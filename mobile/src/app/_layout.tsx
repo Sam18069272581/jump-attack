@@ -1,27 +1,32 @@
-import { BarlowCondensed_600SemiBold } from '@expo-google-fonts/barlow-condensed/600SemiBold';
-import { BarlowCondensed_700Bold } from '@expo-google-fonts/barlow-condensed/700Bold';
 import { useFonts } from 'expo-font';
-import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { ErrorScreen } from '@/components/ErrorScreen';
 import { KeyboardDoneBar } from '@/components/KeyboardDoneBar';
 import { migrate } from '@/db/migrations';
 import { AthleteProvider } from '@/state/athlete';
 import { SyncProvider } from '@/state/sync';
-import { colors } from '@/theme';
+import { colors, fonts } from '@/theme';
 import { setupWeb, webDatabaseBlocked } from '@/web/setup';
 
 setupWeb();
 
 const theme = {
-  ...DarkTheme,
-  colors: { ...DarkTheme.colors, background: colors.bg, card: colors.bg, text: colors.text, border: colors.divider, primary: colors.accent },
+  ...DefaultTheme,
+  colors: { ...DefaultTheme.colors, background: colors.bg, card: colors.bg, text: colors.text, border: colors.divider, primary: colors.accent },
 };
 
+// Expo Router renders this instead of the layout when it throws, e.g. when the database fails to open or migrate.
+export { ErrorScreen as ErrorBoundary };
+
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({ BarlowCondensed_600SemiBold, BarlowCondensed_700Bold });
+  const [fontsLoaded] = useFonts({
+    [fonts.numeric]: require('@expo-google-fonts/big-shoulders-display/BigShouldersDisplay_700Bold.ttf'),
+    [fonts.numericBold]: require('@expo-google-fonts/big-shoulders-display/BigShouldersDisplay_800ExtraBold.ttf'),
+  });
   if (!fontsLoaded) return null;
   if (webDatabaseBlocked()) {
     return (
@@ -37,7 +42,7 @@ export default function RootLayout() {
       <SQLiteProvider databaseName="jump-attack.db" onInit={migrate}>
         {/* SyncProvider remounts everything below after a restore, so every screen reads the new data. */}
         <SyncProvider><AthleteProvider>
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: colors.bg },

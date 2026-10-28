@@ -8,6 +8,4 @@ export type CaptureProps = {
   onImport: () => void;
   /** Present when the result can also be typed in. */
   onManual?: () => void;
-  /** `fps` is the rate the camera actually delivered. */
-  onRecorded: (uri: string, fps: number) => void;
 };

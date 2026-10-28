@@ -27,6 +27,51 @@ export function baseline(days: RecoveryDay[], key: RecoveryKey, date: ISODate): 
   return { mean: m, low: m - half, high: m + half, n: xs.length };
 }
 
+/** Days of HRV history the baseline is built from, and the days averaged for the trend (Plews et al. 2012, 2013). */
+export const HRV_BASELINE_DAYS = 30;
+export const HRV_ROLLING_DAYS = 7;
+/** The trend counts as down once it is half a baseline SD under the mean: the smallest worthwhile change. */
+export const HRV_SWC_SD = 0.5;
+
+/**
+ * HRV's normal range from the 30 days before `date`, worked out on ln(HRV) as HRV is skewed: the log-mean ± 1 SD (at
+ * least ±3 %, as for the other signals), turned back into ms. `logMean` and `logSd` are what the trend is judged on.
+ */
+export function hrvBaseline(days: RecoveryDay[], date: ISODate): (Baseline & { logMean: number; logSd: number }) | null {
+  const from = addDays(date, -HRV_BASELINE_DAYS);
+  const xs = days.filter((d) => d.date >= from && d.date < date && d.hrv != null && d.hrv > 0).map((d) => Math.log(d.hrv!));
+  if (xs.length < MIN_BASELINE_DAYS) return null;
+  const m = mean(xs);
+  const s = Math.max(sd(xs), Math.log(1.03));
+  return { mean: Math.exp(m), low: Math.exp(m - s), high: Math.exp(m + s), n: xs.length, logMean: m, logSd: s };
+}
+
+/** Whether `date`'s HRV was under its own baseline's normal range. */
+function hrvLowOn(days: RecoveryDay[], date: ISODate): boolean {
+  const hrv = days.find((d) => d.date === date)?.hrv;
+  const b = hrvBaseline(days, date);
+  return hrv != null && b != null && hrv < b.low;
+}
+
+/** How far back the previous HRV reading may be and still count as "again": a skipped morning doesn't break a run. */
+export const HRV_REPEAT_DAYS = 2;
+
+/** Whether the latest HRV reading in the `HRV_REPEAT_DAYS` before `date` was low too. */
+function hrvLowBefore(days: RecoveryDay[], date: ISODate): boolean {
+  for (let i = 1; i <= HRV_REPEAT_DAYS; i++) {
+    const d = addDays(date, -i);
+    if (days.some((x) => x.date === d && x.hrv != null)) return hrvLowOn(days, d);
+  }
+  return false;
+}
+
+/** The mean ln(HRV) of the 7 days up to and including `date`, over the days that have one. */
+function hrvTrend(days: RecoveryDay[], date: ISODate): number | null {
+  const from = addDays(date, 1 - HRV_ROLLING_DAYS);
+  const xs = days.filter((d) => d.date >= from && d.date <= date && d.hrv != null && d.hrv > 0).map((d) => Math.log(d.hrv!));
+  return xs.length ? mean(xs) : null;
+}
+
 export type RecoveryStatus = 'good' | 'fair' | 'poor' | 'unknown';
 
 export type RecoveryRead = {
@@ -40,13 +85,13 @@ export type RecoveryRead = {
 };
 
 /**
- * Today's recovery from HRV against its 7-day baseline, resting heart rate and sleep.
- * HRV below its normal range means the body hasn't recovered: train lighter. A raised resting heart rate
- * or a short night alone is a softer warning.
+ * Today's recovery from HRV against its 30-day baseline, resting heart rate and sleep.
+ * HRV below its normal range for more than a day means the body hasn't recovered: train lighter. One low HRV reading,
+ * a raised resting heart rate or a short night is a softer warning; two of them together are poor.
  */
 export function readRecovery(days: RecoveryDay[], date: ISODate): RecoveryRead {
   const today = days.find((d) => d.date === date);
-  const hrv = baseline(days, 'hrv', date);
+  const hrv = hrvBaseline(days, date);
   const rhr = baseline(days, 'rhr', date);
   const reasons: string[] = [];
   const warnings: string[] = [];
@@ -55,11 +100,21 @@ export function readRecovery(days: RecoveryDay[], date: ISODate): RecoveryRead {
   let soft = 0;
 
   if (today?.hrv != null && hrv) {
+    const range = `${Math.round(hrv.low)}–${Math.round(hrv.high)}`;
     if (today.hrv < hrv.low) {
-      hard++;
-      warn(`HRV ${Math.round(today.hrv)} ms，低于你 7 天基线 ${Math.round(hrv.low)}–${Math.round(hrv.high)}`);
+      // Low for more than a day: the 7-day mean is down, or the previous reading was low against its own baseline too
+      // (which catches a run of low days while the history is still too short for the mean to move).
+      const trend = hrvTrend(days, date);
+      const trendLow = trend != null && trend < hrv.logMean - HRV_SWC_SD * hrv.logSd;
+      if (trendLow || hrvLowBefore(days, date)) {
+        hard++;
+        warn(`HRV ${Math.round(today.hrv)} ms，低于你 30 天基线 ${range}，${trendLow ? '7 天平均也偏低' : '前一次也偏低'}`);
+      } else {
+        soft++;
+        warn(`HRV ${Math.round(today.hrv)} ms，低于你 30 天基线 ${range}（7 天平均还正常）`);
+      }
     } else {
-      reasons.push(`HRV 在你 7 天基线范围内（${Math.round(hrv.low)}–${Math.round(hrv.high)}）`);
+      reasons.push(`HRV 在你 30 天基线范围内（${range}）`);
     }
   }
   if (today?.rhr != null && rhr) {
