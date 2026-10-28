@@ -1,21 +1,13 @@
 import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useState, type ComponentType } from 'react';
+import { useCallback, useState } from 'react';
 
 import { captureGuide } from '@/components/capture/guides';
 import SlowMoImport from '@/components/capture/SlowMoImport';
-import type { CaptureProps } from '@/components/capture/types';
 import { listTrials } from '@/db/repo';
 import { returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
-import { isExpoGo } from '@/media/runtime';
-
-// Loaded only outside Expo Go: vision-camera touches its native module as soon as it is imported.
-const NativeCapture: ComponentType<CaptureProps> | null = isExpoGo
-  ? null
-  : // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('@/components/capture/NativeCapture').default;
 
 export default function Capture() {
   // Everything besides the metric and session (`from`, a set's or jump's load, bar travel, box height) is passed on to marking and the result.
@@ -40,26 +32,22 @@ export default function Capture() {
       preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
     });
     if (res.canceled || !res.assets[0]) return;
-    goMark(res.assets[0].uri, 0, res.assets[0].assetId);
-  }
-
-  function goMark(uri: string, recordedFps: number, asset?: string | null) {
-    router.push({ pathname: '/measure/mark', params: { ...pass, uri, fps: String(recordedFps), ...(asset ? { asset } : {}) } });
+    const { uri, assetId } = res.assets[0];
+    // The file's own frame rate is read on the marking screen; 0 means the picker didn't report one.
+    router.push({ pathname: '/measure/mark', params: { ...pass, uri, fps: '0', ...(assetId ? { asset: assetId } : {}) } });
   }
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const manual = def?.capture.includes('manual') && !returnsToLogger(extra.from) ? () => router.push({ pathname: '/measure/entry', params: pass }) : undefined;
 
-  const Screen = NativeCapture ?? SlowMoImport;
   return (
-    <Screen
+    <SlowMoImport
       title={`录制 · ${def?.name ?? metric}`}
       subtitle={`第 ${attempt} 次`}
       guide={captureGuide(def?.category ?? 'jump', def?.code)}
       onClose={close}
       onImport={importVideo}
       onManual={manual}
-      onRecorded={goMark}
     />
   );
 }

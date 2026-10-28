@@ -27,8 +27,3 @@ export async function deleteSavedVideos(): Promise<void> {
   const dir = savedDir();
   if (dir.exists) dir.delete();
 }
-
-/** vision-camera returns filesystem paths; expo-video and expo-file-system want file:// URIs. */
-export function toFileUri(pathOrUri: string): string {
-  return pathOrUri.startsWith('file://') ? pathOrUri : `file://${pathOrUri}`;
-}

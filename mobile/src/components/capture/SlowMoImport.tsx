@@ -23,7 +23,7 @@ export default function SlowMoImport({ title, subtitle, guide, onClose, onImport
             </View>
           </View>
         ))}
-        <Text style={styles.note}>现在是 Expo Go 预览版，App 内直接录 240 fps 需要安装正式开发版。</Text>
+        <Text style={styles.note}>慢动作导出后每一帧仍是 1/240 秒。标记页如果显示视频只有 30 fps，把「拍摄帧率」选成 240。</Text>
       </ScrollView>
       <View style={styles.footer}>
         <Button label="从相册导入视频" onPress={onImport} />
