@@ -34,6 +34,12 @@ Expo 相关规则：@mobile/AGENTS.md
 4. 加依赖用 `npx expo install`。
 5. 数据本地优先：健康和训练数据先存本机，只在用户登录自己的云端账号后整库同步过去（Supabase，见 `mobile/src/sync/`）。不传给任何第三方，不加统计或分析上报。
 
+## Git 工作流（严格遵守）
+
+- **Conventional Commits**：提交信息写成 `<type>(<scope>): <描述>`，scope 可省。type 只用 `feat`（新功能）、`fix`（修 bug）、`docs`、`refactor`、`test`、`perf`、`style`、`build`、`ci`、`chore`、`revert`。破坏性改动在 type 后加 `!`，正文写 `BREAKING CHANGE:`。例：`feat(home): 灵活度和体能耐力收进「辅助」`。
+- **Feature Branch**：每项工作一个分支，从最新的 `main` 拉出来，不直接往 `main` 推。
+- **Squash merge**：PR 一律 squash 合并，一个 PR 在 `main` 上只留一个提交。PR 标题就是 squash 后的提交信息，所以 PR 标题也必须符合 Conventional Commits。
+
 ## 完成标准
 
 在 `mobile/` 下运行 `npm test && npm run typecheck && npm run lint`，全部通过并贴出结果。没跑过就不能说"完成"。
