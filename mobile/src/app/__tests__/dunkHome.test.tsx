@@ -9,6 +9,7 @@ import { addTrial, ensureSession, getAthlete, updateAthlete, type Athlete } from
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { addVbtSet } from '@/db/vbt';
 import { addDays, toISODate } from '@/domain/dates';
+import { TouchChart } from '@/components/TouchChart';
 
 import Home from '../(tabs)/index';
 import History from '../(tabs)/history';
@@ -84,6 +85,18 @@ describe('before any test', () => {
     expect(t).toContain('训练和测试\n测一次 CMJ 或记录恢复数据，判断今天的状态');
   });
 
+  it('folds mobility and conditioning under 辅助, since they add little to the jump itself', async () => {
+    const r = await render(<Home />);
+    const shown = (name: string) => r.root.findAll((n) => n.props.accessibilityLabel === name).length > 0;
+    for (const name of ['跳跃测试', '速度训练', 'VBT 训练', '恢复', '辅助']) expect(shown(name)).toBe(true);
+    expect(shown('灵活度')).toBe(false);
+    expect(shown('体能耐力')).toBe(false);
+
+    await press(r.root, '辅助');
+    expect(shown('灵活度')).toBe(true);
+    expect(shown('体能耐力')).toBe(true);
+  });
+
   it('keeps the history tab empty but tells how to get a touch curve', async () => {
     const r = await render(<History />);
     const t = texts(r.root);
@@ -144,5 +157,31 @@ describe('with results', () => {
     const r = await render(<MetricHistory />);
     expect(texts(r.root)).toContain('离扣篮线 325 cm 还差 33.0 cm');
     expect(texts(r.root)).toContain('扣篮线 325');
+  });
+});
+
+describe('after a wall-reading calibration', () => {
+  it('moves the standing estimates onto the wall scale', async () => {
+    // Filmed touch: 240 reach + 50 cm flight-time jump = 290 from video, the wall read 300, so the offset is 10 cm.
+    await ensureSession(mockDb, 'touch-2', 1, 'approach_touch');
+    await mockDb.runAsync('UPDATE test_session SET started_at = ? WHERE id = ?', '2026-09-20T10:00:00.000Z', 'touch-2');
+    await addTrial(mockDb, { session_id: 'touch-2', value: 300, detail: { source: 'video', jump_cm: 50, standing_reach_cm: 240, touched_cm: 300 } });
+
+    const r = await render(<History />);
+    // CMJ 43 and 45: 240 + 43 + 10 and 240 + 45 + 10.
+    expect(r.root.findByType(TouchChart).props.standing.map((p: { value: number }) => p.value)).toEqual([293, 295]);
+  });
+});
+
+describe('a sprint timed another way', () => {
+  it('shows the new time on the speed tile without a change against the filmed ones', async () => {
+    await ensureSession(mockDb, 'sp-hand', 1, 'sprint_10');
+    await mockDb.runAsync('UPDATE test_session SET started_at = ? WHERE id = ?', '2026-09-25T11:00:00.000Z', 'sp-hand');
+    await addTrial(mockDb, { session_id: 'sp-hand', value: 1.6, detail: { source: 'manual', timing: 'stopwatch' } });
+
+    const t = texts((await render(<History />)).root);
+    expect(t).toContain('1.60 s');
+    expect(t).not.toContain('10 m 冲刺 · −0.18 s');
+    expect(t).toContain('10 m 冲刺 · 秒表计时');
   });
 });

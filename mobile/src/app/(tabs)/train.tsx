@@ -10,9 +10,9 @@ import { AdjustmentNote, SessionItems, WeekStrip, type DayStatus } from '@/compo
 import { Button, Card } from '@/components/ui';
 import { newSessionId } from '@/db/repo';
 import { insertDeload } from '@/db/training';
-import { addDays, daysBetween, shortDate, type ISODate } from '@/domain/dates';
-import { isRetestWeek, nextBlockStart } from '@/domain/blocks';
-import { blockPosition, DELOAD_DAYS, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
+import { addDays, daysBetween, shortDate, weekday, WEEKDAY_NAMES, type ISODate } from '@/domain/dates';
+import { isRetestWeek, nextBlockStart, retestCodes } from '@/domain/blocks';
+import { blockPosition, DELOAD_DAYS, missedThisWeek, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
 import { DELOAD_STREAK } from '@/domain/readiness';
 import { STATUS_TEXT } from '@/domain/recovery';
 import { useAthlete } from '@/state/athlete';
@@ -80,10 +80,10 @@ export default function Train() {
                 setStarting(false);
               }
             }}
-            onStart={async (date) => {
+            onStart={async (date, makeUp) => {
               setStarting(true);
               try {
-                await beginWorkout(db, data, date);
+                await beginWorkout(db, data, date, makeUp);
                 router.push({ pathname: '/workout/[date]', params: { date } });
               } catch (e) {
                 Alert.alert('无法开始训练', String(e));
@@ -127,7 +127,7 @@ function PlanView({
   selected: ISODate;
   onSelect: (d: ISODate) => void;
   starting: boolean;
-  onStart: (date: ISODate) => void;
+  onStart: (date: ISODate, makeUp?: boolean) => void;
   onDeload: () => void;
   onSuggestion: (accept: boolean) => void;
 }) {
@@ -166,6 +166,8 @@ function PlanView({
   const isToday = selected === today;
   const shown = planned ? sessionFor(planned, workout, isToday ? readiness.readiness : null) : null;
   const next = planned ? null : nextSession(template, plan, addDays(selected, 1));
+  // A rest day today can take a session missed earlier this week.
+  const missed = isToday && !planned ? missedThisWeek(template, plan, workouts.map((w) => w.date), today) : [];
 
   return (
     <>
@@ -184,7 +186,7 @@ function PlanView({
       )}
 
       {retest && template.blocks && (
-        <RetestCard codes={template.blocks[block.type].retest} diagnosis={advice.diagnosis} nextStart={nextBlockStart(plan, today)} />
+        <RetestCard codes={retestCodes(template, block.type, advice.diagnosis)} diagnosis={advice.diagnosis} nextStart={nextBlockStart(plan, today)} />
       )}
 
       <WeekStrip
@@ -247,6 +249,14 @@ function PlanView({
             <Text style={text.muted}>
               {next ? `下次：${shortDate(next.date)} · ${next.session.code} ${next.session.name}` : finished ? '测一次 CMJ 看看提升，再选下一个计划。' : ''}
             </Text>
+            {missed.map((m) => (
+              <View key={m.date} style={styles.makeUp}>
+                <Text style={text.body}>
+                  周{WEEKDAY_NAMES[weekday(m.date) - 1]}的 {m.session.code} · {m.session.name} 还没练
+                </Text>
+                <Button label="今天补练" variant="secondary" busy={starting} onPress={() => onStart(m.date, true)} />
+              </View>
+            ))}
           </View>
         )}
       </Card>
@@ -323,6 +333,7 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center' },
   content: { padding: 20, paddingTop: 28, gap: 16 },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  makeUp: { gap: 8, marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: colors.divider },
   dayHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   tag: { fontSize: 12, fontWeight: '700' },
   readiness: { flexDirection: 'row', alignItems: 'center', gap: 12, borderRadius: radius.card },

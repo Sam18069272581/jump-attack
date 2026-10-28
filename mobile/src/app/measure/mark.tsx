@@ -5,16 +5,18 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Chip, Empty } from '@/components/ui';
 import { addTrial, ensureSession } from '@/db/repo';
+import { recalibrateTouches, touchOffsetFor } from '@/db/touch';
+import { parseNumber } from '@/domain/entry';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
-import { markProfile, returnsToLogger } from '@/domain/marking';
+import { markedTrial, markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
+import { calibrationProblem } from '@/domain/touch';
 import { probeFrameRate } from '@/media/frameRate';
-import { persistVideo } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -26,7 +28,7 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
 }
 
 export default function Mark() {
-  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; box?: string }>();
+  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; reps?: string; rom?: string; box?: string; asset?: string }>();
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const def = getMetric(params.metric);
@@ -43,6 +45,16 @@ export default function Mark() {
   // The marks, in the profile's order: take-off/landing for a jump, start/finish for a sprint, touch-down/take-off/landing for a drop jump.
   const [marks, setMarks] = useState<(number | null)[]>([]);
   const [saving, setSaving] = useState(false);
+  // Attempts already saved from this clip.
+  const [saved, setSaved] = useState(0);
+  // A filmed touch: what the hand was read to touch on the wall (optional), and the athlete's calibration so far.
+  const [touchedRaw, setTouchedRaw] = useState('');
+  const [offset, setOffset] = useState<number | null>(null);
+  const isTouch = def?.plusReach === true;
+
+  useEffect(() => {
+    if (isTouch && current) touchOffsetFor(db, current.id).then(setOffset);
+  }, [db, current, isTouch]);
 
   useEventListener(player, 'sourceLoad', ({ duration: d, availableVideoTracks }) => {
     setDuration(d);
@@ -92,28 +104,31 @@ export default function Mark() {
   if (!profile) return <Empty title="这个项目不能用录像测量" />;
   const marked = profile.marks.map((_, i) => marks[i] ?? null);
   const result = profile.measure(marked, fps);
+  const touched = isTouch && result.ok ? parseNumber(touchedRaw) : null;
+  const touchProblem = touched != null && result.ok ? calibrationProblem(touched, result.value) : null;
 
-  async function save() {
-    if (!result.ok || !current) return;
+  // A logger needs new settings (load, box) for every attempt, so only plain tests mark several jumps in one clip.
+  const logger = returnsToLogger(params.from);
+  const goResult = () =>
+    router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
+
+  /** Saves the marked attempt; `next` stays on this clip to mark the next jump from where this one landed. */
+  async function save(next = false) {
+    if (!result.ok || !current || touchProblem) return;
     setSaving(true);
     try {
-      const videoUri = await persistVideo(params.uri, params.session).catch(() => params.uri);
       await ensureSession(db, params.session, current.id, params.metric);
-      await addTrial(db, {
-        session_id: params.session,
-        value: result.value,
-        flight_ms: result.elapsedS * 1000,
-        fps,
-        // The last two marks; a drop jump's touch-down frame goes in the detail.
-        takeoff_frame: marked.at(-2),
-        landing_frame: marked.at(-1),
-        video_uri: videoUri,
-        ...(params.load != null ? { load_kg: Number(params.load) || 0 } : {}),
-        ...(result.detail || params.box ? { detail: { source: 'video', ...result.detail, ...(params.box ? { box_cm: Number(params.box) } : {}) } } : {}),
-      });
-      // A profile jump goes straight back to its log (capture and marking are the two screens above it).
-      if (returnsToLogger(params.from)) return router.dismiss(2);
-      router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
+      // The clip stays in the photo library (its id is in the detail); copying every one filled the phone.
+      await addTrial(db, { session_id: params.session, ...markedTrial(result, marked, fps, params, { touchedCm: touched, offsetCm: offset }) });
+      // A new wall reading moves the earlier filmed touches onto the same scale.
+      if (touched != null) setOffset(await recalibrateTouches(db, current.id));
+      setTouchedRaw('');
+      // A VBT set or a profile jump goes straight back to its log (capture and marking are the two screens above it).
+      if (logger) return router.dismiss(2);
+      if (!next) return goResult();
+      setSaved((n) => n + 1);
+      setMarks([]);
+      setSaving(false);
     } catch (e) {
       Alert.alert('保存失败', String(e));
       setSaving(false);
@@ -197,9 +212,35 @@ export default function Mark() {
             <Text style={styles.problem}>{result.message}</Text>
           )}
         </View>
+
+        {isTouch && result.ok && (
+          <View style={styles.calibrate}>
+            <Text style={styles.label}>
+              {offset != null
+                ? `已按你的校准加 ${offset.toFixed(1)} cm。这一跳有墙上或篮板上的刻度的话，填上会更准，也会更新校准。`
+                : '录像算的摸高通常比实际摸到的低几厘米。这一跳有墙上或篮板上的刻度的话填上，用来校准以后的录像和原地估算。'}
+            </Text>
+            <TextInput
+              accessibilityLabel="墙上摸到的刻度（cm）"
+              value={touchedRaw}
+              onChangeText={setTouchedRaw}
+              keyboardType="decimal-pad"
+              placeholder="墙上摸到的刻度（cm，可选）"
+              placeholderTextColor={colors.textFaint}
+              style={styles.input}
+            />
+            {touchProblem ? <Text style={styles.touchProblem}>{touchProblem}</Text> : null}
+          </View>
+        )}
       </ScrollView>
       <View style={styles.footer}>
-        <Button label="保存这一次" onPress={save} disabled={!result.ok} busy={saving} />
+        {saved > 0 && <Text style={styles.savedNote}>这段视频已存 {saved} 次，可以接着往后标下一跳</Text>}
+        {saved > 0 && !result.ok ? (
+          <Button label="看结果" onPress={goResult} />
+        ) : (
+          <Button label="保存这一次" onPress={() => save()} disabled={!result.ok || touchProblem != null} busy={saving} />
+        )}
+        {!logger && result.ok && <Button label="保存，接着标这段视频的下一跳" variant="ghost" onPress={() => save(true)} disabled={saving || touchProblem != null} />}
       </View>
     </SafeAreaView>
   );
@@ -245,5 +286,9 @@ const styles = StyleSheet.create({
   resultValue: { color: colors.text, fontFamily: fonts.numericBold, fontSize: 36 },
   unit: { color: colors.textMuted, fontSize: 15 },
   problem: { color: colors.textMuted, fontSize: 13, textAlign: 'center', flex: 1 },
-  footer: { paddingHorizontal: 16, paddingTop: 8 },
+  calibrate: { gap: 8 },
+  input: { height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, fontSize: 15 },
+  touchProblem: { color: colors.warn, fontSize: 12 },
+  footer: { paddingHorizontal: 16, paddingTop: 8, gap: 6 },
+  savedNote: { color: colors.textMuted, fontSize: 12, textAlign: 'center' },
 });

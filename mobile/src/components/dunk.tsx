@@ -6,6 +6,7 @@ import type { SessionResult } from '@/db/repo';
 import type { DayState, DunkDiagnosis, DunkMetric, MetricStatus } from '@/domain/dunk';
 import { formatMetric, stateLine } from '@/domain/dunkSummary';
 import { changeTone, formatValue, type MetricDef } from '@/domain/metrics';
+import { previousSameTiming, TIMING_NOTE, type Timing } from '@/domain/timing';
 import { colors, fonts, radius, text } from '@/theme';
 
 const STATE_COLOR: Record<DayState, string> = { good: colors.good, fair: colors.warn, poor: colors.record, unknown: colors.textMuted };
@@ -25,7 +26,9 @@ export function DayStateRow({ state }: { state: DayState }) {
 type Tile = { label: string; metric: DunkMetric | undefined; href: Href };
 
 /** One tile per thing the jump is built from: strength, reactive strength and speed, each against its line. */
-export function LimiterTiles({ diagnosis, sprint }: { diagnosis: DunkDiagnosis; sprint: { def: MetricDef; results: SessionResult[] } | null }) {
+type Sprint = { def: MetricDef; results: SessionResult[]; timings?: Record<string, Timing> };
+
+export function LimiterTiles({ diagnosis, sprint }: { diagnosis: DunkDiagnosis; sprint: Sprint | null }) {
   const m = (key: DunkMetric['key']) => diagnosis.metrics.find((x) => x.key === key);
   const tiles: Tile[] = [
     { label: '力量', metric: m('squat_ratio'), href: '/vbt' },
@@ -60,11 +63,14 @@ function tileNote(m: DunkMetric): string {
   }
 }
 
-/** Speed has no line to pass; it shows the latest sprint and which way it moved. */
-function SprintTile({ sprint }: { sprint: { def: MetricDef; results: SessionResult[] } | null }) {
-  const last = sprint?.results.at(-1);
-  const prev = sprint?.results.at(-2);
+/** Speed has no line to pass; it shows the latest sprint and which way it moved against the last one timed the same way. */
+function SprintTile({ sprint }: { sprint: Sprint | null }) {
+  const timed = (sprint?.results ?? []).map((r) => ({ ...r, timing: sprint?.timings?.[r.session_id] ?? ('video' as Timing) }));
+  const last = timed.at(-1);
+  const prev = previousSameTiming(timed).at(-1);
   const delta = last && prev ? last.best - prev.best : null;
+  // Earlier times exist but none taken this way: say how this one was timed instead of a change.
+  const otherTiming = last != null && prev == null && timed.length > 1;
   const tone = sprint && delta != null ? changeTone(sprint.def, delta) : 'flat';
   return (
     <Pressable
@@ -76,7 +82,13 @@ function SprintTile({ sprint }: { sprint: { def: MetricDef; results: SessionResu
       <Text style={text.caption}>速度</Text>
       <Text style={[styles.tileValue, { color: last ? colors.blue : colors.textMuted }]}>{last ? `${formatValue(sprint!.def, last.best)} s` : '—'}</Text>
       <Text style={[styles.tileNote, delta != null && { color: { good: colors.good, bad: colors.warn, flat: colors.textMuted }[tone] }]}>
-        {!sprint || !last ? '冲刺 · 未测' : delta == null ? sprint.def.name : `${sprint.def.name} · ${delta <= 0 ? '−' : '+'}${Math.abs(delta).toFixed(2)} s`}
+        {!sprint || !last
+          ? '冲刺 · 未测'
+          : otherTiming
+            ? `${sprint.def.name} · ${TIMING_NOTE[last.timing]}`
+            : delta == null
+              ? sprint.def.name
+              : `${sprint.def.name} · ${delta <= 0 ? '−' : '+'}${Math.abs(delta).toFixed(2)} s`}
       </Text>
     </Pressable>
   );

@@ -2,10 +2,12 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { Alert, Text } from 'react-native';
 
+import { addDropJump } from '@/db/jumps';
 import { migrate } from '@/db/migrations';
 import { addTrial, ensureSession } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { getWorkout, listSets, startPlan } from '@/db/training';
+import { addVbtSet } from '@/db/vbt';
 import { addDays, toISODate, weekday, WEEKDAY_NAMES } from '@/domain/dates';
 
 import Train from '../(tabs)/train';
@@ -130,4 +132,21 @@ it('shows the next session on a rest day', async () => {
   const t = texts(r.root);
   expect(t).toContain('休息日');
   expect(t).toContain('下次：');
+});
+
+it('shows the athlete’s own box height and trap-bar load in the exercise cards', async () => {
+  // Drop-jump ladder: RSI peaks at the 40 cm box.
+  for (const [boxCm, rsi] of [[30, 1.6], [40, 1.9], [50, 1.7]] as const) {
+    await addDropJump(mockDb, 1, 'dj-ladder', { boxCm, rsi, contactMs: 200, heightCm: 38, flightS: 0.56 });
+  }
+  // 60 kg @ 1.0, 80 kg @ 0.8 and 100 kg @ 0.6 m/s put the squat 1RM at 130 kg (an estimate needs three loads).
+  await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 60, v: 1.0, reps: 3, source: 'manual' });
+  await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 80, v: 0.8, reps: 3, source: 'manual' });
+  await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 100, v: 0.6, reps: 2, source: 'manual' });
+
+  // Wednesday is session B with depth jumps, Friday session C with trap-bar jumps.
+  mockParams = { date: addDays(today, 2) };
+  expect(texts((await render(<WorkoutScreen />)).root)).toContain('你的最佳箱高 40 cm');
+  mockParams = { date: addDays(today, 4) };
+  expect(texts((await render(<WorkoutScreen />)).root)).toContain('建议 25–40 kg（后蹲 1RM 130 kg 的 20–30%）');
 });

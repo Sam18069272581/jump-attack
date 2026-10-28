@@ -65,6 +65,10 @@ it('gathers every result the diagnosis reads', async () => {
     dropJumps: [{ rsi: 2.1, contactMs: 200 }],
   });
   expect(input.squat1rm[0]).toBeCloseTo(130);
+  // The approach touch was typed in, and nothing is calibrated yet.
+  expect(input).toMatchObject({ approachMethod: 'wall', touchOffsetCm: null });
+  // When each result was last tested, for the stale check.
+  expect(Object.keys(input.latestAt!).sort()).toEqual(['approach', 'cmj', 'drop_jump', 'squat']);
   expect(input.fvPct).toHaveLength(1);
   expect(input.fvPct[0]).toBeCloseTo(71, 0);
 

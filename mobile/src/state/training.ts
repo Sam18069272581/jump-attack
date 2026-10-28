@@ -1,13 +1,25 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { listDropJumps } from '@/db/jumps';
 import { listRecoveryDays } from '@/db/recovery';
 import { listSessionResults } from '@/db/repo';
 import { getActivePlan, listWorkouts, startWorkout, type Plan, type Workout } from '@/db/training';
 import { current1rm, ESTIMATE_MAX_AGE_DAYS, latestOneRm, listVbtSets } from '@/db/vbt';
 import { type Readiness } from '@/domain/assess';
 import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
+import { ladder } from '@/domain/dropJump';
 import { worstState, type BlockType, type DayState } from '@/domain/dunk';
-import { adjustForReadiness, blockOn, planDay, type Adjustment, type PlannedSession, type PlanTemplate, type Prescription, type SessionTemplate } from '@/domain/plan';
+import {
+  adjustForReadiness,
+  blockOn,
+  planDay,
+  type Adjustment,
+  type PersonalNumbers,
+  type PlannedSession,
+  type PlanTemplate,
+  type Prescription,
+  type SessionTemplate,
+} from '@/domain/plan';
 import { dayReadiness, fatigueStreak, type DayReadiness } from '@/domain/readiness';
 import { poorDays, readDay, selfSignal, setTarget, type DayInputs, type DayReading, type SetTarget } from '@/domain/target';
 import { getTemplate } from '@/domain/templates';
@@ -69,6 +81,16 @@ export async function loadSuggestions(
   return out;
 }
 
+/**
+ * The tested numbers exercise cues point at (domain/plan.ts personalNote): the best box of the latest drop-jump
+ * ladder, and the squat 1RM to load from (see `current1rm`).
+ */
+export async function loadPersonalNumbers(db: SQLiteDatabase, athleteId: number, date: ISODate): Promise<PersonalNumbers> {
+  const [drops, squat] = await Promise.all([listDropJumps(db, athleteId), current1rm(db, athleteId, 'vbt_squat', date)]);
+  const lastLadder = drops.filter((j) => j.session_id === drops.at(-1)?.session_id);
+  return { bestBoxCm: ladder(lastLadder).best?.boxCm ?? null, squat1rmKg: squat?.kg ?? null };
+}
+
 /** VBT lifts whose sets double as the strength-day warm-up. */
 export const WARMUP_LIFTS = [...new Set(Object.values(LOAD_FROM_VBT))];
 
@@ -108,11 +130,14 @@ export function sessionFor(planned: PlannedSession, workout: Workout | null | un
   return adjustForReadiness(planned.session, workout?.readiness ?? readiness ?? 'unknown');
 }
 
-/** Starts a day's workout, applying the readiness rule when it is today. Returns the existing one if already started. */
-export async function beginWorkout(db: SQLiteDatabase, data: TrainingData, date: ISODate): Promise<Workout | null> {
+/**
+ * Starts a day's workout, applying the readiness rule when it is today, or when a missed day is made up today.
+ * Returns the existing one if already started.
+ */
+export async function beginWorkout(db: SQLiteDatabase, data: TrainingData, date: ISODate, makeUp = false): Promise<Workout | null> {
   const planned = planDay(data.template, data.plan, date);
   if (!planned) return null;
-  const r = date === todayISO() ? await loadReadiness(db, data.plan.athleteId, date) : null;
+  const r = date === todayISO() || makeUp ? await loadReadiness(db, data.plan.athleteId, todayISO()) : null;
   const readiness = r?.readiness ?? 'unknown';
   const { adjustments } = adjustForReadiness(planned.session, readiness);
   return startWorkout(db, {

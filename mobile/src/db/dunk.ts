@@ -9,6 +9,7 @@ import { pctOf1rm } from '@/domain/vbt';
 
 import { listDropJumps, listLoadedJumps, profileSessions } from './jumps';
 import { listSessionResults, type Athlete } from './repo';
+import { latestTouchMethod, touchOffsetFor } from './touch';
 import { current1rm, listTested1rm, listVbtSets, sessionEstimates, TESTED_MAX_AGE_DAYS, type Current1rm } from './vbt';
 
 const SQUAT_LIFT = 'vbt_squat';
@@ -56,16 +57,21 @@ export async function squat1rmHistory(db: SQLiteDatabase, athleteId: number): Pr
   return [...out.filter((e) => !standing(e.at)), ...tested].sort((a, b) => a.at.localeCompare(b.at) || Number(tested.includes(a)) - Number(tested.includes(b)));
 }
 
+function dropUndefined<T extends object>(o: T): Partial<T> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>;
+}
+
 /** Every result the dunk diagnosis reads, oldest first. */
 export async function loadDunkInputs(db: SQLiteDatabase, athlete: Athlete): Promise<DunkInput> {
-  const bests = async (code: string) => (await listSessionResults(db, athlete.id, code)).map((r) => r.best);
-  const [cmj, sj, approachTouch, squat, drops, loaded] = await Promise.all([
-    bests('cmj'),
-    bests('sj'),
-    bests(APPROACH_TOUCH.code),
+  const [cmjs, sjs, touches, squat, drops, loaded, touchOffsetCm, approachMethod] = await Promise.all([
+    listSessionResults(db, athlete.id, 'cmj'),
+    listSessionResults(db, athlete.id, 'sj'),
+    listSessionResults(db, athlete.id, APPROACH_TOUCH.code),
     squat1rmHistory(db, athlete.id),
     listDropJumps(db, athlete.id),
     listLoadedJumps(db, athlete.id),
+    touchOffsetFor(db, athlete.id),
+    latestTouchMethod(db, athlete.id),
   ]);
 
   const ladders = new Map<string, typeof drops>();
@@ -90,12 +96,16 @@ export async function loadDunkInputs(db: SQLiteDatabase, athlete: Athlete): Prom
     standingReachCm: athlete.standing_reach_cm,
     rimCm: athlete.rim_height_cm,
     clearanceCm: athlete.dunk_clearance_cm,
-    cmj,
-    sj,
-    approachTouch,
+    cmj: cmjs.map((r) => r.best),
+    sj: sjs.map((r) => r.best),
+    approachTouch: touches.map((r) => r.best),
     squat1rm: squat.map((s) => s.kg),
     dropJumps,
     fvPct,
+    touchOffsetCm,
+    approachMethod,
+    asOf: toISODate(new Date()),
+    latestAt: dropUndefined({ squat: squat.at(-1)?.at, drop_jump: drops.at(-1)?.started_at, approach: touches.at(-1)?.started_at, cmj: cmjs.at(-1)?.started_at }),
   };
 }
 
