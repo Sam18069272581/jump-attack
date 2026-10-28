@@ -21,7 +21,7 @@ const JUMP: CaptureGuide = {
     SLOW_MO_SETUP,
     { title: '把手机放稳', text: '放在地面或三脚架上，别手持。距离约 1.5 米，镜头对准脚踝高度，脚和地面都要在画面里。' },
     { title: '用「慢动作」拍', text: '打开相机切到「慢动作」。起跳前 2 秒开拍，落地站稳 2 秒后再停，让整个跳跃都在慢放段里。' },
-    { title: '导入并逐帧标记', text: '回到这里点下面的按钮选视频，然后找到起跳帧和落地帧。' },
+    { title: '导入自动分析', text: '回到这里点下面的按钮选视频，框出要分析的那段、点一下运动员，App 自动找出每一跳的起跳和落地，不准可以逐帧调。' },
   ],
   checks: ['手机放稳（地面或三脚架），别手持', '距离约 1.5 米，镜头对准脚踝'],
   feetOverlay: true,
@@ -36,7 +36,7 @@ const DROP_JUMP: CaptureGuide = {
     SLOW_MO_SETUP,
     { title: '侧面拍箱子和落点', text: '手机放在地面或三脚架上，距离约 2 米，镜头对准脚踝高度。箱子边缘和落地点都要在画面里。' },
     { title: '用「慢动作」拍', text: '站上箱子后开拍。一只脚迈出箱子自然落下（别往下跳也别往上跳），一着地就尽快弹起，落地站稳后再停。' },
-    { title: '导入并逐帧标记', text: '找到三帧：跳下后脚刚着地、反弹脚尖刚离地、再次落地。' },
+    { title: '导入自动分析', text: 'App 自动找三帧：跳下后脚刚着地、反弹脚尖刚离地、再次落地，不准可以逐帧调。' },
   ],
   checks: ['手机放稳，侧对箱子', '箱子边缘和落地点都在画面里'],
   feetOverlay: true,
@@ -46,12 +46,27 @@ const DROP_JUMP: CaptureGuide = {
   maxSeconds: 15,
 };
 
+const REPEATED_JUMP: CaptureGuide = {
+  steps: [
+    SLOW_MO_SETUP,
+    { title: '把手机放稳', text: '放在地面或三脚架上，距离约 1.5 米，镜头对准脚踝高度。原地连跳，脚别跳出画面。' },
+    { title: '用「慢动作」拍', text: '开拍后原地连续跳 10 次：每次尽量跳高、触地尽量短，双手叉腰，脚尖着地马上弹起。跳完站稳再停。' },
+    { title: '导入自动分析', text: '选好视频后点一下运动员，App 会认出每一跳，算触地时间、RSI 和稳定性。' },
+  ],
+  checks: ['手机放稳，镜头对准脚踝', '原地连跳，脚别出画'],
+  feetOverlay: true,
+  recordingHint: '连跳 10 次站稳后，点击停止',
+  doneHint: '下一步自动认出每一跳。',
+  tips: '1. 手机放在地面或三脚架上，镜头对准脚踝高度。\n2. 原地连跳 10 次，每次都要又高又快。\n3. 优先用 240 fps，触地时间误差约 ±4 ms。',
+  maxSeconds: 15,
+};
+
 const APPROACH_TOUCH: CaptureGuide = {
   steps: [
     SLOW_MO_SETUP,
     { title: '侧面拍起跳点', text: '手机放在地面或三脚架上，距离约 3 米，镜头对准脚踝高度。最后一步和落地点都要在画面里。' },
     { title: '用「慢动作」拍', text: '助跑前开拍，3–5 步助跑后全力起跳摸高，落地站稳再停。落地时腿尽量伸直、像起跳时一样，不然腾空时间会算长。' },
-    { title: '导入并逐帧标记', text: '找到起跳脚刚离地的一帧，和第一只脚刚着地的一帧。摸高 = 站立摸高 + 跳高。' },
+    { title: '导入自动分析', text: 'App 自动找起跳脚刚离地的一帧，和第一只脚刚着地的一帧，不准可以逐帧调。摸高 = 站立摸高 + 跳高。' },
   ],
   checks: ['手机放稳，侧对起跳点', '最后一步和落地点都在画面里'],
   feetOverlay: false,
@@ -93,6 +108,7 @@ const LIFT: CaptureGuide = {
 
 export function captureGuide(category: Category, code?: string): CaptureGuide {
   if (code === 'dj_rsi') return DROP_JUMP;
+  if (code === 'rj_rsi') return REPEATED_JUMP;
   if (code === 'approach_touch') return APPROACH_TOUCH;
   return category === 'speed' ? SPRINT : category === 'vbt' ? LIFT : JUMP;
 }

@@ -9,10 +9,11 @@ export type Category = 'jump' | 'conditioning' | 'speed' | 'vbt' | 'mobility' | 
  * How a result can be recorded, first one is the default.
  * - `flight`: take-off and landing frames in a video (jump height).
  * - `contact`: touch-down, take-off and landing frames of a drop jump (reactive strength index).
+ * - `rebound`: a set of repeated jumps analysed from video, each contact the gap between one landing and the next take-off.
  * - `interval`: start and finish frames in a video (sprint time, bar velocity).
  * - `manual`: typed in, from a stopwatch, timing gates, a VBT device or Apple Health.
  */
-export type CaptureKind = 'flight' | 'contact' | 'interval' | 'manual';
+export type CaptureKind = 'flight' | 'contact' | 'rebound' | 'interval' | 'manual';
 
 export type MetricDef = {
   code: string;
@@ -116,6 +117,25 @@ export const DROP_JUMP: MetricDef & { short: string; color: string } = {
   use: '跳高 ÷ 触地时间，反应力量',
   capture: ['contact', 'manual'],
   range: [0.1, 5],
+};
+
+/**
+ * The 10/5 repeated jump test: ten maximal rebounds in a row, as high as possible with as short a contact as possible;
+ * the result is the mean RSI of the best five (Harper, Hobbs & Moore 2011). One set is one trial, its jumps in
+ * `trial.detail.jumps`. Only from video analysis (domain/jumpAnalysis.ts) or typed in from another app.
+ */
+export const REPEATED_JUMP: MetricDef & { short: string; color: string } = {
+  code: 'rj_rsi',
+  short: '10/5',
+  name: '10/5 连跳 RSI',
+  category: 'jump',
+  unit: '',
+  decimals: 2,
+  color: '#6A46BE',
+  use: '连跳 10 次，最好 5 次 RSI 的平均，看反弹稳不稳',
+  capture: ['rebound', 'manual'],
+  range: [0.1, 5],
+  entryHint: '输入 10/5 RSI：用别的 App 或跳垫测的读数',
 };
 
 /**
@@ -242,7 +262,7 @@ export const RECOVERY_METRICS: MetricDef[] = [
   { code: 'rec_resp', name: '呼吸频率', category: 'recovery', unit: '次/分', decimals: 1, neutral: true, capture: ['manual'], range: [5, 40] },
 ];
 
-export const METRICS: MetricDef[] = [APPROACH_TOUCH, ...JUMP_TESTS, LOADED_SJ, DROP_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
+export const METRICS: MetricDef[] = [APPROACH_TOUCH, ...JUMP_TESTS, LOADED_SJ, DROP_JUMP, REPEATED_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
 
 export function getMetric(code: string): MetricDef | undefined {
   const known = METRICS.find((m) => m.code === code);
