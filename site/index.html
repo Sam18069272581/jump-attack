@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Product page, served at https://sam18069272581.github.io/jump-attack/intro/ (scripts/webBuild.js copies this folder there).
+     Chinese is written here; English comes from i18n.js. Only same-origin files: the app's service worker sets COEP require-corp on this path too. -->
+<title data-i18n="meta.title">Jump Attack · 为扣篮做的弹跳训练</title>
+<meta name="description" data-i18n-attr="content:meta.desc" content="测出离扣篮线差多少，找到缺力量还是缺反应，按短板排今天的训练。开源，数据先存手机。">
+<meta property="og:title" content="Jump Attack">
+<meta property="og:description" data-i18n-attr="content:meta.desc" content="测出离扣篮线差多少，找到缺力量还是缺反应，按短板排今天的训练。开源，数据先存手机。">
+<meta property="og:image" content="https://sam18069272581.github.io/jump-attack/intro/assets/banner.png">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#F1ECE2">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="preload" href="fonts/BigShouldersDisplay-900Black.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="nav">
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Jump Attack">
+      <img src="assets/icon.svg" alt="" width="28" height="28">
+      <span>JUMP <b>ATTACK</b></span>
+    </a>
+    <nav class="links" data-i18n-attr="aria-label:nav.label" aria-label="页面导航">
+      <a href="#questions" data-i18n="nav.questions">三个问题</a>
+      <a href="#modules" data-i18n="nav.modules">功能</a>
+      <a href="#loop" data-i18n="nav.loop">诊断</a>
+      <a href="#open" data-i18n="nav.open">怎么打开</a>
+    </nav>
+    <span class="spacer"></span>
+    <button class="lang" type="button" id="lang" data-i18n-attr="aria-label:nav.lang" aria-label="Switch to English"><span data-lang="zh">中</span> / <span data-lang="en">EN</span></button>
+    <a class="btn sm ghost" href="https://github.com/Sam18069272581/jump-attack" target="_blank" rel="noopener">GitHub</a>
+    <a class="btn sm primary" href="../" data-i18n="nav.app">打开网页版</a>
+  </div>
+</header>
+
+<main id="top">
+  <div class="hero">
+    <div class="wrap">
+      <div>
+        <div class="eyebrow" data-i18n="hero.eyebrow">弹跳训练 · iOS · EXPO GO · 网页版</div>
+        <h1 data-i18n="hero.title">练弹跳，<br>只为<em>扣篮</em>。</h1>
+        <p class="lede" data-i18n="hero.lede">测出离扣篮线还差几厘米，看清缺的是力量还是反应，再按短板排出今天的训练。每次测试后，计划跟着变。</p>
+        <div class="cta">
+          <a class="btn primary" href="../" data-i18n="hero.app">打开网页版 →</a>
+          <a class="btn" href="#open" data-i18n="hero.ways">三种打开方式</a>
+          <a class="btn" href="https://github.com/Sam18069272581/jump-attack" target="_blank" rel="noopener">GitHub<span class="count">★ Star</span></a>
+        </div>
+        <p class="open" data-i18n="hero.note">开源 · 数据先存手机 · 不装统计和追踪</p>
+      </div>
+
+      <div class="tester" data-i18n-attr="aria-label:tester.label" aria-label="摸高器演示：拖动滑块看离扣篮线还差多少">
+        <div class="tester-head">
+          <div>
+            <div class="k" id="gapLabel">离扣篮线还差</div>
+            <div class="gap" id="gap">2.0<small>cm</small></div>
+          </div>
+          <div class="reach-now"><span data-i18n="tester.reach">助跑摸高</span><span class="num" id="reachNum">318</span></div>
+        </div>
+        <div class="rig" id="rig" aria-hidden="true"></div>
+        <div class="slider">
+          <label for="reach" data-i18n="tester.drag">拖一下，换成你的摸高</label>
+          <input id="reach" type="range" min="296" max="328" step="1" value="318">
+          <span class="num" id="reachVal">318</span>
+        </div>
+        <p class="verdict" id="verdict">作者现在就在这里：318 cm，目标 12 月 1 日前扣进第一个篮。</p>
+      </div>
+    </div>
+  </div>
+
+  <hr class="rule">
+
+  <section id="questions">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="q.title">整个 App 只回答<em class="blue">三个</em>问题。</h2>
+        <p data-i18n="q.lede">别的功能都在给这三个问题提供数据。打开就能看到结论，不用自己翻表格算。</p>
+      </div>
+      <div class="phones">
+        <figure class="phone">
+          <img src="assets/home.webp" width="560" height="1209" loading="lazy" data-i18n-attr="alt:q.1.alt" alt="首页：离扣篮线还差 12.0 cm，助跑摸高 308 cm，当前短板是反应块">
+          <figcaption><span class="roman">I</span><h3 data-i18n="q.1.title">离扣篮线差多少</h3><p data-i18n="q.1.body">摸高器直接画出你和 320 的距离，取最好 3 跳均值，带误差。</p></figcaption>
+        </figure>
+        <figure class="phone">
+          <img src="assets/history.webp" width="560" height="1209" loading="lazy" data-i18n-attr="alt:q.2.alt" alt="历史页：摸高曲线和扣篮线 320，下面是力量 1.75 倍、反应 RSI 1.72、速度 1.78 秒三格">
+          <figcaption><span class="roman">II</span><h3 data-i18n="q.2.title">差在哪块</h3><p data-i18n="q.2.body">力量、反应、速度三格对照达标线，超过最小有意义变化才算进步。</p></figcaption>
+        </figure>
+        <figure class="phone">
+          <img src="assets/train.webp" width="560" height="1209" loading="lazy" data-i18n-attr="alt:q.3.alt" alt="训练页：反应块第 2 周，今日准备度和今天的连续跳训练">
+          <figcaption><span class="roman">III</span><h3 data-i18n="q.3.title">今天练什么</h3><p data-i18n="q.3.body">按短板排 4 周训练块，练前测一次 CMJ，状态差就自动减量。</p></figcaption>
+        </figure>
+      </div>
+      <p class="demo-note" data-i18n="q.note">截图为示范球员的数据。</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="modules">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="m.title">八个板块，<em class="blue">一个</em>目标。</h2>
+        <p data-i18n="m.lede">所有测试都汇总进首页的扣篮诊断。能自动的不让你手动选，测不准的指标不进诊断。</p>
+      </div>
+      <div class="mods">
+        <div class="mod"><div class="top"><span class="roman">I</span><span class="en">Dunk</span></div><h3 data-i18n="m.1.title">扣篮诊断</h3><p data-i18n="m.1.body">离扣篮线几厘米、当前短板、预计哪天过线，还能记下每次真实试扣。</p><div class="metric" data-i18n="m.1.metric"><span class="num">320</span>cm 扣篮线，可改</div></div>
+        <div class="mod"><div class="top"><span class="roman">II</span><span class="en">Jumps</span></div><h3 data-i18n="m.2.title">跳跃测试</h3><p data-i18n="m.2.body">CMJ、SJ、跳深、10/5 连跳、助跑摸高。导入慢动作，自动认出起跳和落地帧。</p><div class="metric" data-i18n="m.2.metric"><span class="num">RSI</span>触地、反应力量指数</div></div>
+        <div class="mod"><div class="top"><span class="roman">III</span><span class="en">Speed</span></div><h3 data-i18n="m.3.title">速度</h3><p data-i18n="m.3.body">10 / 30 / 50 / 100 m 冲刺，慢动作逐帧，或光电门、秒表手填，分开比较。</p><div class="metric" data-i18n="m.3.metric"><span class="num">240</span>fps 慢动作</div></div>
+        <div class="mod"><div class="top"><span class="roman">IV</span><span class="en">VBT</span></div><h3 data-i18n="m.4.title">杠铃速度</h3><p data-i18n="m.4.body">录像自动跟踪杠铃片算行程和速度，估算深蹲 1RM，不用买测速设备。</p><div class="metric" data-i18n="m.4.metric"><span class="num">45</span>cm 杠铃片自动跟踪</div></div>
+        <div class="mod"><div class="top"><span class="roman">V</span><span class="en">Recovery</span></div><h3 data-i18n="m.5.title">恢复</h3><p data-i18n="m.5.body">HRV、静息心率、睡眠。用快捷指令从苹果健康导入，或者手填。</p><div class="metric" data-i18n="m.5.metric"><span class="num">4</span>项：HRV、心率、睡眠、呼吸</div></div>
+        <div class="mod"><div class="top"><span class="roman">VI</span><span class="en">Training</span></div><h3 data-i18n="m.6.title">训练</h3><p data-i18n="m.6.body">4 周训练块、今日训练、练后 RPE 和膝盖评分，负荷高了下次自动少跳。</p><div class="metric" data-i18n="m.6.metric"><span class="num">3</span>种训练块</div></div>
+        <div class="mod"><div class="top"><span class="roman">VII</span><span class="en">History</span></div><h3 data-i18n="m.7.title">历史</h3><p data-i18n="m.7.body">摸高曲线为主，其他指标看趋势和逐次记录。记错了能改能删。</p><div class="metric" data-i18n="m.7.metric"><span class="num">MDC</span>最小有意义变化</div></div>
+        <div class="mod"><div class="top"><span class="roman">VIII</span><span class="en">Backup</span></div><h3 data-i18n="m.8.title">备份</h3><p data-i18n="m.8.body">邮箱登录后整库同步到你自己的云端账号，也能导出、导入备份文件。</p><div class="metric" data-i18n="m.8.metric"><span class="num">0</span>个第三方</div></div>
+      </div>
+      <p class="aux" data-i18n="m.aux">首页「辅助」里还有灵活度和体能耐力（Yo-Yo、Cooper、RSA），对弹跳本身贡献小，默认收起。</p>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="loop">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="l.title">缺力量还是缺反应，<em class="blue">一张表</em>说清。</h2>
+        <p data-i18n="l.lede">测试、诊断、计划、训练、记录，做成一个闭环。第 4 周减量并复测，诊断变了就建议换块。</p>
+      </div>
+      <div class="loop-grid">
+        <ol class="steps">
+          <li><span class="n">1</span><div><h3 data-i18n="l.1.title">测试</h3><p data-i18n="l.1.body">测试日向导按 CMJ → 跳深 → 助跑摸高走一遍，相册一次多选视频。</p></div></li>
+          <li><span class="n">2</span><div><h3 data-i18n="l.2.title">诊断</h3><p data-i18n="l.2.body">按诊断规则判断短板，最近两次结论一致才算数。</p></div></li>
+          <li><span class="n">3</span><div><h3 data-i18n="l.3.title">计划</h3><p data-i18n="l.3.body">排 4 周训练块，按目标日倒推，赛前 7–10 天减量。</p></div></li>
+          <li><span class="n">4</span><div><h3 data-i18n="l.4.title">训练</h3><p data-i18n="l.4.body">练前 3 跳 CMJ 看准备度，恢复差那天自动减量。</p></div></li>
+          <li><span class="n">5</span><div><h3 data-i18n="l.5.title">记录</h3><p data-i18n="l.5.body">逐组、逐次记下，练完打 RPE 和膝盖疼痛分。</p></div></li>
+          <li class="back"><span class="n">↺</span><div data-i18n="l.back">回到第 1 步，复测后计划跟着变。</div></li>
+        </ol>
+        <div class="rules">
+          <h3 data-i18n="r.title">诊断规则</h3>
+          <div class="tbl">
+            <table>
+              <thead><tr><th data-i18n="r.h1">先看</th><th data-i18n="r.h2">没过线</th><th data-i18n="r.h3">就练</th></tr></thead>
+              <tbody>
+                <tr><td data-i18n="r.1.check">深蹲 1RM ÷ 体重</td><td><span class="num">&lt; 1.5</span></td><td><span class="tag" data-i18n="r.1.block">力量块</span></td></tr>
+                <tr><td data-i18n="r.2.check">跳深 RSI、触地时间</td><td data-i18n="r.2.line"><span class="num">&lt; 2.0</span> 或 <span class="num">&gt; 250</span> ms</td><td><span class="tag" data-i18n="r.2.block">反应块</span></td></tr>
+                <tr><td data-i18n="r.3.check">两项都过线</td><td>—</td><td><span class="tag" data-i18n="r.3.block">转化块</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="foot" data-i18n="r.foot">跳高按腾空时间 h = g·t²/8 · 力-速度曲线按 Samozino 简易法 · 每个公式在测试里写了算例</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule">
+
+  <section id="open">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="o.title">三种打开方式，<em class="blue">都不用</em> Xcode。</h2>
+        <p data-i18n="o.lede">也不用开发者账号。三种方式各存各的数据，在「我的 → 数据备份与同步」登录同一个邮箱就能互通。</p>
+      </div>
+      <div class="ways">
+        <div class="way rec">
+          <div class="top"><span class="roman" data-i18n="o.1.label">I · 网页版</span><span class="badge" data-i18n="o.1.badge">推荐</span></div>
+          <h3 data-i18n="o.1.title">马上就能用</h3>
+          <p data-i18n="o.1.body">iPhone 用 Safari 打开，点「分享 → 添加到主屏幕」，之后全屏使用。</p>
+          <div class="code"><button class="copy" type="button" data-i18n="o.copy">复制</button><code>sam18069272581.github.io/jump-attack</code></div>
+          <p class="req" data-i18n="o.1.req">微信、QQ 内置浏览器打不开，请用 Safari。</p>
+          <a class="more" href="../" data-i18n="o.1.more">打开网页版 →</a>
+        </div>
+        <div class="way">
+          <div class="top"><span class="roman" data-i18n="o.2.label">II · Expo Go 云端版</span></div>
+          <h3 data-i18n="o.2.title">天天用，不开电脑</h3>
+          <p data-i18n="o.2.body">App Store 装 Expo Go，登录有权限的 Expo 账号，打开这个地址。</p>
+          <div class="code"><button class="copy" type="button" data-i18n="o.copy">复制</button><code>exp://u.expo.dev/589a8a7c-8269-46a9-a6f1-a9fa25be2636?channel-name=main</code></div>
+          <p class="req" data-i18n="o.2.req">Expo Go SDK 58 · 合并进 main 后自动更新</p>
+          <a class="more" href="https://github.com/Sam18069272581/jump-attack#怎么打开" target="_blank" rel="noopener" data-i18n="o.2.more">完整说明 →</a>
+        </div>
+        <div class="way">
+          <div class="top"><span class="roman" data-i18n="o.3.label">III · 电脑启动</span></div>
+          <h3 data-i18n="o.3.title">改代码、看最新分支</h3>
+          <p data-i18n="o.3.body">手机和电脑连同一个 Wi-Fi，用相机扫终端里的二维码。</p>
+          <div class="code"><button class="copy" type="button" data-i18n="o.copy">复制</button><code>git clone https://github.com/Sam18069272581/jump-attack
+cd jump-attack/mobile
+npm install
+npm start</code></div>
+          <p class="req" data-i18n="o.3.req">需要 Node.js LTS · 校园网隔离设备时加 --tunnel</p>
+          <a class="more" href="https://github.com/Sam18069272581/jump-attack/blob/main/mobile/README.md" target="_blank" rel="noopener" data-i18n="o.3.more">开发说明 →</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 data-i18n="b.title">从<em>自己</em>，到<em>队里</em>。</h2>
+        <p data-i18n="b.lede">先给作者自己用，测准了再推广到队里。取舍只有三条：测得准比功能多重要，记录要省事，数据不能丢。</p>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="num">318<small>cm</small></span><span data-i18n="b.1">作者现在的助跑摸高</span></div>
+        <div class="stat"><span class="num">320<small>cm</small></span><span data-i18n="b.2">扣篮线：篮筐 305 + 过筐 15</span></div>
+        <div class="stat"><span class="num" data-i18n="b.3.num">12·01</span><span data-i18n="b.3">目标日：无对抗扣进第一个篮</span></div>
+        <div class="stat"><span class="num">0</span><span data-i18n="b.4">第三方统计和追踪</span></div>
+      </div>
+      <p class="fine" data-i18n="b.fine">健康和训练数据先存在手机上。只有你登录自己的云端账号后，才会整库同步过去。</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <a class="brand" href="#top"><img src="assets/icon.svg" alt="" width="28" height="28"><span>JUMP <b>ATTACK</b></span></a>
+        <p class="about" data-i18n="f.about">测出离扣篮线差多少，找到短板，练回来。</p>
+      </div>
+      <div><h4 data-i18n="f.product">产品</h4><ul><li><a href="../" data-i18n="f.web">网页版</a></li><li><a href="#open" data-i18n="f.expo">Expo Go 云端版</a></li><li><a href="#modules" data-i18n="f.modules">功能</a></li></ul></div>
+      <div><h4 data-i18n="f.docs">文档</h4><ul><li><a href="https://github.com/Sam18069272581/jump-attack/blob/main/docs/system-design.md" target="_blank" rel="noopener" data-i18n="f.design">系统方案</a></li><li><a href="https://github.com/Sam18069272581/jump-attack/blob/main/docs/privacy.md" target="_blank" rel="noopener" data-i18n="f.privacy">隐私说明</a></li><li><a href="https://github.com/Sam18069272581/jump-attack/blob/main/CLAUDE.md" target="_blank" rel="noopener" data-i18n="f.rules">开发规则</a></li></ul></div>
+      <div><h4 data-i18n="f.project">项目</h4><ul><li><a href="https://github.com/Sam18069272581/jump-attack" target="_blank" rel="noopener">GitHub</a></li><li><a href="https://github.com/Sam18069272581/jump-attack/issues" target="_blank" rel="noopener" data-i18n="f.issues">反馈问题</a></li><li><a href="https://github.com/Sam18069272581/jump-attack#readme" target="_blank" rel="noopener">README</a></li></ul></div>
+    </div>
+    <div class="copyline"><span>© 2026 Jump Attack</span><span data-i18n="f.stack">Expo SDK 58 · React Native · 本地 SQLite</span></div>
+  </div>
+</footer>
+
+<script src="i18n.js"></script>
+<script src="main.js"></script>
+</body>
+</html>

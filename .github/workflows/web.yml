@@ -1,4 +1,4 @@
-# Builds the web version on every PR and publishes main to GitHub Pages:
+# Builds the web version (plus the product page in site/, served at /intro/) on every PR and publishes main to GitHub Pages:
 # https://sam18069272581.github.io/jump-attack/
 # One-time setup: repo Settings → Pages → Source: "GitHub Actions".
 name: Web
@@ -6,9 +6,9 @@ name: Web
 on:
   push:
     branches: [main]
-    paths: ['mobile/**', '.github/workflows/web.yml']
+    paths: ['mobile/**', 'site/**', '.github/workflows/web.yml']
   pull_request:
-    paths: ['mobile/**', '.github/workflows/web.yml']
+    paths: ['mobile/**', 'site/**', '.github/workflows/web.yml']
   workflow_dispatch:
 
 permissions:

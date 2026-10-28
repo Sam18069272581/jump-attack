@@ -15,6 +15,11 @@ function finishHtml(html, base) {
   return html.split('%BASE_URL%').join(`${base}/`);
 }
 
+/** The product page lives in ../site as plain HTML and is served next to the app at <base>/intro/. */
+function copySite(siteDir, distDir) {
+  fs.cpSync(siteDir, path.join(distDir, 'intro'), { recursive: true });
+}
+
 function main(argv) {
   const at = argv.indexOf('--base');
   const base = normalizeBase(at >= 0 ? argv[at + 1] : process.env.BASE_URL);
@@ -41,9 +46,10 @@ function main(argv) {
   fs.writeFileSync(path.join(root, 'dist', '404.html'), html);
   // Without this GitHub Pages runs Jekyll, which drops folders starting with "_" such as _expo/.
   fs.writeFileSync(path.join(root, 'dist', '.nojekyll'), '');
+  copySite(path.resolve(root, '..', 'site'), path.join(root, 'dist'));
   console.log(`Web build ready in dist/ (base path "${base || '/'}").`);
 }
 
 if (require.main === module) main(process.argv.slice(2));
 
-module.exports = { finishHtml, normalizeBase };
+module.exports = { copySite, finishHtml, normalizeBase };

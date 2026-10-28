@@ -3,6 +3,7 @@
 <img src="docs/assets/banner.png" alt="Jump Attack · 弹跳训练：测出离扣篮线差多少，找到短板，练回来" width="880">
 
 <p>
+<a href="https://sam18069272581.github.io/jump-attack/intro/"><img src="https://img.shields.io/badge/产品介绍-中文_%7C_English-D9541E?style=flat-square&labelColor=17130E" alt="产品介绍"></a>
 <a href="https://sam18069272581.github.io/jump-attack/"><img src="https://img.shields.io/badge/网页版-直接打开-2340C8?style=flat-square&labelColor=17130E" alt="网页版"></a>
 <img src="https://img.shields.io/badge/Expo_SDK-58-2340C8?style=flat-square&labelColor=17130E" alt="Expo SDK 58">
 <img src="https://img.shields.io/badge/React_Native-0.88-2340C8?style=flat-square&labelColor=17130E" alt="React Native 0.88">
@@ -119,6 +120,7 @@ jump-attack/
 │   │   └── state/ theme/   全局状态和「纸面球场」配色
 │   ├── supabase/           云端建表 SQL
 │   └── scripts/            网页版打包
+├── site/                   产品介绍页（纯 HTML，发布到网页版的 /intro/）
 ├── .github/workflows/      合并进 main 后自动发布网页版和云端版
 ├── design/                 UI 设计稿源文件和图标
 └── docs/                   系统方案、隐私说明、README 图片
@@ -146,6 +148,7 @@ npm test && npm run typecheck && npm run lint  # 提交前全部要过
 
 ## 文档
 
+- [产品介绍页](https://sam18069272581.github.io/jump-attack/intro/)：中英双语，源码在 [site/](site/)
 - [系统方案](docs/system-design.md)：闭环设计、数据模型、开源选型
 - [UI 设计稿](https://claude.ai/artifact/TdA5bEMuYhctBQhrrQeKv9)：源文件在 [design/](design/)
 - [隐私说明](docs/privacy.md)
