@@ -15,8 +15,9 @@ const IN_EXPO_GO = new Set([
   'react-native-screens',
   'react-native-svg',
   'react-native-webview',
-  // JavaScript only, for the web version: nothing native to load.
-  'react-native-web',
+  // JavaScript only: nothing native to load.
+  'react-native-web', // the web version
+  '@supabase/supabase-js', // cloud backup
 ]);
 
 const inExpoGo = (name: string) => IN_EXPO_GO.has(name) || name === 'expo' || name.startsWith('expo-') || name.startsWith('@expo/') || name.startsWith('@expo-google-fonts/');

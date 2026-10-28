@@ -10,6 +10,7 @@ import { ErrorScreen } from '@/components/ErrorScreen';
 import { KeyboardDoneBar } from '@/components/KeyboardDoneBar';
 import { migrate } from '@/db/migrations';
 import { AthleteProvider } from '@/state/athlete';
+import { SyncProvider } from '@/state/sync';
 import { colors } from '@/theme';
 import { setupWeb, webDatabaseBlocked } from '@/web/setup';
 
@@ -38,7 +39,8 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={theme}>
       <SQLiteProvider databaseName="jump-attack.db" onInit={migrate}>
-        <AthleteProvider>
+        {/* SyncProvider remounts everything below after a restore, so every screen reads the new data. */}
+        <SyncProvider><AthleteProvider>
           <StatusBar style="light" />
           <Stack
             screenOptions={{
@@ -74,9 +76,10 @@ export default function RootLayout() {
             <Stack.Screen name="plan/index" options={{ title: '训练计划' }} />
             <Stack.Screen name="plan/new" options={{ title: '选择训练计划' }} />
             <Stack.Screen name="workout/[date]" options={{ title: '' }} />
+            <Stack.Screen name="backup" options={{ title: '数据备份与同步' }} />
           </Stack>
           <KeyboardDoneBar />
-        </AthleteProvider>
+        </AthleteProvider></SyncProvider>
       </SQLiteProvider>
     </ThemeProvider>
   );
