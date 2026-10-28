@@ -10,7 +10,9 @@ import { Icon } from '@/components/Icon';
 import { PressScale, Rise } from '@/components/motion';
 import { ReachHero } from '@/components/ReachHero';
 import { loadDiagnosis } from '@/db/dunk';
-import { dayState, type DayState, type DunkDiagnosis } from '@/domain/dunk';
+import { listDunkAttempts } from '@/db/dunkAttempts';
+import { dayState, RIM_CM, type DayState, type DunkDiagnosis } from '@/domain/dunk';
+import { attemptSummary, BALL_NAME, type AttemptSummary } from '@/domain/dunkAttempts';
 import { CATEGORIES, SUPPORT_CATEGORIES, type CategoryDef } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { loadReadiness, todayISO } from '@/state/training';
@@ -20,7 +22,7 @@ import { colors, radius, text } from '@/theme';
 export default function Home() {
   const db = useSQLiteContext();
   const { current } = useAthlete();
-  const [goal, setGoal] = useState<{ diagnosis: DunkDiagnosis; state: DayState } | null>(null);
+  const [goal, setGoal] = useState<{ diagnosis: DunkDiagnosis; state: DayState; attempts: AttemptSummary | null } | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
   const main = CATEGORIES.filter((c) => !SUPPORT_CATEGORIES.includes(c.key));
   const support = CATEGORIES.filter((c) => SUPPORT_CATEGORIES.includes(c.key));
@@ -28,8 +30,13 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       if (!current) return;
-      Promise.all([loadDiagnosis(db, current), loadReadiness(db, current.id, todayISO())]).then(([diagnosis, readiness]) =>
-        setGoal({ diagnosis, state: dayState(readiness) }),
+      Promise.all([loadDiagnosis(db, current), loadReadiness(db, current.id, todayISO()), listDunkAttempts(db, current.id)]).then(([diagnosis, readiness, attempts]) =>
+        setGoal({
+          diagnosis,
+          state: dayState(readiness),
+          // The goal setup first; practice at a lower rim or with a smaller ball when that is all there is.
+          attempts: attemptSummary(attempts, { rimCm: current.rim_height_cm ?? RIM_CM, ball: 'basketball' }) ?? attemptSummary(attempts),
+        }),
       );
     }, [db, current]),
   );
@@ -42,6 +49,9 @@ export default function Home() {
             <ReachHero diagnosis={goal.diagnosis} standingReach={current?.standing_reach_cm ?? null} name={current?.name ?? ''} onSwitchAthlete={() => router.push('/me')} />
             <Rise index={1}>
               <DunkSummary diagnosis={goal.diagnosis} />
+            </Rise>
+            <Rise index={2}>
+              <AttemptsRow summary={goal.attempts} />
             </Rise>
           </View>
         )}
@@ -67,6 +77,24 @@ export default function Home() {
         </Rise>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/** The real result: recent dunk attempts, and the way into logging them. */
+function AttemptsRow({ summary: s }: { summary: AttemptSummary | null }) {
+  return (
+    <PressScale accessibilityLabel="扣篮尝试" style={styles.module} onPress={() => router.push('/attempts')}>
+      <View style={[styles.tile, { backgroundColor: colors.surfaceRaised }]}>
+        <Icon name="jump" size={22} color={colors.rim} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.moduleTitle}>扣篮尝试</Text>
+        <Text style={styles.moduleSub} numberOfLines={1}>
+          {s ? `${s.rimCm} cm ${BALL_NAME[s.ball]}：最近 ${s.total} 次扣进 ${s.made} 次` : '去篮下试扣，每试一次点一下'}
+        </Text>
+      </View>
+      <Icon name="chevronRight" size={18} color={colors.textMuted} />
+    </PressScale>
   );
 }
 
