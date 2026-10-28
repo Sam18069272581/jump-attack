@@ -15,7 +15,13 @@ const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), dismi
 const mockWeb: { props: Record<string, any> | null; inject: jest.Mock } = { props: null, inject: jest.fn() };
 const scene = defaultScene('cmj', { shadow: 0.4 });
 const mockClip = { frames: Math.floor(scene.durationS * scene.fps), fps: scene.fps };
+const mockRuntime = { isWeb: false };
 
+jest.mock('@/media/runtime', () => ({
+  get isWeb() {
+    return mockRuntime.isWeb;
+  },
+}));
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
 jest.mock('@/state/athlete', () => ({ useAthlete: () => ({ current: { id: 1, name: '我自己' } }) }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn() }));
@@ -122,4 +128,16 @@ it('says so when the clip cannot be read, and leaves marking to the athlete', as
   await post({ type: 'error', message: '视频打不开' });
   expect(texts(r.root)).toContain('读不到视频画面，请手动标');
   expect(texts(r.root)).toContain('未设');
+});
+
+it('leaves marking to the athlete in the web version, which has no frame reader', async () => {
+  mockRuntime.isWeb = true;
+  mockWeb.props = null;
+  await act(async () => {
+    r = create(<Mark />);
+  });
+  await act(async () => {});
+  expect(texts(r.root)).not.toContain('正在自动找起跳和落地');
+  expect(mockWeb.props).toBeNull();
+  mockRuntime.isWeb = false;
 });

@@ -34,6 +34,7 @@ const N = Number(opt('--n', 24));
 const REAL = opt('--real', null);
 const OUT = path.resolve(opt('--out', fs.mkdtempSync(path.join(os.tmpdir(), 'jump-detect-'))));
 const SEED = Number(opt('--seed', 1));
+const SCALE = Number(opt('--scale', 1));
 
 function compile() {
   const build = path.join(OUT, 'build');
@@ -75,14 +76,23 @@ function scenarios(S, n) {
       ...(r() < 0.25 ? { courtLineMm: 20 + 40 * r() } : {}),
       ...(kind === 'drop' ? { contactS: 0.17 + 0.12 * r(), boxMm: pick([300, 400]) } : {}),
     };
-    // Real slow-motion files are 1080 wide; a 540-wide render keeps the athlete about as many pixels tall as the
-    // detector's fine pass uses, at a quarter of the rendering time.
-    const big = { width: kind === 'approach' ? 720 : 540, height: kind === 'approach' ? 540 : 960 };
+    // At the default size the athlete is about 600 px tall, roughly what the detector's fine pass reads from a real
+    // 1080 x 1920 slow-motion file; --scale renders bigger (and slower).
     const base = S.defaultScene(kind === 'single' ? 'cmj' : kind, over);
-    const k = big.width / base.width;
-    out.push({ name: `${String(i + 1).padStart(2, '0')}-${kind}`, kind, o: { ...base, ...big, mmPerPx: base.mmPerPx / k, floorRow: Math.round(base.floorRow * k), durationS: base.durationS + (kind === 'drop' ? 0.2 : 0) } });
+    const big = { width: Math.round(base.width * SCALE), height: Math.round(base.height * SCALE) };
+    out.push({ name: `${String(i + 1).padStart(2, '0')}-${kind}`, kind, o: { ...base, ...big, mmPerPx: base.mmPerPx / SCALE, floorRow: Math.round(base.floorRow * SCALE), durationS: base.durationS + (kind === 'drop' ? 0.2 : 0) } });
   }
   return out;
+}
+
+/** Renders and encodes one clip in a worker thread, so all cores render. */
+function encodeInWorker(scenePath, o, file) {
+  const { Worker } = require('worker_threads');
+  return new Promise((resolve, reject) => {
+    const w = new Worker(__filename, { workerData: { scenePath, o, file } });
+    w.on('message', resolve);
+    w.on('error', reject);
+  });
 }
 
 function encode(S, o, file) {
@@ -200,13 +210,14 @@ async function main() {
   } else {
     const list = scenarios(S, N);
     let done = 0;
-    // Four renders at a time; each is a few hundred frames.
+    // One render per core; each clip is a few hundred frames.
+    const cores = os.cpus().length;
     await Promise.all(
-      [0, 1, 2, 3].map(async (w) => {
-        for (let i = w; i < list.length; i += 4) {
+      [...Array(cores).keys()].map(async (w) => {
+        for (let i = w; i < list.length; i += cores) {
           const c = list[i];
           const video = `${c.name}.mp4`;
-          const frames = await encode(S, c.o, path.join(OUT, video));
+          const frames = await encodeInWorker(path.join(OUT, 'build/domain/testing/jumpScene.js'), c.o, path.join(OUT, video));
           cases[i] = { name: c.name, kind: c.kind === 'drop' ? 'drop' : 'jump', scene: c.kind, video, frames, fileFps: c.o.fps, captureFps: c.o.fps, truth: S.sceneTruth(c.o), o: c.o };
           process.stdout.write(`\rrendered ${++done}/${list.length}`);
         }
@@ -288,7 +299,12 @@ async function main() {
   console.log(`\n${md}\n\n${OUT}`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+const { isMainThread, parentPort, workerData } = require('worker_threads');
+if (isMainThread) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+} else {
+  encode(require(workerData.scenePath), workerData.o, workerData.file).then((frames) => parentPort.postMessage(frames));
+}

@@ -18,6 +18,7 @@ import { markedTrial, markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { calibrationProblem } from '@/domain/touch';
 import { probeFrameRate } from '@/media/frameRate';
+import { isWeb } from '@/media/runtime';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -157,7 +158,8 @@ export default function Mark() {
           </View>
         </View>
 
-        {def && (def.capture.includes('flight') || def.capture.includes('contact')) && total > 0 && (
+        {/* The web version has no WebView to read frames with. */}
+        {!isWeb && def && (def.capture.includes('flight') || def.capture.includes('contact')) && total > 0 && (
           <AutoMarker
             key={`${params.uri}@${fps}`}
             uri={params.uri}
