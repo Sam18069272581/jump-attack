@@ -35,6 +35,11 @@ export type SetupFrame = {
   lumas: number[];
   /** Mean brightness of the whole picture. */
   luma: number;
+  /**
+   * How many people the latest search of the whole picture found, when `poses` holds only the people read around the
+   * athlete (the camera page searches the whole picture now and then, and follows the athlete in between).
+   */
+  crowd?: number;
 };
 
 export type SetupCheckKey = 'phone' | 'steady' | 'person' | 'whole' | 'size' | 'room' | 'light' | 'clear' | 'side';
@@ -231,7 +236,7 @@ function pictureChecks(frames: SetupFrame[]): { checks: SetupCheck[]; athlete: S
   const floor = med((m) => m.floor);
   const checks: SetupCheck[] = [];
 
-  const crowd = max(...recent.map((f) => f.poses.length));
+  const crowd = latest.crowd ?? max(...recent.map((f) => f.poses.length));
   checks.push(
     crowd > 1
       ? { key: 'person', state: 'warn', hint: `画面里有 ${crowd} 个人：最好只留运动员，分析时也可以点一下运动员` }

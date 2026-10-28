@@ -117,6 +117,13 @@ describe('checkSetup', () => {
       expect(r.main?.key).toBe('person');
     });
 
+    it('counts the people the camera page last found across the whole picture, when it reads only around the athlete', () => {
+      expect(stateOf(checkSetup(frames(GOOD, { crowd: 2 }), gravity()), 'person')).toMatchObject({ state: 'warn', hint: expect.stringContaining('2 个人') });
+      // Its count is the latest: whoever has left since isn't counted.
+      const left = frames(GOOD).map((x, i) => ({ ...x, crowd: i < 3 ? 2 : 1 }));
+      expect(stateOf(checkSetup(left, gravity()), 'person').state).toBe('ok');
+    });
+
     it('one frame without anyone doesn’t undo a second of frames with them', () => {
       const f = frames(GOOD);
       f[f.length - 1] = { ...f[f.length - 1], poses: [], lumas: [] };
