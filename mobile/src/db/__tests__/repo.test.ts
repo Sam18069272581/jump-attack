@@ -1,7 +1,7 @@
 import { LATEST_VERSION, migrate } from '../migrations';
 import { getMetric } from '@/domain/metrics';
 
-import { addTrial, clearSavedVideoUris, deleteTrial, ensureSession, listAthletes, listMetricResults, listSessionResults, listSessionValues, listTrials, saveSession, sessionCounts } from '../repo';
+import { addTrial, clearSavedVideoUris, deleteTrial, ensureSession, listAthletes, listMetricResults, listSessionResults, listSessionValues, listTrials, saveSession, sessionCounts, sessionTimings } from '../repo';
 import { openMemoryDb } from '../testing/memoryDb';
 
 async function setup() {
@@ -69,6 +69,22 @@ describe('sessions and trials', () => {
     expect(r.trials).toBe(3);
     expect(await listSessionValues(db, 1, 'rsa')).toEqual({ r1: [7.0, 7.2, 7.4] });
     expect(await listSessionValues(db, 1, 'cmj')).toEqual({});
+  });
+});
+
+describe('sprint timing', () => {
+  it('reads how each session was timed from its first attempt', async () => {
+    const db = await setup();
+    await ensureSession(db, 'v', 1, 'sprint_10');
+    await addTrial(db, { ...trial('v', 1.82), detail: { source: 'video', asset_id: 'x' } });
+    await ensureSession(db, 'g', 1, 'sprint_10');
+    await addTrial(db, { session_id: 'g', value: 1.75, detail: { source: 'manual', timing: 'gates' } });
+    await ensureSession(db, 'old', 1, 'sprint_10');
+    await addTrial(db, trial('old', 1.9));
+    await ensureSession(db, 'other', 1, 'sprint_20');
+    await addTrial(db, { session_id: 'other', value: 3.1, detail: { source: 'manual', timing: 'stopwatch' } });
+
+    expect(await sessionTimings(db, 1, 'sprint_10')).toEqual({ v: 'video', g: 'gates', old: 'video' });
   });
 });
 

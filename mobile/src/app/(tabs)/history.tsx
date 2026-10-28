@@ -9,15 +9,16 @@ import { Icon } from '@/components/Icon';
 import { TouchChart } from '@/components/TouchChart';
 import { Empty } from '@/components/ui';
 import { loadDiagnosis } from '@/db/dunk';
-import { listMetricResults, sessionCounts, type SessionResult } from '@/db/repo';
+import { listMetricResults, sessionCounts, sessionTimings, type SessionResult } from '@/db/repo';
 import { touchOffsetFor } from '@/db/touch';
 import { MISSING_TEXT, type DunkDiagnosis } from '@/domain/dunk';
 import { standingTouches } from '@/domain/dunkSummary';
 import { APPROACH_TOUCH, CATEGORIES, METRICS, formatValue, getMetric, metricColor, resultNote, type MetricDef } from '@/domain/metrics';
+import type { Timing } from '@/domain/timing';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
-type Row = { def: MetricDef; color: string; results: SessionResult[] };
+type Row = { def: MetricDef; color: string; results: SessionResult[]; timings?: Record<string, Timing> };
 
 /** The sprint the speed tile shows: the shortest distance tested, closest to a run-up. */
 const SPRINT_ORDER = ['sprint_10', 'sprint_30'];
@@ -41,7 +42,16 @@ export default function History() {
           .map(getMetric)
           .filter((m): m is MetricDef => m != null);
         const defs = [...known, ...extra];
-        setRows(await Promise.all(defs.map(async (m) => ({ def: m, color: metricColor(m), results: await listMetricResults(db, current.id, m) }))));
+        setRows(
+          await Promise.all(
+            defs.map(async (m) => ({
+              def: m,
+              color: metricColor(m),
+              results: await listMetricResults(db, current.id, m),
+              ...(m.category === 'speed' ? { timings: await sessionTimings(db, current.id, m.code) } : {}),
+            })),
+          ),
+        );
         setDiagnosis(await loadDiagnosis(db, current));
         setOffset(await touchOffsetFor(db, current.id));
       })();

@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { best, getMetric, type MetricDef } from '@/domain/metrics';
+import { timingOf, type Timing } from '@/domain/timing';
 
 export type Athlete = {
   id: number;
@@ -163,6 +164,20 @@ export async function listSessionValues(db: SQLiteDatabase, athleteId: number, m
   );
   const out: Record<string, number[]> = {};
   for (const r of rows) (out[r.session_id] ??= []).push(r.value);
+  return out;
+}
+
+/** How each session of a metric was timed (domain/timing.ts), read from its first attempt. */
+export async function sessionTimings(db: SQLiteDatabase, athleteId: number, metricCode: string): Promise<Record<string, Timing>> {
+  const rows = await db.getAllAsync<{ session_id: string; detail: string | null }>(
+    `SELECT t.session_id, t.detail FROM trial t JOIN test_session s ON s.id = t.session_id
+     WHERE s.athlete_id = ? AND s.metric_code = ?
+     ORDER BY t.id`,
+    athleteId,
+    metricCode,
+  );
+  const out: Record<string, Timing> = {};
+  for (const r of rows) out[r.session_id] ??= timingOf(r.detail ? JSON.parse(r.detail) : null);
   return out;
 }
 

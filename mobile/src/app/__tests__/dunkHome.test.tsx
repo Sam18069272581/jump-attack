@@ -159,3 +159,16 @@ describe('after a wall-reading calibration', () => {
     expect(r.root.findByType(TouchChart).props.standing.map((p: { value: number }) => p.value)).toEqual([293, 295]);
   });
 });
+
+describe('a sprint timed another way', () => {
+  it('shows the new time on the speed tile without a change against the filmed ones', async () => {
+    await ensureSession(mockDb, 'sp-hand', 1, 'sprint_10');
+    await mockDb.runAsync('UPDATE test_session SET started_at = ? WHERE id = ?', '2026-09-25T11:00:00.000Z', 'sp-hand');
+    await addTrial(mockDb, { session_id: 'sp-hand', value: 1.6, detail: { source: 'manual', timing: 'stopwatch' } });
+
+    const t = texts((await render(<History />)).root);
+    expect(t).toContain('1.60 s');
+    expect(t).not.toContain('10 m 冲刺 · −0.18 s');
+    expect(t).toContain('10 m 冲刺 · 秒表计时');
+  });
+});

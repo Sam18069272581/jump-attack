@@ -4,7 +4,7 @@ import { Alert, Text, TextInput, type AlertButton } from 'react-native';
 
 import { saveRecoveryDay } from '@/db/recovery';
 import { migrate } from '@/db/migrations';
-import { listSessionResults } from '@/db/repo';
+import { addTrial, ensureSession, listSessionResults, listTrials } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { getActivePlan, startPlan } from '@/db/training';
 import { addVbtSet } from '@/db/vbt';
@@ -12,6 +12,7 @@ import { addDays, toISODate } from '@/domain/dates';
 
 import Home from '../(tabs)/index';
 import Train from '../(tabs)/train';
+import MetricHistory from '../history/[metric]';
 import ManualEntry from '../measure/entry';
 import Result from '../measure/result';
 import MobilityEntry from '../mobility/[test]';
@@ -149,6 +150,31 @@ describe('speed', () => {
     expect(texts(result.root)).toContain('含手动输入的成绩');
     await press(result.root, '完成');
     expect(mockRouter.dismissTo).toHaveBeenCalledWith('/speed');
+  });
+
+  it('asks how a typed time was taken, and compares it only with times taken the same way', async () => {
+    for (const [session, at, value] of [['sp-v1', '2026-10-01T10:00:00.000Z', 1.82], ['sp-v2', '2026-10-08T10:00:00.000Z', 1.8]] as const) {
+      await ensureSession(mockDb, session, 1, 'sprint_10');
+      await mockDb.runAsync('UPDATE test_session SET started_at = ? WHERE id = ?', at, session);
+      await addTrial(mockDb, { session_id: session, value, fps: 240, detail: { source: 'video' } });
+    }
+    mockParams = { metric: 'sprint_10', session: 'sp-hand' };
+    const entry = await render(<ManualEntry />);
+    expect(texts(entry.root)).toContain('怎么计时的');
+    await press(entry.root, '秒表');
+    await type(entry.root, '10 m 冲刺（s）', '1.62');
+    await press(entry.root, '保存这一次');
+    expect((await listTrials(mockDb, 'sp-hand'))[0].detail).toEqual({ source: 'manual', timing: 'stopwatch' });
+
+    mockParams = { metric: 'sprint_10' };
+    const history = await render(<MetricHistory />);
+    const t = texts(history.root);
+    // 1.62 by hand after 1.80 on video is a method change, not a 0.18 s gain: no change shown for it.
+    expect(t).not.toContain('−0.18');
+    expect(t).not.toContain('首次以来');
+    expect(t).toContain('秒表计时，只和秒表计时的成绩比较');
+    // The two filmed sprints still compare with each other.
+    expect(t).toContain('−0.02');
   });
 
   it('rejects an impossible time', async () => {
