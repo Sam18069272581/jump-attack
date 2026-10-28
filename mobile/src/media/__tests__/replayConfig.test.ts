@@ -34,7 +34,8 @@ describe('replayConfig', () => {
   it('labels each jump with its height and the set with its best', () => {
     expect(c.jumps[0]).toMatchObject({ label: '37.1 cm', detail: '滞空 550 ms', counted: true });
     expect(c.headline).toEqual({ label: '最高', value: '37.1', unit: 'cm' });
-    expect(c.note).toBe('每个关键帧 ±1 帧：跳高 ±0.6 cm');
+    // √2 × 0.56 cm: one frame on each of the two marks (see jumpAnalysis).
+    expect(c.note).toBe('每个关键帧 ±1 帧：跳高 ±0.8 cm');
     expect(c.brand).toBe('JUMP ATTACK');
   });
 

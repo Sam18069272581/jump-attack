@@ -13,7 +13,7 @@ import Analyse from '../measure/analyse';
 
 const mockDb = openMemoryDb();
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), dismiss: jest.fn() };
-const mockWeb: { props: Record<string, any> | null; inject: jest.Mock } = { props: null, inject: jest.fn() };
+const mockWeb: { props: Record<string, any> | null; inject: jest.Mock; reload: jest.Mock } = { props: null, inject: jest.fn(), reload: jest.fn() };
 const mockState: { scene: SceneOptions; params: Record<string, string> } = { scene: defaultScene('cmj'), params: {} };
 
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
@@ -50,7 +50,7 @@ jest.mock('react-native-webview', () => {
   const { View } = jest.requireActual('react-native');
   const WebView = React.forwardRef((props: Record<string, any>, ref: unknown) => {
     mockWeb.props = props;
-    React.useImperativeHandle(ref, () => ({ injectJavaScript: mockWeb.inject }));
+    React.useImperativeHandle(ref, () => ({ injectJavaScript: mockWeb.inject, reload: mockWeb.reload }));
     return <View />;
   });
   WebView.displayName = 'WebView';
@@ -122,7 +122,13 @@ it('analyses a 10/5 set: every rebound, its contact, and one saved trial with th
   expect(shown).toContain(`认出 ${truth.length} 跳，计入 ${truth.length} 跳`);
   expect(shown).toContain('10/5 RSI');
   expect(shown).toContain('GCT-CV');
-  expect(shown).toMatch(/误差：每个关键帧 ±1 帧（4 ms）/);
+  expect(shown).toMatch(/误差：每个关键帧 ±1 帧（4 ms），跳高约 ±\d\.\d cm，触地 ±\d+ ms/);
+
+  // iOS ends the hidden page while the results are on screen (memory, or the app in the background): the results stay,
+  // and the page is loaded again for the next clip.
+  await act(async () => mockWeb.props!.onContentProcessDidTerminate());
+  expect(texts(r.root)).toContain(`认出 ${truth.length} 跳，计入 ${truth.length} 跳`);
+  expect(mockWeb.reload).toHaveBeenCalled();
 
   await press(r.root, '保存这一组');
   const [t] = await listTrials(mockDb, 'rj-1');
@@ -131,6 +137,18 @@ it('analyses a 10/5 set: every rebound, its contact, and one saved trial with th
   expect(Math.abs(t.value - exact)).toBeLessThan(0.08);
   expect(t.detail).toMatchObject({ source: 'video', auto: true });
   expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/measure/result', params: { metric: 'rj_rsi', session: 'rj-1' } });
+});
+
+it('scores no 10/5 from a set cut short, and says why nothing can be saved', async () => {
+  const full = defaultScene('repeat', { shadow: 0.4 });
+  const scene = { ...full, hops: full.hops!.slice(0, 2), durationS: 3 };
+  await open(scene, { metric: 'rj_rsi', session: 'rj-2' });
+  await press(r.root, '开始分析');
+  await answerGrabs();
+  const shown = texts(r.root);
+  expect(shown).toContain('认出 3 跳');
+  expect(shown).toContain('计入的反弹只有 2 次，10/5 RSI 要至少 5 次');
+  expect(shown).toContain('没有能保存的跳');
 });
 
 it('follows the athlete tapped when someone else moves more, and lets a key frame be nudged before saving', async () => {
@@ -174,4 +192,9 @@ it('says why nothing was found and what to change', async () => {
   expect(shown).toContain('选中的片段里没认出跳跃');
   expect(shown).toContain('建议：');
   expect(shown).toContain('手动逐帧标');
+
+  // Marking by hand takes this screen's place, so the marking screen goes back to wherever it would from the import.
+  await press(r.root, '手动逐帧标');
+  expect(mockRouter.push).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/measure/mark' }));
+  expect(mockRouter.replace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/measure/mark' }));
 });

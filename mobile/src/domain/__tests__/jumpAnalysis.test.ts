@@ -19,10 +19,10 @@ describe('analyseJumps: one jump', () => {
     expect(r.summary.gctCv).toBeUndefined();
   });
 
-  it('gives the error one frame on the flight makes: dJH = g·FT/4 · 1/fps', () => {
-    // 9.81 × 0.55 / 4 / 240 = 0.00562 m.
-    expect(r.jumps[0].error.jhCm).toBeCloseTo(0.562, 3);
-    expect(r.jumps[0].error.ftS).toBeCloseTo(1 / 240, 9);
+  it('gives the error ±1 frame on each of the two marks makes, the marks independent: √2 · g·FT/4 · 1/fps', () => {
+    // One frame on one mark: 9.81 × 0.55 / 4 / 240 = 0.00562 m. Two marks in quadrature: × √2 = 0.00795 m.
+    expect(r.jumps[0].error.jhCm).toBeCloseTo(0.795, 3);
+    expect(r.jumps[0].error.ftS).toBeCloseTo(Math.SQRT2 / 240, 9);
   });
 
   it('summarises the counted jumps', () => {
@@ -47,9 +47,20 @@ describe('analyseJumps: a drop jump', () => {
     expect(j.dri).toBeCloseTo(1.245, 3);
   });
 
-  it('propagates one frame on each interval into RSI: relative errors add in quadrature', () => {
-    const rel = Math.hypot(j.error.jhCm / j.jhCm, 1 / 240 / j.gctS!);
-    expect(j.error.rsi! / j.rsi!).toBeCloseTo(rel, 9);
+  it('propagates ±1 frame on each of the three marks into RSI; take-off moves JH and GCT the same way', () => {
+    // Per frame (1/240 s): dJH = g·FT/4 · dt = 0.004428 m, RSI/GCT · dt = 5.305 / 240 = 0.02211.
+    // Landing: +dJH/GCT = 0.02125. Touch-down: +0.02211. Take-off: −0.02125 − 0.02211 = −0.04336 (both shrink RSI).
+    // In quadrature: √(0.02125² + 0.02211² + 0.04336²) = 0.0531.
+    expect(j.error.rsi).toBeCloseTo(0.0531, 3);
+    expect(j.error.gctS).toBeCloseTo(Math.SQRT2 / 240, 9);
+  });
+
+  it('is what moving the marks one frame each actually does to RSI, to within its own size', () => {
+    const at = (m: JumpEvents) => analyseJumps([m], { kind: 'drop', captureFps: 240, boxCm: 30 }).jumps[0].rsi!;
+    const worst = at({ touchdown: 101, takeoff: 149, landing: 255 }) - j.rsi!;
+    // All three marks off by one frame in the worst direction: about √3 × the stated error, never far beyond it.
+    expect(worst).toBeGreaterThan(j.error.rsi!);
+    expect(worst).toBeLessThan(2 * j.error.rsi!);
   });
 
   it('has no DRI without a box height', () => {
@@ -100,6 +111,11 @@ describe('analyseJumps: repeated jumps', () => {
     expect(s.jumps[1].rsi).toBeCloseTo(Math.max(...rsis), 9);
   });
 
+  it('scores no 10/5 from fewer than five counted rebounds: the best of fewer is not the same test', () => {
+    expect(r.summary.rsi).toBeDefined();
+    expect(r.summary.rsi105).toBeUndefined();
+  });
+
   it('flags a rebound slower than 250 ms as not a fast stretch-shortening cycle, but still counts it', () => {
     expect(SLOW_CONTACT_S).toBe(0.25);
     const slow = analyseJumps(
@@ -122,6 +138,18 @@ describe('analyseJumps: repeated jumps', () => {
       { kind: 'jump', captureFps: 240 },
     );
     expect(apart.jumps[1].gctS).toBeUndefined();
+  });
+
+  it('gives a CMJ clip no contact, even when the next jump follows within a second: only rebounds have one', () => {
+    const twoCmj = analyseJumps(
+      [
+        { takeoff: 100, landing: 200 },
+        { takeoff: 400, landing: 500 },
+      ],
+      { kind: 'jump', captureFps: 240 },
+    );
+    expect(twoCmj.jumps[1].gctS).toBeUndefined();
+    expect(twoCmj.jumps[1].flags).not.toContain('slow-contact');
   });
 });
 

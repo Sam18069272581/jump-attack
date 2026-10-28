@@ -23,6 +23,7 @@ type Msg =
   | { type: 'ready' }
   | { type: 'progress'; done: number; total: number }
   | { type: 'file'; mime: string; part: number; parts: number; data: string }
+  | { type: 'cancelled' }
   | { type: 'unsupported' }
   | { type: 'error'; message: string };
 
@@ -37,7 +38,10 @@ export default function Replay() {
   const web = useRef<Web>(null);
   const file = useRef<File | null>(null);
   const [stage, setStage] = useState<{ page: string; dir: string } | null>(null);
-  const [state, setState] = useState<{ name: 'loading' | 'ready' | 'sharing' } | { name: 'exporting'; done: number; total: number } | { name: 'problem'; text: string }>({ name: 'loading' });
+  // A problem that `retry` allows: the export can be tried again (the page itself still works).
+  const [state, setState] = useState<{ name: 'loading' | 'ready' | 'sharing' } | { name: 'exporting'; done: number; total: number } | { name: 'problem'; text: string; retry?: boolean }>({
+    name: 'loading',
+  });
 
   const config = useMemo(() => {
     if (!def || !kind) return null;
@@ -78,6 +82,29 @@ export default function Replay() {
 
   const call = (js: string) => web.current?.injectJavaScript(`${js}; true;`);
 
+  function startExport() {
+    setState({ name: 'exporting', done: 0, total: 1 });
+    call('window.replay.exportVideo()');
+  }
+
+  /** Drops a video written in part, or already shared: each export is a new file, and the cache is no place to keep them. */
+  function dropFile() {
+    try {
+      file.current?.delete();
+    } catch {
+      // Already gone.
+    }
+    file.current = null;
+  }
+
+  /** iOS ended the page (memory, or the app in the background): load it again, and say what happened to an export. */
+  function died() {
+    const exporting = state.name === 'exporting';
+    dropFile();
+    setState(exporting ? { name: 'problem', text: '导出中断：手机把回放页面关掉了，页面重新加载后可以再导出一次。', retry: true } : { name: 'loading' });
+    web.current?.reload();
+  }
+
   async function onMessage(e: WebViewMessageEvent) {
     let m: Msg;
     try {
@@ -90,26 +117,37 @@ export default function Replay() {
       return call('window.replay.play()');
     }
     if (m.type === 'progress') return setState({ name: 'exporting', done: m.done, total: m.total });
+    if (m.type === 'cancelled') return setState({ name: 'ready' });
     if (m.type === 'unsupported') return setState({ name: 'problem', text: '这台手机的系统录不了这个画面。可以点「再放一次」，用系统录屏录下来。' });
-    if (m.type === 'error') return setState({ name: 'problem', text: `出错了：${m.message}` });
+    if (m.type === 'error') return setState({ name: 'problem', text: `出错了：${m.message}`, retry: true });
     // The video arrives in parts, each written as it comes: base64 to bytes, no copy of the whole video in memory.
     const mp4 = m.mime.includes('mp4');
-    if (m.part === 0) {
-      file.current = new File(Paths.cache, `jump-attack-${params.metric}-${Date.now()}.${mp4 ? 'mp4' : 'webm'}`);
-      file.current.create({ overwrite: true });
+    try {
+      if (m.part === 0) {
+        file.current = new File(Paths.cache, `jump-attack-${params.metric}-${Date.now()}.${mp4 ? 'mp4' : 'webm'}`);
+        file.current.create({ overwrite: true });
+      }
+      if (!file.current) return;
+      file.current.write(m.data, m.part === 0 ? { encoding: 'base64' } : { encoding: 'base64', append: true });
+    } catch (err) {
+      dropFile();
+      return setState({ name: 'problem', text: `导出失败：${err instanceof Error ? err.message : String(err)}`, retry: true });
     }
-    file.current?.write(m.data, m.part === 0 ? { encoding: 'base64' } : { encoding: 'base64', append: true });
-    if (m.part < m.parts - 1 || !file.current) return;
+    if (m.part < m.parts - 1) return;
     setState({ name: 'sharing' });
     try {
       await Sharing.shareAsync(file.current.uri, { mimeType: mp4 ? 'video/mp4' : 'video/webm', UTI: mp4 ? 'public.mpeg-4' : 'org.webmproject.webm', dialogTitle: '保存或分享视频' });
-    } finally {
       setState({ name: 'ready' });
+    } catch (err) {
+      setState({ name: 'problem', text: `分享失败：${err instanceof Error ? err.message : String(err)}`, retry: true });
+    } finally {
+      dropFile();
     }
   }
 
   if (!config) return <Empty title="这个项目不能回放" />;
   const exporting = state.name === 'exporting';
+  const canExport = state.name === 'ready' || (state.name === 'problem' && state.retry === true);
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
@@ -129,6 +167,8 @@ export default function Replay() {
             bounces={false}
             onMessage={onMessage}
             onError={() => setState({ name: 'problem', text: '视频打不开' })}
+            onContentProcessDidTerminate={died}
+            onRenderProcessGone={died}
             style={{ backgroundColor: colors.bg }}
           />
         )}
@@ -138,7 +178,7 @@ export default function Replay() {
         {state.name === 'problem' && <Text style={styles.problem}>{state.text}</Text>}
         <View style={styles.row}>
           <Button label="再放一次" variant="secondary" onPress={() => call('window.replay.play()')} disabled={state.name === 'loading' || exporting} style={{ flex: 1 }} />
-          <Button label="导出视频" onPress={() => call('window.replay.exportVideo()')} disabled={state.name !== 'ready'} busy={exporting || state.name === 'sharing'} style={{ flex: 1 }} />
+          <Button label="导出视频" onPress={startExport} disabled={!canExport} busy={exporting || state.name === 'sharing'} style={{ flex: 1 }} />
         </View>
         <Text style={styles.note}>竖屏 720 × 1280，带水印、起跳曲线和每跳数据，可以存到相册或直接发出去。</Text>
       </View>

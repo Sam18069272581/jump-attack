@@ -85,7 +85,7 @@ export type AnalysisSummary = {
   dri?: Spread;
   gctCv?: number;
   driCv?: number;
-  /** Repeated jumps only: mean RSI of the best five rebounds. */
+  /** Repeated jumps with at least five counted rebounds: mean RSI of the best five. */
   rsi105?: number;
 };
 
@@ -99,36 +99,22 @@ export function frameError(ftS: number, fps: number): number {
 export function analyseJumps(events: JumpEvents[], opts: { kind: AnalysisKind; captureFps: number; boxCm?: number; keep?: number[] }): Analysis {
   const { kind, captureFps: fps } = opts;
   if (fps <= 0) throw new Error('fps must be positive');
-  const dt = 1 / fps;
+  const boxM = opts.boxCm != null ? opts.boxCm / 100 : undefined;
   const jumps: JumpResult[] = events.map((e, i) => {
-    const ftS = (e.landing - e.takeoff) / fps;
-    const jhM = heightFromFlightTime(ftS);
-    const jhErrM = frameError(ftS, fps) / 100;
     const prev = events[i - 1];
-    let gctS: number | undefined;
-    let dropM: number | undefined;
-    if (kind === 'drop') {
-      if (e.touchdown != null) gctS = (e.takeoff - e.touchdown) / fps;
-      if (opts.boxCm != null) dropM = opts.boxCm / 100;
-    } else if (prev && (e.takeoff - prev.landing) / fps <= MAX_CONTACT_S) {
-      gctS = (e.takeoff - prev.landing) / fps;
-      dropM = heightFromFlightTime((prev.landing - prev.takeoff) / fps);
+    const m: Marks = { takeoff: e.takeoff, landing: e.landing };
+    if (kind === 'drop' && e.touchdown != null) m.touchdown = e.touchdown;
+    if (kind === 'repeat' && prev && (e.takeoff - prev.landing) / fps <= MAX_CONTACT_S) Object.assign(m, { touchdown: prev.landing, prevTakeoff: prev.takeoff });
+    const f = figures(m, fps, kind === 'drop' ? boxM : undefined);
+    const r: JumpResult = { index: i, events: e, ftS: f.ftS, jhCm: f.jhM * 100, error: markError(m, fps, boxM, kind), flags: [...(e.flags ?? [])], counted: true };
+    if (f.gctS != null) {
+      r.gctS = f.gctS;
+      r.rsi = f.rsi;
+      r.rsr = f.rsr;
+      if (f.dri != null) r.dri = f.dri;
+      if (f.gctS > SLOW_CONTACT_S) r.flags.push('slow-contact');
     }
-    const r: JumpResult = { index: i, events: e, ftS, jhCm: jhM * 100, error: { ftS: dt, jhCm: jhErrM * 100 }, flags: [...(e.flags ?? [])], counted: true };
-    if (gctS != null && gctS > 0) {
-      r.gctS = gctS;
-      r.rsi = jhM / gctS;
-      r.rsr = ftS / gctS;
-      r.error.gctS = dt;
-      r.error.rsi = r.rsi * Math.hypot(jhErrM / jhM, dt / gctS);
-      r.error.rsr = r.rsr * Math.hypot(dt / ftS, dt / gctS);
-      if (dropM != null) {
-        r.dri = (dropM + jhM) / (G * gctS * gctS);
-        r.error.dri = Math.hypot(jhErrM / (G * gctS * gctS), ((2 * r.dri) / gctS) * dt);
-      }
-      if (gctS > SLOW_CONTACT_S) r.flags.push('slow-contact');
-    }
-    if (frameError(ftS, fps) > MAX_FRAME_ERROR_CM) r.flags.push('low-fps');
+    if (frameError(f.ftS, fps) > MAX_FRAME_ERROR_CM) r.flags.push('low-fps');
     return r;
   });
 
@@ -139,6 +125,46 @@ export function analyseJumps(events: JumpEvents[], opts: { kind: AnalysisKind; c
   for (const j of jumps) j.counted = (opts.keep ?? []).includes(j.index) || !j.flags.some((f) => EXCLUDING.includes(f));
 
   return { jumps, summary: summarise(jumps, kind) };
+}
+
+/** The marks a jump's figures come from. In a rebound, touch-down is the landing before, and `prevTakeoff` with it gives the drop. */
+type Marks = { takeoff: number; landing: number; touchdown?: number; prevTakeoff?: number };
+
+type Figures = { ftS: number; jhM: number; gctS?: number; rsi?: number; rsr?: number; dri?: number };
+
+function figures(m: Marks, fps: number, boxM: number | undefined): Figures {
+  const ftS = (m.landing - m.takeoff) / fps;
+  const jhM = heightFromFlightTime(ftS);
+  const out: Figures = { ftS, jhM };
+  if (m.touchdown == null) return out;
+  const gctS = (m.takeoff - m.touchdown) / fps;
+  if (gctS <= 0) return out;
+  Object.assign(out, { gctS, rsi: jhM / gctS, rsr: ftS / gctS });
+  const dropM = m.prevTakeoff != null ? heightFromFlightTime((m.touchdown - m.prevTakeoff) / fps) : boxM;
+  if (dropM != null) out.dri = (dropM + jhM) / (G * gctS * gctS);
+  return out;
+}
+
+/**
+ * What ±1 frame on each mark does to each figure: every mark moved a frame either way (central difference), the marks'
+ * errors taken as independent and added in quadrature. A mark two figures share moves them together, which this keeps:
+ * a later take-off both shortens the flight and lengthens the contact, so it lowers RSI twice over.
+ */
+function markError(m: Marks, fps: number, boxM: number | undefined, kind: AnalysisKind): JumpResult['error'] {
+  const box = kind === 'drop' ? boxM : undefined;
+  const at = figures(m, fps, box);
+  const keys = (Object.keys(m) as (keyof Marks)[]).filter((k) => m[k] != null);
+  const shifts = keys.map((k) => [figures({ ...m, [k]: m[k]! + 1 }, fps, box), figures({ ...m, [k]: m[k]! - 1 }, fps, box)]);
+  const of = (name: keyof Figures, scale = 1) => {
+    if (at[name] == null) return undefined;
+    return Math.hypot(...shifts.map(([up, down]) => ((up[name] ?? at[name]!) - (down[name] ?? at[name]!)) / 2)) * scale;
+  };
+  const err: JumpResult['error'] = { ftS: of('ftS')!, jhCm: of('jhM', 100)! };
+  for (const k of ['gctS', 'rsi', 'rsr', 'dri'] as const) {
+    const v = of(k);
+    if (v != null) err[k] = v;
+  }
+  return err;
 }
 
 function summarise(jumps: JumpResult[], kind: AnalysisKind): AnalysisSummary {
@@ -162,7 +188,7 @@ function summarise(jumps: JumpResult[], kind: AnalysisKind): AnalysisSummary {
   set('dri', spread(dri));
   set('gctCv', cv(gct));
   set('driCv', cv(dri));
-  if (kind === 'repeat' && rsi.length) set('rsi105', mean([...rsi].sort((a, b) => b - a).slice(0, 5)));
+  if (kind === 'repeat' && rsi.length >= 5) set('rsi105', mean([...rsi].sort((a, b) => b - a).slice(0, 5)));
   return out;
 }
 

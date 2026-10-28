@@ -105,8 +105,9 @@ export default function Analyse() {
 
   useEffect(() => {
     if (phase.name !== 'done' || !def || athleteId == null) return;
-    analysisHistory(db, athleteId, def, params.session).then(setHistory);
-  }, [phase.name, db, def, athleteId, params.session]);
+    const boxCm = kind === 'drop' ? Number(params.box) || undefined : undefined;
+    analysisHistory(db, athleteId, def, params.session, { boxCm }).then(setHistory);
+  }, [phase.name, db, def, kind, athleteId, params.session, params.box]);
 
   function show(f: number) {
     setFrame(f);
@@ -182,7 +183,8 @@ export default function Analyse() {
   }
 
   function markByHand() {
-    router.push({ pathname: '/measure/mark', params: { metric: params.metric, session: params.session, uri: params.uri, fps: params.fps, ...(params.from ? { from: params.from } : {}), ...(params.box ? { box: params.box } : {}), ...(params.asset ? { asset: params.asset } : {}) } });
+    // In this screen's place, so the marking screen's way back (to the logger, or on to the result) is the same as from the import.
+    router.replace({ pathname: '/measure/mark', params: { metric: params.metric, session: params.session, uri: params.uri, fps: params.fps, ...(params.from ? { from: params.from } : {}), ...(params.box ? { box: params.box } : {}), ...(params.asset ? { asset: params.asset } : {}) } });
   }
 
   function replay() {
@@ -214,7 +216,7 @@ export default function Analyse() {
           <VideoView player={player} nativeControls={false} contentFit="contain" style={StyleSheet.absoluteFill} />
           {/* The page that reads frames: hidden until it runs, then it shows each frame it reads and the strip it reads. */}
           <View style={[StyleSheet.absoluteFill, { opacity: running ? 1 : 0.01 }]} pointerEvents="none">
-            <FrameReader ref={reader} uri={params.uri} fileFps={fileFps} onReady={setClip} onError={() => setPhase({ name: 'failed', problem: 'error' })} style={StyleSheet.absoluteFill} />
+            <FrameReader ref={reader} uri={params.uri} fileFps={fileFps} onReady={setClip} onError={() => setPhase((p) => (p.name === 'done' ? p : { name: 'failed', problem: 'error' }))} style={StyleSheet.absoluteFill} />
           </View>
           {phase.name === 'setup' && (
             <Pressable accessibilityRole="button" accessibilityLabel="点一下运动员" style={StyleSheet.absoluteFill} onPress={(e) => tap(e.nativeEvent.locationX, e.nativeEvent.locationY)} />
@@ -280,7 +282,7 @@ export default function Analyse() {
         {phase.name === 'done' && analysis && s && (
           <>
             <Rise>
-              <Summary def={def} kind={kind} analysis={analysis} />
+              <Summary def={def} kind={kind} analysis={analysis} fps={fps} />
             </Rise>
             {analysis.jumps.map((j, i) => (
               <Rise key={i} index={i + 1}>
@@ -343,10 +345,11 @@ function RangeRow({ label, value, max, fps, onChange }: { label: string; value: 
 const cm = (x: number) => x.toFixed(1);
 const ms = (s: number) => String(Math.round(s * 1000));
 
-function Summary({ def, kind, analysis }: { def: MetricDef; kind: 'jump' | 'drop' | 'repeat'; analysis: ReturnType<typeof analyseJumps> }) {
+function Summary({ def, kind, analysis, fps }: { def: MetricDef; kind: 'jump' | 'drop' | 'repeat'; analysis: ReturnType<typeof analyseJumps>; fps: number }) {
   const s = analysis.summary;
   const counted = analysis.jumps.filter((j) => j.counted);
-  const err = counted[0]?.error;
+  // A jump with a contact, so the contact's error can be shown too: in a set, the first jump has none.
+  const err = (counted.find((j) => j.gctS != null) ?? counted[0])?.error;
   const cells: { label: string; value: string; unit: string; main?: boolean }[] = [];
   if (kind === 'repeat') {
     if (s.rsi105 != null) cells.push({ label: '10/5 RSI', value: s.rsi105.toFixed(2), unit: '', main: true });
@@ -376,6 +379,9 @@ function Summary({ def, kind, analysis }: { def: MetricDef; kind: 'jump' | 'drop
           </View>
         ))}
       </View>
+      {kind === 'repeat' && s.rsi105 == null && (
+        <Text style={styles.muted}>计入的反弹只有 {counted.filter((j) => j.rsi != null).length} 次，10/5 RSI 要至少 5 次。把片段拉到整组 10 跳，或核对被剔除的跳。</Text>
+      )}
       {kind !== 'jump' && (s.rsr || s.dri) && (
         <Text style={styles.muted}>
           {s.rsr ? `平均 RSR ${s.rsr.mean.toFixed(2)}` : ''}
@@ -384,7 +390,7 @@ function Summary({ def, kind, analysis }: { def: MetricDef; kind: 'jump' | 'drop
       )}
       {err && (
         <Text style={styles.muted}>
-          误差：每个关键帧 ±1 帧（{Math.round(err.ftS * 1000)} ms），跳高约 ±{err.jhCm.toFixed(1)} cm
+          误差：每个关键帧 ±1 帧（{Math.round(1000 / fps)} ms），跳高约 ±{err.jhCm.toFixed(1)} cm
           {err.gctS ? `，触地 ±${Math.round(err.gctS * 1000)} ms` : ''}
         </Text>
       )}

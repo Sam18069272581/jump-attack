@@ -44,6 +44,29 @@ describe('analysisTrials', () => {
   });
 
   it('saves a set of repeated jumps as one attempt: the 10/5 RSI, with every jump in the detail', () => {
+    // Six jumps, five rebounds. Contacts 48, 60, 48, 60, 48 frames.
+    const a = analyseJumps(
+      [
+        { takeoff: 100, landing: 200 },
+        { takeoff: 248, landing: 350 },
+        { takeoff: 410, landing: 510 },
+        { takeoff: 558, landing: 658 },
+        { takeoff: 718, landing: 818 },
+        { takeoff: 866, landing: 966 },
+      ],
+      { kind: 'repeat', captureFps: 240 },
+    );
+    const trials = analysisTrials(REPEATED_JUMP, a, { captureFps: 240, context: {} });
+    expect(trials).toHaveLength(1);
+    expect(trials[0].value).toBeCloseTo(a.summary.rsi105!, 2);
+    // GCT-CV: contacts 0.20, 0.25, 0.20, 0.25, 0.20 s, mean 0.22, SD √(0.003 / 4) = 0.0274 → 12.4 %.
+    expect(trials[0].detail).toMatchObject({ source: 'video', auto: true, gct_cv: 12.4 });
+    const jumps = trials[0].detail!.jumps as object[];
+    expect(jumps).toHaveLength(6);
+    expect(jumps.slice(0, 3)).toMatchObject([{ takeoff: 100, landing: 200, ft_ms: 417 }, { gct_ms: 200 }, { gct_ms: 250 }]);
+  });
+
+  it('saves nothing for a set with fewer than five rebounds, which has no 10/5 RSI', () => {
     const a = analyseJumps(
       [
         { takeoff: 100, landing: 200 },
@@ -52,14 +75,6 @@ describe('analysisTrials', () => {
       ],
       { kind: 'repeat', captureFps: 240 },
     );
-    const trials = analysisTrials(REPEATED_JUMP, a, { captureFps: 240, context: {} });
-    expect(trials).toHaveLength(1);
-    expect(trials[0].value).toBeCloseTo(a.summary.rsi105!, 2);
-    expect(trials[0].detail).toMatchObject({ source: 'video', auto: true, gct_cv: 15.7, jumps: [{ takeoff: 100, landing: 200, ft_ms: 417 }, { gct_ms: 200 }, { gct_ms: 250 }] });
-  });
-
-  it('saves nothing for a set without a single rebound', () => {
-    const a = analyseJumps([{ takeoff: 100, landing: 200 }], { kind: 'repeat', captureFps: 240 });
     expect(analysisTrials(REPEATED_JUMP, a, { captureFps: 240, context: {} })).toEqual([]);
   });
 });

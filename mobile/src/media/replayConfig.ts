@@ -39,7 +39,7 @@ export function replayConfig(o: {
   const stride = Math.max(1, Math.round(o.captureFps / SHOWN_PER_S));
   const slower = o.captureFps / (stride * OUT_FPS);
   const counted = analysis.jumps.filter((j) => j.counted);
-  const err = counted[0]?.error;
+  const err = (counted.find((j) => j.gctS != null) ?? counted[0])?.error;
   let headline: ReplayConfig['headline'];
   let stats: ReplayConfig['stats'];
   if (kind === 'repeat') {

@@ -225,6 +225,7 @@ export function replayHtml(c: ReplayConfig): string {
     }
     // Hold the last frame a moment, so the numbers can be read.
     await wait(record ? 1500 : 800);
+    return !stopAsked;
   }
 
   async function play() {
@@ -252,9 +253,11 @@ export function replayHtml(c: ReplayConfig): string {
       var stopped = new Promise(function (r) { rec.onstop = r; });
       draw(C.from);
       rec.start(500);
-      await run(true);
+      var finished = await run(true);
       rec.stop();
       await stopped;
+      // Stopped part-way (a replay or another export asked): what was recorded is not the video, so none of it goes out.
+      if (!finished) return post({ type: 'cancelled' });
       var blob = new Blob(parts, { type: rec.mimeType || type || 'video/mp4' });
       var url = await new Promise(function (r) { var fr = new FileReader(); fr.onload = function () { r(fr.result); }; fr.readAsDataURL(blob); });
       var b64 = String(url).slice(String(url).indexOf(',') + 1), size = 512 * 1024, n = Math.ceil(b64.length / size);

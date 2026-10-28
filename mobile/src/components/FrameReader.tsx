@@ -29,7 +29,7 @@ const SILENCE_MS = 30000;
 /**
  * Reads frames out of a clip for the analysis screen: the same page as automatic marking (media/frameGrabberHtml) in a
  * WebView, which shows each frame it reads with the rectangle it reads from. `onReady` hears the clip's size once the
- * page has it; `onError` hears that the page can't read the clip, or went quiet.
+ * page has it, again after the page is reloaded; `onError` hears that the page can't read the clip, or went quiet.
  */
 export const FrameReader = forwardRef<FrameReaderHandle, { uri: string; fileFps: number; onReady: (info: ClipInfo) => void; onError: () => void; style?: StyleProp<ViewStyle> }>(
   function FrameReader({ uri, fileFps, onReady, onError, style }, ref) {
@@ -65,6 +65,16 @@ export const FrameReader = forwardRef<FrameReaderHandle, { uri: string; fileFps:
       job.current?.reject(new Error('frame reader stopped'));
       job.current = null;
       handlers.current.onError();
+    }
+
+    /** iOS ended the page (memory, or the app in the background): a read under way has failed; load it again for the next. */
+    function died() {
+      const reading = job.current != null;
+      if (timer.current) clearTimeout(timer.current);
+      job.current?.reject(new Error('frame reader stopped'));
+      job.current = null;
+      web.current?.reload();
+      if (reading) handlers.current.onError();
     }
 
     function hear() {
@@ -125,8 +135,8 @@ export const FrameReader = forwardRef<FrameReaderHandle, { uri: string; fileFps:
         onMessage={onMessage}
         onError={fail}
         onHttpError={fail}
-        onContentProcessDidTerminate={fail}
-        onRenderProcessGone={fail}
+        onContentProcessDidTerminate={died}
+        onRenderProcessGone={died}
         style={[{ backgroundColor: colors.text }, style]}
       />
     );
