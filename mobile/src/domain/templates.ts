@@ -1,23 +1,6 @@
 import type { BlockType } from './dunk';
 import type { BlockTemplate, PlanTemplate, Prescription, SessionTemplate, WeekSpec } from './plan';
 
-// Exercises shared by the templates. Sets and RPE are week-1 values; the week specs scale them.
-const EX = {
-  squatJump: { code: 'squat_jump', name: '深蹲跳', kind: 'plyo', sets: 3, reps: 5, cue: '每次落地站稳再跳，追求高度' },
-  backSquat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 4, reps: 5, rpe: 7.5 },
-  rdl: { code: 'rdl', name: '罗马尼亚硬拉', kind: 'strength', sets: 3, reps: 8, rpe: 7 },
-  calfRaise: { code: 'calf_raise', name: '单腿提踵', kind: 'accessory', sets: 3, reps: 12, perSide: true },
-  pogo: { code: 'pogo', name: 'Pogo 跳', kind: 'plyo', sets: 3, reps: 15, cue: '膝盖微屈，靠脚踝弹，触地越短越好' },
-  boxJump: { code: 'box_jump', name: '跳箱', kind: 'plyo', sets: 4, reps: 4, cue: '落在箱上要轻，走下来不跳下来' },
-  depthJump: { code: 'depth_jump', name: '跌落跳', kind: 'plyo', sets: 3, reps: 5, intense: true, cue: '从 30–45 cm 台阶落下，一触地就起跳' },
-  singleLegHop: { code: 'single_leg_hop', name: '单腿连续跳', kind: 'plyo', sets: 3, reps: 5, perSide: true },
-  deadBug: { code: 'dead_bug', name: '死虫', kind: 'accessory', sets: 3, reps: 10, perSide: true },
-  trapBarJump: { code: 'trap_bar_jump', name: '六角杠铃跳', kind: 'plyo', sets: 4, reps: 4, loaded: true, cue: '用后蹲 1RM 的 20–30%，每次都全力跳' },
-  splitSquat: { code: 'split_squat', name: '保加利亚分腿蹲', kind: 'strength', sets: 3, reps: 6, perSide: true, rpe: 7.5 },
-  approachJump: { code: 'approach_jump', name: '助跑摸高', kind: 'plyo', sets: 5, reps: 3, intense: true, cue: '3–5 步助跑，全力起跳摸高，每次休息 1 分钟' },
-  nordic: { code: 'nordic', name: '北欧腿弯举', kind: 'accessory', sets: 3, reps: 5 },
-} satisfies Record<string, Prescription>;
-
 // The block plan's exercises, each tagged strength / reactive / transfer / technique. A new exercise only needs a
 // tag and a place in a session; the plan logic doesn't change.
 const SMITH = '没有深蹲架就用史密斯机';
@@ -41,6 +24,24 @@ const BX = {
   calfRaise: { code: 'calf_raise', name: '单腿提踵', kind: 'accessory', sets: 3, reps: 12, perSide: true },
   nordic: { code: 'nordic', name: '北欧腿弯举', kind: 'accessory', sets: 3, reps: 5 },
   deadBug: { code: 'dead_bug', name: '死虫', kind: 'accessory', sets: 3, reps: 10, perSide: true },
+} satisfies Record<string, Prescription>;
+
+// The older fixed templates' exercises. Sets and RPE are week-1 values; the week specs scale them. Where an exercise
+// is the same as in the block plan it is taken from BX, so the two can't drift apart.
+const EX = {
+  squatJump: { code: 'squat_jump', name: '深蹲跳', kind: 'plyo', sets: 3, reps: 5, cue: '每次落地站稳再跳，追求高度' },
+  backSquat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 4, reps: 5, rpe: 7.5 },
+  rdl: { code: 'rdl', name: '罗马尼亚硬拉', kind: 'strength', sets: 3, reps: 8, rpe: 7 },
+  calfRaise: BX.calfRaise,
+  pogo: { ...BX.pogo, kind: 'plyo' },
+  boxJump: { code: 'box_jump', name: '跳箱', kind: 'plyo', sets: 4, reps: 4, cue: '落在箱上要轻，走下来不跳下来' },
+  depthJump: { code: 'depth_jump', name: '跌落跳', kind: 'plyo', sets: 3, reps: 5, intense: true, cue: '从 30–45 cm 台阶落下，一触地就起跳' },
+  singleLegHop: { code: 'single_leg_hop', name: '单腿连续跳', kind: 'plyo', sets: 3, reps: 5, perSide: true },
+  deadBug: BX.deadBug,
+  trapBarJump: { code: 'trap_bar_jump', name: '六角杠铃跳', kind: 'plyo', sets: 4, reps: 4, loaded: true, cue: BX.trapBarJump.cue },
+  splitSquat: BX.splitSquat,
+  approachJump: { code: 'approach_jump', name: '助跑摸高', kind: 'plyo', sets: 5, reps: 3, intense: true, cue: BX.approachJump.cue },
+  nordic: BX.nordic,
 } satisfies Record<string, Prescription>;
 
 /** Three weeks building up, then a deload week to retest in. */

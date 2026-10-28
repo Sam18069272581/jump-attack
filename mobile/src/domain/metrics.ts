@@ -55,7 +55,7 @@ export type CategoryDef = {
 };
 
 export const CATEGORIES: CategoryDef[] = [
-  { key: 'jump', name: '跳跃测试', color: '#D4FF3F', tile: '#2A3312', subtitle: 'CMJ · SJ · DJ · Pogo RSI', icon: 'jump', href: '/jumps' },
+  { key: 'jump', name: '跳跃测试', color: '#D4FF3F', tile: '#2A3312', subtitle: 'CMJ · SJ · DJ · 助跑摸高', icon: 'jump', href: '/jumps' },
   { key: 'conditioning', name: '体能耐力', color: '#FF7A6B', tile: '#3A1C19', subtitle: 'VO2max · RSA 反复冲刺', icon: 'conditioning', href: '/conditioning' },
   { key: 'speed', name: '速度训练', color: '#4FD1FF', tile: '#0F2D38', subtitle: '10 m · 30 m · 50 m · 100 m 冲刺', icon: 'speed', href: '/speed' },
   { key: 'vbt', name: 'VBT 训练', color: '#FF9F43', tile: '#3A2512', subtitle: '深蹲 · 高翻 · 高拉 · 深蹲跳', icon: 'vbt', href: '/vbt' },
