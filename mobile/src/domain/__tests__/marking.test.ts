@@ -35,6 +35,19 @@ describe('markedTrial', () => {
     expect(t.detail).toEqual({ source: 'video', jump_cm: 30.7, standing_reach_cm: 240 });
   });
 
+  it('saves the wall reading of a filmed touch as its value, keeping the video estimate to calibrate with', () => {
+    const t = markedTrial(measured(APPROACH_TOUCH.code, [0, 120], 240, { reachCm: 240 }), [0, 120], 240, {}, { touchedCm: 276 });
+    expect(t.value).toBe(276);
+    expect(t.detail).toEqual({ source: 'video', jump_cm: 30.7, standing_reach_cm: 240, touched_cm: 276 });
+  });
+
+  it('adds the athlete’s calibration to a filmed touch without a wall reading', () => {
+    // 240 + 30.7 + 5.5 = 276.2.
+    const t = markedTrial(measured(APPROACH_TOUCH.code, [0, 120], 240, { reachCm: 240 }), [0, 120], 240, {}, { offsetCm: 5.5 });
+    expect(t.value).toBe(276.2);
+    expect(t.detail).toEqual({ source: 'video', jump_cm: 30.7, standing_reach_cm: 240, offset_cm: 5.5 });
+  });
+
   it('records the load of a loaded jump and of a VBT set, with the VBT bar travel', () => {
     expect(markedTrial(measured(LOADED_SJ.code, [0, 120], 240), [0, 120], 240, { from: 'fvp', load: '40' }).load_kg).toBe(40);
     // 60 cm in 0.8 s = 0.75 m/s.

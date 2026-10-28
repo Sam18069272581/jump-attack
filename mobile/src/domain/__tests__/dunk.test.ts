@@ -196,3 +196,29 @@ describe('stale results', () => {
     expect(diagnose(input).stale).toEqual([]);
   });
 });
+
+describe('touch calibration', () => {
+  it('adds the athlete’s calibration to the standing estimate', () => {
+    // 240 + 45 + 6.
+    const d = diagnose({ ...base, cmj: [45], touchOffsetCm: 6 });
+    expect(d.touch).toMatchObject({ standing: 291, value: 291, source: 'standing' });
+  });
+
+  it('compares a wall-read approach touch with the standing estimate only once calibrated', () => {
+    // Read off the wall: 290. Uncalibrated, 240 + 45 = 285 would make the run-up look like it adds only 5 cm.
+    const raw = diagnose({ ...base, cmj: [45], approachTouch: [290], approachMethod: 'wall' });
+    expect(raw.metrics.find((m) => m.key === 'approach_gain')!.value).toBeNull();
+    expect(raw.technique).toBe(false);
+    expect(raw.reasons).toContain('助跑摸高是在墙上读的，原地摸高是用录像算的，两种口径差几厘米。录一次助跑摸高视频并填上墙上摸到的刻度，校准后才能比较助跑比原地高多少。');
+
+    const calibrated = diagnose({ ...base, cmj: [45], approachTouch: [290], approachMethod: 'wall', touchOffsetCm: 6 });
+    // 290 − (240 + 45 + 6) = −1: the run-up adds nothing.
+    expect(calibrated.metrics.find((m) => m.key === 'approach_gain')!.value).toBe(-1);
+    expect(calibrated.technique).toBe(true);
+  });
+
+  it('compares two video estimates as they are: the same offset is in both', () => {
+    const d = diagnose({ ...base, cmj: [45], approachTouch: [290], approachMethod: 'video' });
+    expect(d.metrics.find((m) => m.key === 'approach_gain')!.value).toBe(5);
+  });
+});

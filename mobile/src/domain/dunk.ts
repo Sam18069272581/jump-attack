@@ -57,6 +57,10 @@ export type DunkInput = {
   dropJumps: { rsi: number; contactMs: number }[];
   /** FV% of each force-velocity profile. */
   fvPct: number[];
+  /** Wall reading minus video estimate for this athlete (domain/touch.ts); null before any calibration. */
+  touchOffsetCm?: number | null;
+  /** How the latest approach touch was measured: read off a wall, or estimated from video. */
+  approachMethod?: 'wall' | 'video' | null;
   /** The day the diagnosis is for, and when each result was last tested (ISO date or timestamp), for the stale check. */
   asOf?: ISODate;
   latestAt?: Partial<Record<Testable, string>>;
@@ -174,7 +178,8 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
   const line = dunkLine(input.rimCm, input.clearanceCm);
   const cmj = input.cmj.at(-1) ?? null;
   const sj = input.sj.at(-1) ?? null;
-  const standing = input.standingReachCm != null && cmj != null ? input.standingReachCm + cmj : null;
+  const offset = input.touchOffsetCm ?? null;
+  const standing = input.standingReachCm != null && cmj != null ? input.standingReachCm + cmj + (offset ?? 0) : null;
   const approach = input.approachTouch.at(-1) ?? null;
   const value = approach ?? standing;
   const source = approach != null ? 'approach' : standing != null ? 'standing' : null;
@@ -189,7 +194,10 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
   const confirmed = limiter != null && (limiterOf(before) === limiter || clearlyReactive);
   const eur = cmj != null && sj ? cmj / sj : null;
   const fv = input.fvPct.at(-1) ?? null;
-  const gain = approach != null && standing != null ? approach - standing : null;
+  // A wall reading and a video estimate are a few cm apart, so they only compare once the athlete is calibrated; two
+  // video estimates share the same error.
+  const comparable = input.approachMethod !== 'wall' || offset != null;
+  const gain = approach != null && standing != null && comparable ? Math.round((approach - standing) * 10) / 10 : null;
   const technique = gain != null && gain < THRESHOLDS.approachGainCm.low;
   const T = THRESHOLDS;
 
@@ -230,6 +238,9 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
     else if (fv > T.fvPct.high) reasons.push(`力-速度曲线偏速度不足（FV% ${Math.round(fv)}），块里多放一个速度练习。`);
   }
   if (eur != null && eur < T.eur.low) reasons.push(`CMJ ÷ SJ 只有 ${fixed(eur, 2)}，不到 ${fixed(T.eur.low, 1)}：下蹲反弹的弹性没用上，加反向跳和连续跳。`);
+  if (approach != null && standing != null && !comparable) {
+    reasons.push('助跑摸高是在墙上读的，原地摸高是用录像算的，两种口径差几厘米。录一次助跑摸高视频并填上墙上摸到的刻度，校准后才能比较助跑比原地高多少。');
+  }
   if (technique && gain != null) reasons.push(`助跑摸高只比原地高 ${fixed(gain, 1)} cm（精英篮球运动员平均高约 ${T.approachGainCm.good} cm）：练最后两步和摆臂。`);
   if (limiter != null && !confirmed) reasons.push('这个结论只有一次测试支持，再测一次结论一致才建议换训练块。');
 

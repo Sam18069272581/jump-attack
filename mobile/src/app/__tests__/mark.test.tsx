@@ -4,6 +4,7 @@ import { Text } from 'react-native';
 
 import { migrate } from '@/db/migrations';
 import { listTrials } from '@/db/repo';
+import { touchOffsetFor } from '@/db/touch';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 
 import { persistVideo } from '@/media/videos';
@@ -141,6 +142,24 @@ it('goes to the result after the last saved jump without marking another', async
   await press(pressable(r.root, '看结果'));
   expect(await listTrials(mockDb, 'cmj-3')).toHaveLength(1);
   expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/measure/result', params: { metric: 'cmj', session: 'cmj-3' } });
+});
+
+it('calibrates a filmed run-up touch with the reading on the wall', async () => {
+  mockParams = { metric: 'approach_touch', session: 'touch-1', uri: 'file:///touch.mov', fps: '0' };
+  const r = await render();
+  await step(r.root, 100);
+  await press(byLabel(r.root, '把当前帧标为起跳帧'));
+  // 120 frames: 0.5 s, 30.7 cm on top of the 240 cm standing reach.
+  await step(r.root, 120);
+  await press(byLabel(r.root, '把当前帧标为落地帧'));
+  expect(texts(r.root)).toContain('270.7');
+  await act(async () => r.root.find((n) => n.props.accessibilityLabel === '墙上摸到的刻度（cm）' && typeof n.props.onChangeText === 'function').props.onChangeText('277'));
+  await press(pressable(r.root, '保存这一次'));
+
+  const [t] = await listTrials(mockDb, 'touch-1');
+  expect(t).toMatchObject({ value: 277, detail: { touched_cm: 277, jump_cm: 30.7, standing_reach_cm: 240 } });
+  // The next filmed touch without a reading gets the 6.3 cm this one showed.
+  expect(await touchOffsetFor(mockDb, 1)).toBe(6.3);
 });
 
 it('saves a drop jump with its box height and goes straight back to the box ladder', async () => {

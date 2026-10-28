@@ -10,6 +10,7 @@ import { TouchChart } from '@/components/TouchChart';
 import { Empty } from '@/components/ui';
 import { loadDiagnosis } from '@/db/dunk';
 import { listMetricResults, sessionCounts, type SessionResult } from '@/db/repo';
+import { touchOffsetFor } from '@/db/touch';
 import { MISSING_TEXT, type DunkDiagnosis } from '@/domain/dunk';
 import { standingTouches } from '@/domain/dunkSummary';
 import { APPROACH_TOUCH, CATEGORIES, METRICS, formatValue, getMetric, metricColor, resultNote, type MetricDef } from '@/domain/metrics';
@@ -26,6 +27,7 @@ export default function History() {
   const { current } = useAthlete();
   const [rows, setRows] = useState<Row[]>([]);
   const [diagnosis, setDiagnosis] = useState<DunkDiagnosis | null>(null);
+  const [offset, setOffset] = useState<number | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -41,6 +43,7 @@ export default function History() {
         const defs = [...known, ...extra];
         setRows(await Promise.all(defs.map(async (m) => ({ def: m, color: metricColor(m), results: await listMetricResults(db, current.id, m) }))));
         setDiagnosis(await loadDiagnosis(db, current));
+        setOffset(await touchOffsetFor(db, current.id));
       })();
     }, [db, current]),
   );
@@ -48,7 +51,7 @@ export default function History() {
   const withData = rows.filter((r) => r.results.length > 0);
   const results = (code: string) => rows.find((r) => r.def.code === code)?.results ?? [];
   const approach = results(APPROACH_TOUCH.code).map((r) => ({ at: r.started_at, value: r.best }));
-  const standing = standingTouches(results('cmj'), current?.standing_reach_cm ?? null);
+  const standing = standingTouches(results('cmj'), current?.standing_reach_cm ?? null, offset);
   const sprintRow =
     SPRINT_ORDER.map((c) => rows.find((r) => r.def.code === c)).find((r) => r != null) ?? rows.find((r) => r.def.category === 'speed') ?? null;
 
