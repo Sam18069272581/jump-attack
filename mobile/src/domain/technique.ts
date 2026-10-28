@@ -440,7 +440,8 @@ const toPicture = (f: Frame, w: Pt): Pt => ({ x: f.origin.x + w.x * f.xAxis.x + 
 // 3. Series.
 
 type Track2 = { x: number[]; y: number[] };
-type Series = { frame: number[]; com: Track2; hip: Track2; feet: Record<Side, { heel: Track2; toe: Track2 }> };
+/** Per frame of the stretch: its file frame, whether the model lost the athlete there, and the paths (gaps bridged). */
+type Series = { frame: number[]; lost: boolean[]; com: Track2; hip: Track2; feet: Record<Side, { heel: Track2; toe: Track2 }> };
 
 function seriesOf(poses: (Pose | null)[], frames: PoseFrame[], f: Frame, maxGap: number): Series {
   const pick = (fn: (p: Pose) => Pt): Track2 => {
@@ -448,7 +449,7 @@ function seriesOf(poses: (Pose | null)[], frames: PoseFrame[], f: Frame, maxGap:
     return { x: bridge(pts.map((q) => (q ? q.x : NaN)), maxGap), y: bridge(pts.map((q) => (q ? q.y : NaN)), maxGap) };
   };
   const foot = (s: Side) => ({ heel: pick((p) => p[SIDE[s].heel]), toe: pick((p) => p[SIDE[s].toe]) });
-  return { frame: frames.map((fr) => fr.frame), com: pick(centreOfMass), hip: pick(hipCentre), feet: { left: foot('left'), right: foot('right') } };
+  return { frame: frames.map((fr) => fr.frame), lost: poses.map((p) => !p), com: pick(centreOfMass), hip: pick(hipCentre), feet: { left: foot('left'), right: foot('right') } };
 }
 
 /** Speed of a point along a smoothed path, px/s, by central differences. */
@@ -644,6 +645,30 @@ function edgeTime(
   return { t: fit.t, err: hypot(spread, EVENT_FLOOR_FRAMES) };
 }
 
+/**
+ * An edge timed next to a run of frames where the model lost the athlete (motion blur at the fastest moments): the
+ * path bridged across the run is a guess, and the fit puts the edge at one end of it while the real one may be
+ * anywhere inside. So its error reaches across any run of two or more lost frames within the fit's window. One lost
+ * frame, bridged by its neighbours' mean, stays within the fit's own error.
+ */
+function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number): { t: number; err: number } {
+  if (!Number.isFinite(e.err)) return e;
+  const reach = max(4, round(0.04 * fps));
+  const c = round(e.t);
+  let err = e.err;
+  let k = max(0, c - reach);
+  while (k > 0 && lost[k] && lost[k - 1]) k--;
+  for (; k <= min(lost.length - 1, c + reach); k++) {
+    if (!lost[k]) continue;
+    let b = k;
+    while (b + 1 < lost.length && lost[b + 1]) b++;
+    // The edge lies between the last frame seen before the run and the first after it.
+    if (b > k) err = max(err, hypot(max(e.t - (k - 1), b + 1 - e.t), EVENT_FLOOR_FRAMES));
+    k = b;
+  }
+  return { t: e.t, err };
+}
+
 /** Two timings of one moment, weighted by their errors; the error is the better one's (their floor is shared). */
 function together(a: { t: number; err: number }, b: { t: number; err: number }): { t: number; err: number } {
   const wa = 1 / (a.err * a.err);
@@ -694,8 +719,8 @@ function contactsOf(traces: Record<Side, FootTrace>, s: Series, floor: Floor, fp
         const unknown = { t: NaN, err: Infinity };
         const downs = i === 0 ? [] : [heel, toe].flatMap((pt) => edgeTime(pt, i, 'down', fps, [i, j], at(pt, i, half), scale) ?? []);
         // The heel or the toe, whichever comes down first.
-        const dn = downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 };
-        const up = j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: j - 0.5 });
+        const dn = acrossGap(downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 }, s.lost, fps);
+        const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: j - 0.5 }), s.lost, fps);
         const downAt = frameAt(s, dn.t);
         const upAt = frameAt(s, max(up.t, dn.t + 1));
         // The toe's place: the median over the part of the stance it is planted for, good to 1.25σ/√n (1 SD).

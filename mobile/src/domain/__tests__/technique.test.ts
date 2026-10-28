@@ -234,6 +234,22 @@ describe('what the clip lacks or gets wrong', () => {
     expect(result.flags).toContain('unseen');
   });
 
+  it('the athlete lost for a few frames at take-off or touch-down: what is timed there says how unsure it is', () => {
+    // Motion blur at the fastest moments can lose the athlete for a run of frames; the path bridged across is a guess.
+    const wrong: string[] = [];
+    for (const [fps, len, at] of [[240, 8, 'take-off'], [240, 8, 'touch-down'], [120, 4, 'take-off'], [60, 3, 'take-off']] as const) {
+      for (let seed = 1; seed <= 5; seed++) {
+        const scene = poseScene({ fps, seed });
+        const touchDown = scene.truth.contacts.find((c) => c.downS === scene.truth.plantDownS)!.downFrame;
+        const from = (at === 'take-off' ? scene.truth.takeoffFrame : touchDown) - Math.floor(len / 2);
+        const frames = scene.frames.map((f) => (f.frame >= from && f.frame < from + len ? { ...f, poses: [] } : f));
+        const result = resultOf(analyseTechnique({ frames, captureFps: fps, markers: scene.markers }));
+        wrong.push(...misses(scene, result).filter((m) => /^(plant|vz|angle):/.test(m)).map((m) => `${fps} fps, ${len} lost at ${at}, seed ${seed}: ${m}`));
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
   it('a 240 fps clip read as 120 fps: the scales disagree hugely', () => {
     const scene = poseScene();
     const frames = scene.frames.map((f) => ({ ...f, t: f.frame / 120 }));
