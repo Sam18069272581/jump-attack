@@ -15,6 +15,8 @@ App 用 Expo 的云端编译服务（EAS）打包，**不需要 Xcode**，Intel 
 
 ## 第一次打包
 
+打包前先把 `mobile/app.json` 里的 `"runtimeVersion": "exposdk:58.0.0"` 改回 `{ "policy": "appVersion" }`。`exposdk:` 是给 Expo Go 云端版用的，正式版要按自己的版本号接收更新。
+
 1. 登录 Expo：
 
    ```sh

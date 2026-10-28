@@ -9,13 +9,13 @@ import type { CaptureProps } from '@/components/capture/types';
 import { listTrials } from '@/db/repo';
 import { returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
-import { isExpoGo } from '@/media/runtime';
+import { hasInAppCamera } from '@/media/runtime';
 
-// Loaded only outside Expo Go: vision-camera touches its native module as soon as it is imported.
-const NativeCapture: ComponentType<CaptureProps> | null = isExpoGo
-  ? null
-  : // eslint-disable-next-line @typescript-eslint/no-require-imports
-    require('@/components/capture/NativeCapture').default;
+// Loaded only in a native build (not Expo Go, not the web): vision-camera touches its native module as soon as it is imported.
+const NativeCapture: ComponentType<CaptureProps> | null = hasInAppCamera
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('@/components/capture/NativeCapture').default
+  : null;
 
 export default function Capture() {
   // Everything besides the metric and session (`from`, a set's or jump's load, bar travel, box height) is passed on to marking and the result.
