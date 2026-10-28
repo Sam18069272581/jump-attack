@@ -138,7 +138,7 @@ async function trackOne(browser, port, job, i) {
     // As the app does: tell the page the frame rate the player reported (0 when it didn't).
     await page.evaluate((fps) => window.startTrack(fps), job.fps ?? 0);
     // Generous: a second of video takes the page a few seconds at 60 fps.
-    const timeout = Math.max(120000, ready.duration * 60 * 1000);
+    const timeout = Math.max(120000, ready.duration * 150 * 1000);
     await page.waitForFunction(() => window.__msgs.some((m) => m.type === 'done' || m.type === 'error'), null, { timeout, polling: 250 });
     const done = await page.evaluate(() => window.__msgs.find((m) => m.type === 'done' || m.type === 'error'));
     if (done.type === 'error') return { error: done.message, circle: snapped };

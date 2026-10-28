@@ -151,6 +151,33 @@ describe('bar path analysis', () => {
     a.reps.forEach((r) => expect(r.flags).toEqual([]));
   });
 
+  it('times fast reps on the few frames of a 30 fps video filmed at half rate', () => {
+    // In dim light an iPhone records a 30 fps video at 15 fps. The top 15 % of a 0.4 s rep (55 cm, 1.4 m/s) then
+    // lasts 0.1 s, one or two frames, too few to fit the shape of the turn: each end is fitted on at least four
+    // frames either side. Without that the turn was pushed past the next frame, 10 % slow on average.
+    const times = [0.36, 0.4, 0.44, 0.48, 0.52, 0.56];
+    const a = analyseBarPath(film(squats(...times), { fps: 30, times: (i, f) => (2 * i) / f, jitter: 1 }), 200);
+    expect(a.reps).toHaveLength(6);
+    const e = errors(a.reps, times);
+    expect(Math.abs(e.reduce((s, x) => s + x, 0) / e.length)).toBeLessThan(0.03);
+    e.forEach((x) => expect(Math.abs(x)).toBeLessThan(0.07));
+  });
+
+  it('ends a rep held at lockout where the bar stops rising', () => {
+    // The top is fitted as the bottom run backwards: the bar rises into it and stands still after it. Fitted the
+    // other way up, it wanted the bar to come back down after the top and fitted the jitter of the hold instead:
+    // the 1.2 s rep here ended 54 ms late and read 4.2 % slow.
+    const times = [0.5, 0.8, 1.2, 1.6];
+    const a = analyseBarPath(film(squats(...times)), 200);
+    expect(a.reps).toHaveLength(4);
+    // Rep i stops rising 0.6 s + 2 s for each rep before it + 1 s down + its own concentric time into the clip.
+    a.reps.forEach((r, i) => {
+      const top = 0.6 + times.slice(0, i).reduce((s, c) => s + 2 + c, 0) + 1 + times[i];
+      expect(Math.abs(r.end - top)).toBeLessThan(0.02);
+    });
+    errors(a.reps, times).forEach((e) => expect(Math.abs(e)).toBeLessThan(0.02));
+  });
+
   // MPV: the concentric phase up to where the bar decelerates faster than gravity (Sánchez-Medina et al. 2010).
   it('gives the propulsive velocity of a fast rep that brakes harder than gravity', () => {
     // 55 cm in 0.4 s with a half-sine profile decelerates at up to 17 m/s² into lockout.

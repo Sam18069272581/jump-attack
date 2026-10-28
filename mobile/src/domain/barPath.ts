@@ -78,14 +78,25 @@ const MIN_ROM_CM = 10;
 const MIN_ROM_SHARE = 0.6;
 /** A dip in a rise smaller than this share of the climb before it is the bar sinking at a sticking point, not a new rep. */
 const SINK_SHARE = 0.25;
-/** The ends of a rep are fitted on the points within this share of the rise from the bottom or top… */
-const ENDS_SHARE = 0.2;
+/**
+ * The ends of a rep are fitted on the points within this share of the rise from the bottom or top… The power law
+ * only holds near the turn: for a minimum-jerk lift, h = 10u³ − 15u⁴ + 6u⁵, its leading term 10u³ is already 63 %
+ * too high at 15 % of the rise (u = 0.29) and 74 % at 20 % (u = 0.33), and with jitter that pulls both ends inwards.
+ */
+const ENDS_SHARE = 0.15;
 /** …and within this long (s) on either side of the turnaround… */
 const ENDS_S = 0.4;
 /** …and may move by at most this much (s) from where the filtered velocity put them. */
 const MAX_SHIFT_S = 0.15;
 /** Speed (m/s) below which the bar is all but still: where it crosses it is a steadier guess at the turn than 0. */
 const STILL = 0.03;
+/**
+ * Fewest frames each end is fitted on, either side of where the filtered velocity put it. The fit has five unknowns:
+ * the turn's time and height and the exponent, shared by both sides, and each side's own rate; four frames a side
+ * leave it over-determined even when one side sits on a hold. At 15 fps (a 30 fps
+ * video at half rate in dim light) the top 15 % of a 0.4 s rep lasts 0.1 s: one or two frames.
+ */
+const MIN_FIT_FRAMES = 4;
 /** Exponents tried for the shape of each end: 2 is constant acceleration, higher is force still building up. */
 const END_POWERS = [1.5, 2, 2.5, 3];
 /** A rep shorter than this share of the set's typical (median) rep is flagged as partial. */
@@ -239,6 +250,12 @@ function filterPath(raw: Raw[], rate: number): Point[] {
  * and was level or falling before it) and −1 for the top. Null without enough frames on both sides.
  */
 function fitTurn(raw: Raw[], from: number, to: number, lo: number, hi: number, dir: 1 | -1): { t: number; h: number } | null {
+  // The top is the bottom run backwards and upside down: the bar rises into it and is level or falling after it.
+  // Flipping only the height would fit where the bar starts back down instead, which after a hold is jitter.
+  if (dir === -1) {
+    const top = fitTurn(raw.map((p) => ({ ...p, t: -p.t, h: -p.h })), -to, -from, -hi, -lo, 1);
+    return top && { t: -top.t, h: -top.h };
+  }
   const pts = raw.filter((p) => p.t >= lo && p.t <= hi);
   // Seconds are scaled to tenths so the powers stay well conditioned.
   const sse = (t0: number, n: number) => {
@@ -349,8 +366,14 @@ function measureRep(raw: Raw[], frames: number[], path: Point[], low: number, hi
       return path[i].t;
     };
     const segRaw = raw.filter((p) => p.seg === seg);
-    const fs = fitTurn(segRaw, Math.min(start.t, slowStart) - MAX_SHIFT_S, slowStart + MAX_SHIFT_S, edge(s, -1, (h) => h > start.h + band), edge(sv, 1, (h) => h > start.h + band), 1);
-    const fe = fitTurn(segRaw, slowEnd - MAX_SHIFT_S, Math.max(end.t, slowEnd) + MAX_SHIFT_S, edge(ev, -1, (h) => h < end.h - band), edge(e, 1, (h) => h < end.h - band), -1);
+    // A fast rep filmed at a low frame rate has only a frame or two in the band, too few to fit; take at least
+    // MIN_FIT_FRAMES frames on either side of the guess.
+    const nth = (t: number, step: 1 | -1) => {
+      const side = step > 0 ? segRaw.filter((p) => p.t > t) : segRaw.filter((p) => p.t < t).reverse();
+      return side.length ? side[Math.min(side.length, MIN_FIT_FRAMES) - 1].t : t;
+    };
+    const fs = fitTurn(segRaw, Math.min(start.t, slowStart) - MAX_SHIFT_S, slowStart + MAX_SHIFT_S, Math.min(edge(s, -1, (h) => h > start.h + band), nth(Math.min(start.t, slowStart), -1)), Math.max(edge(sv, 1, (h) => h > start.h + band), nth(slowStart, 1)), 1);
+    const fe = fitTurn(segRaw, slowEnd - MAX_SHIFT_S, Math.max(end.t, slowEnd) + MAX_SHIFT_S, Math.min(edge(ev, -1, (h) => h < end.h - band), nth(slowEnd, -1)), Math.max(edge(e, 1, (h) => h < end.h - band), nth(Math.max(end.t, slowEnd), 1)), -1);
     if (fs && fs.t < path[b].t) start = fs;
     if (fe && fe.t > path[a].t) end = fe;
   }
