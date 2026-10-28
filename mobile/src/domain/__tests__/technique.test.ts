@@ -286,6 +286,17 @@ describe('what the clip lacks or gets wrong', () => {
     expect(wrong).toEqual([]);
   });
 
+  it('two frames lost a little before take-off, with frames seen between them and it: no wider error than without them', () => {
+    // The frames seen after the gap show the foot still standing, so the take-off can't be inside it.
+    const scene = poseScene();
+    const tk = scene.truth.takeoffFrame;
+    const clean = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: scene.markers }));
+    const frames = scene.frames.map((f) => (f.frame >= tk - 9 && f.frame < tk - 7 ? { ...f, poses: [] } : f));
+    const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: scene.markers }));
+    for (const k of ['vz', 'angle', 'plant'] as const) expect([k, result.metrics[k]!.error <= 1.1 * clean.metrics[k]!.error]).toEqual([k, true]);
+    expect(misses(scene, result)).toEqual([]);
+  });
+
   it('a 24 or 25 fps clip (a phone’s video mode): the plant is found, and knee and trunk come out as angles', () => {
     for (const fps of [24, 25]) {
       const { scene, r } = analyse({ fps });

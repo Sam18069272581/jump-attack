@@ -656,8 +656,8 @@ function edgeTime(
 /**
  * An edge timed next to a run of frames where the model lost the athlete (motion blur at the fastest moments): the
  * path bridged across the run is a guess, and the fit puts the edge at one end of it while the real one may be
- * anywhere inside. So its error reaches across any run of two or more lost frames within the fit's window. One lost
- * frame, bridged by its neighbours' mean, stays within the fit's own error.
+ * anywhere inside. So its error reaches across a run of two or more lost frames next to it. One lost frame, bridged by
+ * its neighbours' mean, stays within the fit's own error.
  */
 function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number): { t: number; err: number } {
   if (!Number.isFinite(e.err)) return e;
@@ -670,8 +670,11 @@ function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number):
     if (!lost[k]) continue;
     let b = k;
     while (b + 1 < lost.length && lost[b + 1]) b++;
-    // The edge lies between the last frame seen before the run and the first after it.
-    if (b > k) err = max(err, hypot(max(e.t - (k - 1), b + 1 - e.t), EVENT_FLOOR_FRAMES));
+    // The edge lies between the last frame seen before the run and the first after it. The path bridged across the
+    // run can pull the fit off its end by about the run's length, but no further: a run further from the edge than
+    // that and the edge's own error, with frames seen in between, can't hold it.
+    const len = b - k + 1;
+    if (b > k && k - 1 - len <= e.t + e.err && b + 1 + len >= e.t - e.err) err = max(err, hypot(max(e.t - (k - 1), b + 1 - e.t), EVENT_FLOOR_FRAMES));
     k = b;
   }
   return { t: e.t, err };
