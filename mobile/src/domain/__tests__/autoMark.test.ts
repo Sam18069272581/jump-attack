@@ -1,4 +1,4 @@
-import { analyseCoarse, analyseFine, coarseRequest, findFlights, footprint, type DetectKind, type FrameRequest, type Grey } from '../autoMark';
+import { analyseCoarse, analyseFine, bareFloor, coarseRequest, contactSeries, findFlights, footprint, type DetectKind, type FrameRequest, type Grey } from '../autoMark';
 import { defaultScene, renderScene, sceneTruth, type SceneOptions } from '../testing/jumpScene';
 
 /** Runs both passes on a synthetic clip, rendering exactly the frames and crops the detector asks for. */
@@ -66,6 +66,108 @@ describe('footprint', () => {
 });
 
 const max = (a: Int16Array) => Math.max(...Array.from(a));
+
+describe('bareFloor', () => {
+  it("takes what is behind a sock from the wall, not from a pixel half covered by the sock's edge", () => {
+    // One row, 40 frames: wall at 180 everywhere, a sock (200) over columns 7–12 for 32 frames and gone for 8. Column
+    // 6 is the sock's edge, half wall: 192 while it stands, 180 when it's gone. With noise σ ≈ 4.4 (half the readings
+    // within 3 grey levels), 12 levels is under the 3 σ that mark a pixel moved, so column 6 counts as still; settling
+    // from its 192 would end in the sock's group, 8 levels off (within 2.5 σ), and erase the sock.
+    const w = 24;
+    const wobble = [-6, -3, -3, 0, 3, 3, 6];
+    const strips = Array.from({ length: 40 }, (_, k): Grey => {
+      const stands = k < 32;
+      const data = new Uint8Array(w);
+      for (let x = 0; x < w; x++) {
+        const base = x === 6 ? (stands ? 192 : 180) : x >= 7 && x <= 12 && stands ? 200 : 180;
+        data[x] = base + (x === 6 && !stands ? 0 : wobble[(k * 3 + x * 5) % 7]);
+      }
+      return { w, h: 1, data };
+    });
+    const bare = bareFloor(strips);
+    for (let x = 7; x <= 12; x++) expect(Math.abs(bare.data[x] - 180)).toBeLessThan(6);
+  });
+});
+
+describe('contactSeries', () => {
+  // Strips 40 rows high with the floor line at row 34. A foot is a dark column block hanging from the top edge down to
+  // its sole's row; everything else is bare floor. eps 1, hold 6 and span 2 are what the fine pass uses at 240 fps.
+  const H = 40;
+  type Foot = [from: number, to: number, sole: number];
+  const frame = (w: number, feet: Foot[]): Grey => {
+    const data = new Uint8Array(w * H).fill(130);
+    for (const [from, to, sole] of feet) for (let y = 0; y <= sole; y++) for (let x = from; x <= to; x++) data[y * w + x] = 40;
+    return { w, h: H, data };
+  };
+  const bare = (w: number) => frame(w, []);
+  const seq = (n: number, f: (k: number) => Foot[], w: number) => Array.from({ length: n }, (_, k) => frame(w, f(k)));
+
+  it('does not let a foot held still in mid-air, far from where feet stood, raise the floor elsewhere', () => {
+    // Feet stand at both ends of a 240-column strip for 12 frames while a run-up foot holds still at row 24, 10 rows up,
+    // in columns more than a strip's height from either: it is its own only neighbour. A fourth foot walks across new
+    // floor, 2 columns a frame, and from frame 12 on is 3 rows up. Fitted through all three, the floor line would be
+    // near row 31, and the lifted foot would still look down against it.
+    const w = 240;
+    const strips = seq(
+      20,
+      (k) => [
+        ...(k < 12
+          ? ([
+              [10, 30, 34],
+              [200, 220, 34],
+              [110, 125, 24],
+            ] as Foot[])
+          : []),
+        [40 + 2 * k, 48 + 2 * k, k < 12 ? 34 : 31],
+      ],
+      w,
+    );
+    const down = contactSeries(strips, bare(w), 1, 6, 2);
+    expect(down).toEqual([...Array(12).fill(true), ...Array(8).fill(false)]);
+  });
+
+  it('keeps a foot down while compression breaks its join to the floor in most frames', () => {
+    // A foot stands on columns 20–40 for 12 frames, then for 5 frames only 4 of its columns, a different 4 each frame,
+    // still reach the floor row; the rest stop 4 rows short (on its toes, sole and mirror image meet through a neck
+    // a pixel wide that video compression wipes out in some frames). Then it is in the air, 9 rows up. Smoothed over
+    // 5 frames each column is short of the floor from frame 13 on; each frame on its own still touches.
+    const w = 100;
+    const strips = seq(
+      23,
+      (k) =>
+        k < 12
+          ? [[20, 40, 34]]
+          : k < 17
+            ? [
+                [20, 40, 30],
+                [20 + 4 * (k - 12), 23 + 4 * (k - 12), 34],
+              ]
+            : [[20, 40, 25]],
+      w,
+    );
+    const down = contactSeries(strips, bare(w), 1, 6, 2);
+    expect(down).toEqual([...Array(17).fill(true), ...Array(6).fill(false)]);
+  });
+
+  it("keeps the floor where a foot on its toes stood, though a glossy floor's mirror image runs deeper elsewhere", () => {
+    // Two fine-pass windows. Around take-off (24 frames) a toe on columns 100–104 reaches row 37 with its mirror image
+    // for 4 frames, row 32 without it for 8 (compression cut the neck between them), 37 for 4 more, 32 for 2, then
+    // leaves the floor at frame 18. Around landing (20 frames), feet with their mirror images land at row 36 on
+    // columns 20–55 and 150–190, more than a strip's height away. The line through all of them runs 4 rows below the
+    // toe's row 32, more than the 2 rows (≈ 15 mm) that mark a hovering foot; but the toe reached lower both before and
+    // after it held row 32, in the same window, so it stood there.
+    const w = 200;
+    const toe = (k: number): Foot[] => [[100, 104, k < 4 || (k >= 12 && k < 16) ? 37 : k < 18 ? 32 : 25]];
+    const land = (k: number): Foot[] => [
+      [20, 55, k < 30 ? 22 : 36],
+      [150, 190, k < 30 ? 22 : 36],
+    ];
+    const strips = seq(44, (k) => (k < 24 ? toe(k) : land(k)), w);
+    const segment = Array.from({ length: 44 }, (_, k) => (k < 24 ? 0 : 1));
+    const down = contactSeries(strips, bare(w), 1, 6, 2, segment);
+    expect(down).toEqual([...Array(18).fill(true), ...Array(12).fill(false), ...Array(14).fill(true)]);
+  });
+});
 
 describe('findFlights', () => {
   const t = true;
@@ -153,7 +255,7 @@ describe('automatic take-off and landing', () => {
     const video = { width: 160, height: 90, frames: 24, captureFps: 24 };
     const req = coarseRequest(video);
     let seed = 1;
-    const texture = Array.from({ length: 163 * 90 }, () => ((seed = (seed * 16807) % 2147483647) % 256));
+    const texture = Array.from({ length: 163 * 90 }, () => (seed = (seed * 16807) % 2147483647) % 256);
     const picture = (dx: number): Grey => {
       const data = new Uint8Array(160 * 90);
       for (let y = 0; y < 90; y++) for (let x = 0; x < 160; x++) data[y * 160 + x] = texture[y * 163 + x + dx];

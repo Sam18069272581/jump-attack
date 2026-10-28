@@ -370,11 +370,12 @@ export function footprint(img: Grey, empty: Grey, minThreshold = MIN_THRESHOLD):
 }
 
 /**
- * On the ground, frame by frame: some column reaches within `eps` rows of where that column's foot stood. Where a foot
- * stood is the lowest row a column held for a few frames in a row; columns no foot stood in use a line through the
- * others, so a foot swinging low over new ground still has a floor to be measured against.
+ * On the ground, frame by frame: some column reaches within `eps` rows of where that column's foot stood (or, in that
+ * frame alone, all the way). Where a foot stood is the lowest row a column held for a few frames in a row; columns no
+ * foot stood in use a line through the others, so a foot swinging low over new ground still has a floor to be measured
+ * against.
  */
-function contactSeries(strips: Grey[], empty: Grey, eps: number, hold: number, span: number, segment?: number[]): boolean[] {
+export function contactSeries(strips: Grey[], empty: Grey, eps: number, hold: number, span: number, segment?: number[]): boolean[] {
   const bottoms = strips.map((s) => footprint(s, empty));
   const { w, h } = empty;
   const n = bottoms.length;
@@ -412,6 +413,18 @@ function contactSeries(strips: Grey[], empty: Grey, eps: number, hold: number, s
     }
     return out;
   });
+  // How far above the floor a still foot counts as hovering (≈ 15 mm: the strip is about a fifth of the athlete's
+  // height).
+  const tol = max(1, round(h / 24));
+  // A fine-pass window reaches at most three coarse steps (≈ 0.13 s) past the take-off or landing it is around, less
+  // than the shortest flight, so it can't hold a whole flight. A column that reached lower both before and after a
+  // level it held, in the same window, stood through it (see the line below). The coarse pass has no windows: its one
+  // series runs through every flight, and a foot reaches lower before and after the top of one.
+  const stood = new Uint8Array(w);
+  const lowerBy = (x: number, k: number, dir: number, level: number) => {
+    for (let i = k + dir; i >= 0 && i < n && seg(i) === seg(k); i += dir) if (steady[i][x] > level + tol) return true;
+    return false;
+  };
   for (let x = 0; x < w; x++) {
     // `hold` frames in a row within two pixels (the sole's edge wobbles with noise). A foot in the air rarely holds still
     // that long, except near the top of a flight, or when a run-up carries it forward as it rises and a column sees its
@@ -426,31 +439,57 @@ function contactSeries(strips: Grey[], empty: Grey, eps: number, hold: number, s
         lo = min(lo, v);
         hi = max(hi, v);
       }
-      if (hi - lo <= 2) ground[x] = max(ground[x], hi);
+      if (hi - lo <= 2) {
+        const inside = segment != null && lowerBy(x, k, -1, hi) && lowerBy(x, k + hold - 1, 1, hi);
+        if (hi > ground[x]) stood[x] = inside ? 1 : 0;
+        else if (hi === ground[x] && inside) stood[x] = 1;
+        ground[x] = max(ground[x], hi);
+      }
     }
     // The floor is in the lower half of the strip; a foot hanging at the top edge near the peak is not standing.
     if (ground[x] >= 0 && ground[x] < h / 2) ground[x] = -1;
     if (ground[x] >= 0) pts.push([x, ground[x]]);
   }
-  // Most columns that held still held still on the floor; one that held well above its neighbours (≈ 15 mm: the strip
-  // is about a fifth of the athlete's height) saw a foot hovering at the top of a low jump. Mirror images on a glossy
-  // floor only make a standing foot reach lower, so they never look like that.
-  const tol = max(1, round(h / 24));
+  // Most columns that held still held still on the floor; one that held well above its neighbours saw a foot hovering
+  // at the top of a low jump. Mirror images on a glossy floor only make a standing foot reach lower, so they never look
+  // like that.
   const onFloor = pts.filter(([x, y]) => {
     const near = pts.filter(([x2]) => abs(x2 - x) <= h).map(([, y2]) => y2);
     return y >= middle(near) - tol;
   });
+  // A foot carried forward at one height by a run-up can hold still over columns no foot stood near, and then it is its
+  // own only neighbour. So also measure every point against the line through all of them: drop the one furthest above
+  // it and refit, until none is more than that same margin above. One at a time, because the hovering points tilt the
+  // first line, and the floor at the far end of the strip can look high against it. A column that stood through its
+  // level is never dropped: on a glossy floor a foot on its toes holds two levels, with its mirror image and without it
+  // when compression cuts the neck between them (see the end), and the line, drawn mostly through feet with their
+  // mirror images, runs below the higher one.
+  let line = fitLine(onFloor);
+  while (line) {
+    const l = line;
+    const above = ([x, y]: [number, number]) => (stood[x] ? Infinity : y - l(x));
+    let worst = -1;
+    for (let i = 0; i < onFloor.length; i++) if (worst < 0 || above(onFloor[i]) < above(onFloor[worst])) worst = i;
+    if (above(onFloor[worst]) >= -tol) break;
+    onFloor.splice(worst, 1);
+    line = fitLine(onFloor);
+  }
   ground.fill(-1);
   for (const [x, y] of onFloor) ground[x] = y;
-  const line = fitLine(onFloor);
-  return steady.map((b) => {
+  const reaches = (b: Int16Array, slack: number) => {
     for (let x = 0; x < w; x++) {
       if (b[x] < 0) continue;
       const ref = ground[x] >= 0 ? ground[x] : line ? line(x) : Infinity;
-      if (b[x] >= ref - eps) return true;
+      if (b[x] >= ref - slack) return true;
     }
     return false;
-  });
+  };
+  // A frame whose own footprint reaches all the way to where the foot stood is down, whatever its neighbours show. On
+  // its toes, a foot meets its mirror image through a neck a pixel wide at the floor line, and video compression wipes
+  // that neck out in some frames: the footprint then stops at the sole. Late in a push-off that happens in most of the
+  // five frames the median above takes, and the median alone would call a foot still pushing off gone. Only the
+  // smoothed bottoms get `eps` of slack: a single frame's edge wobbles by that much in the air too.
+  return steady.map((b, k) => reaches(b, eps) || reaches(bottoms[k], 0));
 }
 
 function fitLine(pts: [number, number][]): ((x: number) => number) | null {
@@ -552,6 +591,10 @@ export function bareFloor(strips: Grey[]): Grey {
         let i = x + dir;
         while (i >= 0 && i < w && !still[y * w + i]) i += dir;
         if (i < 0 || i >= w) continue;
+        // The first still pixel can be one the athlete's edge half covers the whole time a foot stands: a blend that
+        // changes by less than noise when the foot leaves, and whose value can draw the search below into the sock's
+        // or shoe's group. The one beyond it, if still too, is clear of the edge.
+        if (i + dir >= 0 && i + dir < w && still[y * w + i + dir]) i += dir;
         const ref = usual.data[y * w + i];
         fallback = fallback < 0 ? ref : (fallback + ref) / 2;
         const m = settle(ref);
