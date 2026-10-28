@@ -4,7 +4,7 @@ import { Alert, Text, TextInput, type AlertButton } from 'react-native';
 
 import { saveRecoveryDay } from '@/db/recovery';
 import { migrate } from '@/db/migrations';
-import { listSessionResults } from '@/db/repo';
+import { addTrial, ensureSession, listSessionResults, listTrials } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { getActivePlan, getWorkout, listSets, startPlan } from '@/db/training';
 import { addVbtSet } from '@/db/vbt';
@@ -12,6 +12,7 @@ import { addDays, toISODate } from '@/domain/dates';
 
 import Home from '../(tabs)/index';
 import Train from '../(tabs)/train';
+import MetricHistory from '../history/[metric]';
 import ManualEntry from '../measure/entry';
 import Result from '../measure/result';
 import MobilityEntry from '../mobility/[test]';
@@ -109,6 +110,27 @@ it('opens every module from the home screen', async () => {
   expect(texts(r.root)).not.toContain('即将上线');
 });
 
+describe('jumps', () => {
+  it('takes a typed CMJ height from another app and marks it as typed in', async () => {
+    mockParams = { metric: 'cmj', session: 'cmj-typed' };
+    const entry = await render(<ManualEntry />);
+    expect(texts(entry.root)).toContain('My Jump');
+    await type(entry.root, 'CMJ 反向跳（cm）', '41,2');
+    await press(entry.root, '保存这一次');
+
+    const result = await render(<Result />);
+    expect(texts(result.root)).toContain('41.2');
+    expect(texts(result.root)).toContain('含手动输入的成绩');
+  });
+
+  it('rejects a jump height no one can reach', async () => {
+    mockParams = { metric: 'sj', session: 'sj-typed' };
+    const entry = await render(<ManualEntry />);
+    await type(entry.root, 'SJ 蹲跳（cm）', '150');
+    expect(pressable(entry.root, '保存这一次').props.disabled).toBe(true);
+  });
+});
+
 describe('speed', () => {
   it('starts a sprint test, takes a typed time and keeps the fastest attempt', async () => {
     const list = await render(<SpeedTests />);
@@ -144,6 +166,67 @@ describe('speed', () => {
     const slower = await render(<ManualEntry />);
     await type(slower.root, '30 m 冲刺（s）', '4.40');
     await press(slower.root, '保存这一次');
+    expect(texts((await render(<Result />)).root)).not.toContain('新纪录');
+  });
+
+  it('asks how a typed time was taken, and compares it only with times taken the same way', async () => {
+    for (const [session, at, value] of [['sp-v1', '2026-10-01T10:00:00.000Z', 1.82], ['sp-v2', '2026-10-08T10:00:00.000Z', 1.8]] as const) {
+      await ensureSession(mockDb, session, 1, 'sprint_10');
+      await mockDb.runAsync('UPDATE test_session SET started_at = ? WHERE id = ?', at, session);
+      await addTrial(mockDb, { session_id: session, value, fps: 240, detail: { source: 'video' } });
+    }
+    mockParams = { metric: 'sprint_10', session: 'sp-hand' };
+    const entry = await render(<ManualEntry />);
+    expect(texts(entry.root)).toContain('怎么计时的');
+    await press(entry.root, '秒表');
+    await type(entry.root, '10 m 冲刺（s）', '1.62');
+    await press(entry.root, '保存这一次');
+    expect((await listTrials(mockDb, 'sp-hand'))[0].detail).toEqual({ source: 'manual', timing: 'stopwatch' });
+
+    mockParams = { metric: 'sprint_10' };
+    const history = await render(<MetricHistory />);
+    const t = texts(history.root);
+    // 1.62 by hand after 1.80 on video is a method change, not a 0.18 s gain: no change shown for it.
+    expect(t).not.toContain('−0.18');
+    expect(t).not.toContain('首次以来');
+    expect(t).toContain('秒表计时，只和秒表计时的成绩比较');
+    // The two filmed sprints still compare with each other.
+    expect(t).toContain('−0.02');
+  });
+
+  it('opens a past result from the history to fix a typo or delete an attempt', async () => {
+    mockParams = { metric: 'sprint_10' };
+    const history = await render(<MetricHistory />);
+    await press(history.root, '2026-10-19 的记录');
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/measure/result', params: { metric: 'sprint_10', session: 'sp-hand', from: 'history' } });
+
+    mockParams = { metric: 'sprint_10', session: 'sp-hand', from: 'history' };
+    const result = await render(<Result />);
+    expect(texts(result.root)).not.toContain('再测一次');
+    await press(result.root, '改第 1 次');
+    await type(result.root, '第 1 次（s）', '0.6');
+    expect(texts(result.root)).toContain('一般在');
+    expect(pressable(result.root, '保存修改').props.disabled).toBe(true);
+    await type(result.root, '第 1 次（s）', '1,65');
+    await press(result.root, '保存修改');
+    expect((await listTrials(mockDb, 'sp-hand')).map((t) => t.value)).toEqual([1.65]);
+    expect(texts(result.root)).toContain('1.65');
+
+    // A filmed attempt can be deleted but not typed over.
+    mockParams = { metric: 'sprint_10', session: 'sp-v2', from: 'history' };
+    const filmed = await render(<Result />);
+    expect(filmed.root.findAll((n) => n.props.accessibilityLabel === '改第 1 次')).toHaveLength(0);
+    expect(filmed.root.findAll((n) => n.props.accessibilityLabel === '删除第 1 次').length).toBeGreaterThan(0);
+    await press(filmed.root, '返回');
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
+  it('does not call a stopwatch time a record against filmed ones, nor an old result opened from the history', async () => {
+    // sp-hand: 1.65 s on a stopwatch; the filmed sprints were 1.82 and 1.80 s.
+    mockParams = { metric: 'sprint_10', session: 'sp-hand' };
+    expect(texts((await render(<Result />)).root)).not.toContain('新纪录');
+
+    mockParams = { metric: 'sprint_30', session: 'sprint-c', from: 'history' };
     expect(texts((await render(<Result />)).root)).not.toContain('新纪录');
   });
 
@@ -188,7 +271,7 @@ describe('recovery and the training tab', () => {
     await press(r.root, '保存');
     const t = texts(r.root);
     expect(t).toContain('疲劳');
-    expect(t).toContain('HRV 48 ms，低于你 7 天基线');
+    expect(t).toContain('HRV 48 ms，低于你 30 天基线');
     expect((await listSessionResults(mockDb, 1, 'rec_hrv')).at(-1)?.best).toBe(48);
   });
 

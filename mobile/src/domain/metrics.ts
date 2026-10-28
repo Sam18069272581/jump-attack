@@ -55,7 +55,7 @@ export type CategoryDef = {
 };
 
 export const CATEGORIES: CategoryDef[] = [
-  { key: 'jump', name: '跳跃测试', color: '#2340C8', tile: '#E1E6FA', subtitle: 'CMJ · SJ · DJ · Pogo RSI', icon: 'jump', href: '/jumps' },
+  { key: 'jump', name: '跳跃测试', color: '#2340C8', tile: '#E1E6FA', subtitle: 'CMJ · SJ · DJ · 助跑摸高', icon: 'jump', href: '/jumps' },
   { key: 'conditioning', name: '体能耐力', color: '#B92F1C', tile: '#F6E0DB', subtitle: 'VO2max · RSA 反复冲刺', icon: 'conditioning', href: '/conditioning' },
   { key: 'speed', name: '速度训练', color: '#0B6F6E', tile: '#DCEEEC', subtitle: '10 m · 30 m · 50 m · 100 m 冲刺', icon: 'speed', href: '/speed' },
   { key: 'vbt', name: 'VBT 训练', color: '#D9541E', tile: '#F8E3D8', subtitle: '深蹲 · 高翻 · 高拉 · 深蹲跳', icon: 'vbt', href: '/vbt' },
@@ -87,10 +87,13 @@ export const APPROACH_TOUCH: MetricDef & { short: string; color: string } = {
   range: [150, 420],
 };
 
-/** Jump tests measured by flight time from video. */
+/** Typed-in jumps come from another flight-time app; a jump-and-reach mark measures something else. */
+const JUMP_ENTRY_HINT = '输入跳高：用 My Jump 等按腾空时间计算的 App 测的读数';
+
+/** Jump tests measured by flight time from video, or typed in from another app (CMJ and SJ, for the daily readiness test). */
 export const JUMP_TESTS: (MetricDef & { short: string; color: string })[] = [
-  { code: 'cmj', short: 'CMJ', name: 'CMJ 反向跳', category: 'jump', unit: 'cm', decimals: 1, color: '#2340C8', capture: ['flight'], range: [5, 120] },
-  { code: 'sj', short: 'SJ', name: 'SJ 蹲跳', category: 'jump', unit: 'cm', decimals: 1, color: '#0B6F6E', capture: ['flight'], range: [5, 120] },
+  { code: 'cmj', short: 'CMJ', name: 'CMJ 反向跳', category: 'jump', unit: 'cm', decimals: 1, color: '#2340C8', capture: ['flight', 'manual'], range: [5, 120], entryHint: JUMP_ENTRY_HINT },
+  { code: 'sj', short: 'SJ', name: 'SJ 蹲跳', category: 'jump', unit: 'cm', decimals: 1, color: '#0B6F6E', capture: ['flight', 'manual'], range: [5, 120], entryHint: JUMP_ENTRY_HINT },
   { code: 'sl_cmj_l', short: 'SL-L', name: '单腿 CMJ · 左', category: 'jump', unit: 'cm', decimals: 1, color: '#1A6E3D', capture: ['flight'], range: [3, 80] },
   { code: 'sl_cmj_r', short: 'SL-R', name: '单腿 CMJ · 右', category: 'jump', unit: 'cm', decimals: 1, color: '#1A6E3D', capture: ['flight'], range: [3, 80] },
 ];

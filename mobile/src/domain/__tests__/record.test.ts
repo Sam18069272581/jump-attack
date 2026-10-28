@@ -1,4 +1,5 @@
-import { personalRecord } from '../record';
+import { getMetric, METRICS } from '../metrics';
+import { personalRecord, recordable } from '../record';
 
 describe('personal record', () => {
   it('is a record only when it beats every earlier session', () => {
@@ -17,5 +18,19 @@ describe('personal record', () => {
 
   it('needs an earlier session to beat', () => {
     expect(personalRecord([], 318)).toBeNull();
+  });
+});
+
+describe('which results can be a record', () => {
+  it('celebrates jumps, touches and sprints, not loads, recovery readings or set averages', () => {
+    expect(recordable(getMetric('approach_touch')!)).toBe(true);
+    expect(recordable(getMetric('cmj')!)).toBe(true);
+    expect(recordable(getMetric('sprint_30')!)).toBe(true);
+    // A bar speed only means something at its load; recovery readings are not performances.
+    expect(recordable(getMetric('vbt_squat')!)).toBe(false);
+    expect(recordable(getMetric('rec_hrv')!)).toBe(false);
+    expect(recordable(getMetric('rec_resp')!)).toBe(false);
+    // Repeated sprints are scored as a set mean.
+    expect(recordable(METRICS.find((m) => m.aggregate === 'mean')!)).toBe(false);
   });
 });

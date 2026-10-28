@@ -71,6 +71,15 @@ describe('limiter', () => {
     expect(diagnose({ ...base, squat1rm: [125, 130], dropJumps: [{ rsi: 1.8, contactMs: 200 }] }).confirmed).toBe(false);
   });
 
+  it('trusts a single drop jump that is clearly below the RSI floor', () => {
+    // RSI 1.3 is under the 1.5 line that holds an athlete back, not just under the 2.0 target: one test is enough,
+    // as long as the squat was past 1.5× in the test before too.
+    expect(diagnose({ ...base, squat1rm: [125, 130], dropJumps: [{ rsi: 1.3, contactMs: 200 }] }).confirmed).toBe(true);
+    expect(diagnose({ ...base, squat1rm: [100, 130], dropJumps: [{ rsi: 1.3, contactMs: 200 }] }).confirmed).toBe(false);
+    // Passing 2.0 once still needs a second test before moving on to transfer.
+    expect(diagnose({ ...base, squat1rm: [125, 130], dropJumps: [{ rsi: 2.6, contactMs: 160 }] }).confirmed).toBe(false);
+  });
+
   it('waits for a drop jump once the squat is past 1.5×', () => {
     const d = diagnose({ ...base, squat1rm: [130] });
     expect(d.limiter).toBeNull();
@@ -154,6 +163,63 @@ describe('day state', () => {
     expect(worstState('good', 'fair', 'unknown')).toBe('fair');
     expect(worstState('unknown', 'good')).toBe('good');
     expect(worstState()).toBe('unknown');
+  });
+});
+
+describe('stale results', () => {
+  // A block is 4 weeks with a retest at the end, so a result over 6 weeks old has missed a retest.
+  const asOf = '2026-10-28';
+  const input: DunkInput = {
+    ...base,
+    cmj: [45],
+    squat1rm: [130, 130],
+    dropJumps: [{ rsi: 1.8, contactMs: 200 }, { rsi: 1.8, contactMs: 200 }],
+    approachTouch: [290],
+    asOf,
+  };
+
+  it('flags the deciding results and the touch older than 6 weeks, and asks for a retest', () => {
+    const d = diagnose({ ...input, latestAt: { squat: '2026-10-20', drop_jump: '2026-09-02', approach: '2026-09-16' } });
+    // 56 days and 42 days: only the drop jump is past 42.
+    expect(d.stale).toEqual(['drop_jump']);
+    expect(d.reasons.at(-1)).toBe('跳深 RSI 是 8 周前测的，建议复测，结论才跟得上现在的你。');
+  });
+
+  it('ignores results that don’t decide anything now', () => {
+    // Strength-limited: the drop jump doesn't count. The touch comes from the approach, so the CMJ doesn't either.
+    const d = diagnose({ ...input, squat1rm: [100, 100], latestAt: { squat: '2026-10-20', drop_jump: '2026-01-01', cmj: '2026-01-01', approach: '2026-10-20' } });
+    expect(d.limiter).toBe('strength');
+    expect(d.stale).toEqual([]);
+  });
+
+  it('has nothing to compare without dates', () => {
+    expect(diagnose(input).stale).toEqual([]);
+  });
+});
+
+describe('touch calibration', () => {
+  it('adds the athlete’s calibration to the standing estimate', () => {
+    // 240 + 45 + 6.
+    const d = diagnose({ ...base, cmj: [45], touchOffsetCm: 6 });
+    expect(d.touch).toMatchObject({ standing: 291, value: 291, source: 'standing' });
+  });
+
+  it('compares a wall-read approach touch with the standing estimate only once calibrated', () => {
+    // Read off the wall: 290. Uncalibrated, 240 + 45 = 285 would make the run-up look like it adds only 5 cm.
+    const raw = diagnose({ ...base, cmj: [45], approachTouch: [290], approachMethod: 'wall' });
+    expect(raw.metrics.find((m) => m.key === 'approach_gain')!.value).toBeNull();
+    expect(raw.technique).toBe(false);
+    expect(raw.reasons).toContain('助跑摸高是在墙上读的，原地摸高是用录像算的，两种口径差几厘米。录一次助跑摸高视频并填上墙上摸到的刻度，校准后才能比较助跑比原地高多少。');
+
+    const calibrated = diagnose({ ...base, cmj: [45], approachTouch: [290], approachMethod: 'wall', touchOffsetCm: 6 });
+    // 290 − (240 + 45 + 6) = −1: the run-up adds nothing.
+    expect(calibrated.metrics.find((m) => m.key === 'approach_gain')!.value).toBe(-1);
+    expect(calibrated.technique).toBe(true);
+  });
+
+  it('compares two video estimates as they are: the same offset is in both', () => {
+    const d = diagnose({ ...base, cmj: [45], approachTouch: [290], approachMethod: 'video' });
+    expect(d.metrics.find((m) => m.key === 'approach_gain')!.value).toBe(5);
   });
 });
 

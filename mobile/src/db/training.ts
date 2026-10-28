@@ -16,6 +16,8 @@ export type Workout = {
   adjustments: Adjustment[];
   /** The fatigue signals that caused the adjustments; null on workouts saved before reasons were kept. */
   reason: string | null;
+  /** When it was started: later than `date` for a session made up or logged afterwards. */
+  startedAt: string;
   finishedAt: string | null;
 };
 
@@ -29,6 +31,7 @@ type WorkoutRow = {
   cmj_drop: number | null;
   adjustments: string;
   reason: string | null;
+  started_at: string;
   finished_at: string | null;
 };
 
@@ -51,6 +54,7 @@ const toWorkout = (r: WorkoutRow): Workout => ({
   cmjDrop: r.cmj_drop,
   adjustments: JSON.parse(r.adjustments),
   reason: r.reason,
+  startedAt: r.started_at,
   finishedAt: r.finished_at,
 });
 
@@ -107,7 +111,7 @@ export type NewWorkout = Pick<Workout, 'planId' | 'date' | 'sessionCode' | 'read
 /** Starts the day's workout, or returns the one already started so its readiness stays as first recorded. */
 export async function startWorkout(db: SQLiteDatabase, w: NewWorkout): Promise<Workout> {
   await db.runAsync(
-    'INSERT OR IGNORE INTO workout (plan_id, date, session_code, readiness, cmj_drop, adjustments, reason) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    'INSERT OR IGNORE INTO workout (plan_id, date, session_code, readiness, cmj_drop, adjustments, reason, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
     w.planId,
     w.date,
     w.sessionCode,
@@ -115,6 +119,8 @@ export async function startWorkout(db: SQLiteDatabase, w: NewWorkout): Promise<W
     w.cmjDrop,
     JSON.stringify(w.adjustments),
     w.reason ?? null,
+    // The app's clock rather than SQLite's, like the dates the workout is planned on.
+    new Date().toISOString(),
   );
   return (await getWorkout(db, w.planId, w.date))!;
 }

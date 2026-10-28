@@ -1,7 +1,7 @@
 import { LATEST_VERSION, migrate } from '../migrations';
 import { getMetric } from '@/domain/metrics';
 
-import { addTrial, deleteTrial, ensureSession, listAthletes, listMetricResults, listSessionResults, listSessionValues, listTrials, saveSession, sessionCounts } from '../repo';
+import { addTrial, clearSavedVideoUris, deleteTrial, ensureSession, listAthletes, listMetricResults, listSessionResults, listSessionValues, listTrials, saveSession, sessionCounts, sessionTimings, updateTrialValue } from '../repo';
 import { openMemoryDb } from '../testing/memoryDb';
 
 async function setup() {
@@ -69,5 +69,47 @@ describe('sessions and trials', () => {
     expect(r.trials).toBe(3);
     expect(await listSessionValues(db, 1, 'rsa')).toEqual({ r1: [7.0, 7.2, 7.4] });
     expect(await listSessionValues(db, 1, 'cmj')).toEqual({});
+  });
+});
+
+describe('correcting a typed-in attempt', () => {
+  it('changes only that attempt’s value', async () => {
+    const db = await setup();
+    await ensureSession(db, 't', 1, 'approach_touch');
+    await addTrial(db, { session_id: 't', value: 298, detail: { source: 'manual' } });
+    await addTrial(db, { session_id: 't', value: 287, detail: { source: 'manual' } });
+    const [first, second] = await listTrials(db, 't');
+    await updateTrialValue(db, first.id, 289);
+    expect((await listTrials(db, 't')).map((t) => t.value)).toEqual([289, 287]);
+    expect((await listTrials(db, 't'))[1]).toEqual(second);
+  });
+});
+
+describe('sprint timing', () => {
+  it('reads how each session was timed from its first attempt', async () => {
+    const db = await setup();
+    await ensureSession(db, 'v', 1, 'sprint_10');
+    await addTrial(db, { ...trial('v', 1.82), detail: { source: 'video', asset_id: 'x' } });
+    await ensureSession(db, 'g', 1, 'sprint_10');
+    await addTrial(db, { session_id: 'g', value: 1.75, detail: { source: 'manual', timing: 'gates' } });
+    await ensureSession(db, 'old', 1, 'sprint_10');
+    await addTrial(db, trial('old', 1.9));
+    await ensureSession(db, 'other', 1, 'sprint_20');
+    await addTrial(db, { session_id: 'other', value: 3.1, detail: { source: 'manual', timing: 'stopwatch' } });
+
+    expect(await sessionTimings(db, 1, 'sprint_10')).toEqual({ v: 'video', g: 'gates', old: 'video' });
+  });
+});
+
+describe('saved videos', () => {
+  it('forgets copies in the app’s video folder and leaves other video references alone', async () => {
+    const db = await setup();
+    await ensureSession(db, 'a', 1, 'cmj');
+    await addTrial(db, { ...trial('a', 35), video_uri: 'file:///var/mobile/Documents/videos/a-1.mov' });
+    await addTrial(db, { ...trial('a', 36), video_uri: 'file:///var/mobile/Caches/ImagePicker/x.mov' });
+    await addTrial(db, trial('a', 37));
+
+    expect(await clearSavedVideoUris(db)).toBe(1);
+    expect((await listTrials(db, 'a')).map((t) => t.video_uri)).toEqual([null, 'file:///var/mobile/Caches/ImagePicker/x.mov', null]);
   });
 });

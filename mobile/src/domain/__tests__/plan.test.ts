@@ -6,7 +6,9 @@ import {
   calendarDate,
   formatPrescription,
   isJump,
+  missedThisWeek,
   nextSession,
+  personalNote,
   planDay,
   planFinished,
   planPosition,
@@ -219,5 +221,44 @@ describe('block plans', () => {
     const r1 = planDay(blocks, s, '2026-10-19')!.session;
     expect(summarizeWorkout(r1, [{ exercise_code: 'pogo', set_no: 1, reps: 15, load_kg: null, rpe: null }]).jumps).toBe(15);
     expect(isJump({ code: 'sprint_20', name: '20 m 冲刺', kind: 'transfer', sets: 1, reps: 1 })).toBe(false);
+  });
+});
+
+describe('personalNote', () => {
+  it('names the best box from the drop-jump test for depth jumps', () => {
+    expect(personalNote('depth_jump', { bestBoxCm: 40, squat1rmKg: null })).toBe('你的最佳箱高 40 cm');
+    expect(personalNote('depth_jump', { bestBoxCm: null, squat1rmKg: 130 })).toBeNull();
+  });
+
+  it('turns the 20–30% of the squat 1RM for trap-bar jumps into kilos', () => {
+    // 130 × 0.2 = 26 → 25 kg, 130 × 0.3 = 39 → 40 kg, to the nearest 2.5 kg plate step.
+    expect(personalNote('trap_bar_jump', { bestBoxCm: null, squat1rmKg: 130 })).toBe('建议 25–40 kg（后蹲 1RM 130 kg 的 20–30%）');
+    expect(personalNote('trap_bar_jump', { bestBoxCm: 40, squat1rmKg: null })).toBeNull();
+  });
+
+  it('has nothing for other exercises', () => {
+    expect(personalNote('pogo', { bestBoxCm: 40, squat1rmKg: 130 })).toBeNull();
+  });
+});
+
+describe('missedThisWeek', () => {
+  const t = getTemplate('jump-4-1')!;
+  // Starts Monday 2026-10-19, training Monday, Wednesday and Friday.
+  const s: PlanSettings = { templateCode: 'jump-4-1', startDate: '2026-10-19', weekdays: [1, 3, 5] };
+
+  it('lists this week’s training days before today that were never started, oldest first', () => {
+    // Thursday: Monday's A and Wednesday's B are open.
+    expect(missedThisWeek(t, s, [], '2026-10-22').map((p) => [p.date, p.session.code])).toEqual([
+      ['2026-10-19', 'A'],
+      ['2026-10-21', 'B'],
+    ]);
+    expect(missedThisWeek(t, s, ['2026-10-19'], '2026-10-22').map((p) => p.date)).toEqual(['2026-10-21']);
+  });
+
+  it('does not reach into last week or before the plan started', () => {
+    // Next Tuesday: only that week's Monday counts, not last Friday.
+    expect(missedThisWeek(t, s, [], '2026-10-27').map((p) => p.date)).toEqual(['2026-10-26']);
+    expect(missedThisWeek(t, { ...s, startDate: '2026-10-21' }, [], '2026-10-22').map((p) => p.date)).toEqual(['2026-10-21']);
+    expect(missedThisWeek(t, s, [], '2026-10-19')).toEqual([]);
   });
 });
