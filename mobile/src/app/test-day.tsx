@@ -1,4 +1,4 @@
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -22,20 +22,29 @@ const NOBODY: Athlete[] = [];
 export default function TestDay() {
   const db = useSQLiteContext();
   const { current, athletes = NOBODY, select } = useAthlete();
-  // Who takes turns; null: the current athlete alone.
-  const [picked, setPicked] = useState<number[] | null>(null);
-  const [lanes, setLanes] = useState<TestDayRow[][]>([]);
-  const crew = useMemo(() => (picked ? athletes.filter((a) => picked.includes(a.id)) : current ? [current] : []), [picked, athletes, current]);
+  // From the team board: everyone takes turns.
+  const { crew: everyone } = useLocalSearchParams<{ crew?: string }>();
+  // Who takes turns: everyone, some, or null for the current athlete alone.
+  const [picked, setPicked] = useState<number[] | 'all' | null>(everyone === 'all' ? 'all' : null);
+  // Each athlete's tests today, with whose they are, so a change of crew never shows one athlete's under another.
+  const [loaded, setLoaded] = useState<{ ids: number[]; lanes: TestDayRow[][] }>({ ids: [], lanes: [] });
+  const crew = useMemo(() => {
+    if (picked === 'all' && athletes.length > 1) return athletes;
+    if (Array.isArray(picked)) return athletes.filter((a) => picked.includes(a.id));
+    return current ? [current] : [];
+  }, [picked, athletes, current]);
+  const lanes = loaded.ids.join() === crew.map((a) => a.id).join() ? loaded.lanes : [];
 
   useFocusEffect(
     useCallback(() => {
       const today = toISODate(new Date());
-      Promise.all(crew.map((a) => loadTestDay(db, a.id, today))).then(setLanes);
+      const ids = crew.map((a) => a.id);
+      Promise.all(ids.map((id) => loadTestDay(db, id, today))).then((lanes) => setLoaded({ ids, lanes }));
     }, [db, crew]),
   );
 
   function toggle(id: number) {
-    const now = picked ?? (current ? [current.id] : []);
+    const now = crew.map((a) => a.id);
     const next = now.includes(id) ? now.filter((x) => x !== id) : [...now, id];
     if (next.length > 1) setPicked(next);
     else {
@@ -66,7 +75,7 @@ export default function TestDay() {
     </View>
   );
 
-  if (crew.length > 1 && lanes.length === crew.length) {
+  if (crew.length > 1 && lanes.length > 0) {
     const turn = nextTurn(lanes);
     const up = turn && { athlete: crew[turn.athlete], row: lanes[turn.athlete][turn.step] };
     return (
@@ -100,7 +109,7 @@ export default function TestDay() {
           <Button label={`下一位：${up.athlete.name} · ${up.row.def.name}`} onPress={() => measure(up.row, up.athlete.id)} />
         ) : (
           <Card style={styles.done}>
-            <Text style={text.section}>全队三项都测完了</Text>
+            <Text style={text.section}>{crew.length === athletes.length ? '全队' : `${crew.length} 人`}三项都测完了</Text>
             <Text style={text.muted}>每个人的扣篮诊断都已按今天的成绩更新。</Text>
             <Button label="看团队排行" onPress={() => router.push('/team')} />
           </Card>
@@ -109,7 +118,6 @@ export default function TestDay() {
     );
   }
 
-  // Nothing while a crew's lanes are still loading, instead of one athlete's.
   const rows = crew.length > 1 ? [] : (lanes[0] ?? []);
   const next = rows.length ? nextStep(rows, Object.fromEntries(rows.map((r) => [r.metric, r]))) : null;
 

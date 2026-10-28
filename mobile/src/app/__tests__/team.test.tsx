@@ -18,6 +18,7 @@ const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), dismi
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
 /** The latest screen's focus callback, to come back to it the way the result screen's 完成 does. */
 let mockFocus = () => {};
+let mockParams: Record<string, string> = {};
 const mockKv = new Map<string, string>();
 jest.mock('expo-sqlite/kv-store', () => ({
   __esModule: true,
@@ -34,7 +35,7 @@ jest.mock('expo-router', () => {
     get router() {
       return mockRouter;
     },
-    useLocalSearchParams: () => ({}),
+    useLocalSearchParams: () => mockParams,
     useFocusEffect: (cb: () => void) => {
       mockFocus = cb;
       React.useEffect(cb, [cb]);
@@ -51,6 +52,10 @@ function texts(root: ReactTestInstance): string {
 
 const pressable = (root: ReactTestInstance, label: string) =>
   root.find((n) => typeof n.props.onPress === 'function' && (n.props.accessibilityLabel === label || n.findAllByType(Text).some((t) => [t.props.children].flat().join('') === label)));
+
+/** The test day's 谁来测 chip for an athlete. */
+const chip = (root: ReactTestInstance, name: string) =>
+  root.find((n) => n.props.accessibilityRole === 'checkbox' && typeof n.props.onPress === 'function' && n.findAllByType(Text).some((t) => t.props.children === name));
 
 /** Shows whose data the screens are on, the way the home screen's name does. */
 const mockSeen = jest.fn();
@@ -130,11 +135,21 @@ it('ranks the team by the gap to each one’s dunk line and names each one’s w
   await act(async () => pressable(r.root, '看 我自己 的扣篮诊断').props.onPress());
   expect(current()).toBe('我自己');
   expect(mockRouter.push).toHaveBeenCalledWith('/dunk');
+
+  await act(async () => pressable(r.root, '测试日 · 全队轮流测').props.onPress());
+  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/test-day', params: { crew: 'all' } });
+});
+
+it('starts with everyone picked when opened from the team board', async () => {
+  mockParams = { crew: 'all' };
+  const r = await render(<TestDay />);
+  mockParams = {};
+  expect(texts(r.root)).toContain('2 人轮流测');
 });
 
 it('lets several athletes take turns on a test day, each test for everyone before the next', async () => {
   const r = await render(<TestDay />);
-  await act(async () => pressable(r.root, '小明').props.onPress());
+  await act(async () => chip(r.root, '小明').props.onPress());
   expect(texts(r.root)).toContain('2 人轮流测');
 
   await act(async () => pressable(r.root, '下一位：我自己 · CMJ 反向跳').props.onPress());
@@ -147,6 +162,12 @@ it('lets several athletes take turns on a test day, each test for everyone befor
   await act(async () => {});
   await act(async () => pressable(r.root, '下一位：小明 · CMJ 反向跳').props.onPress());
   expect(current()).toBe('小明');
+
+  // Back to 小明 alone: until his own tests load, 我自己's CMJ must not show up (or be added to) as his.
+  act(() => chip(r.root, '我自己').props.onPress());
+  expect(texts(r.root)).not.toContain('已测 1 跳');
+  await act(async () => {});
+  expect(texts(r.root)).toContain('下一项：CMJ 反向跳');
 });
 
 it('hands an athlete their own data as a file, and brings it back without touching anyone else', async () => {
@@ -165,7 +186,19 @@ it('hands an athlete their own data as a file, and brings it back without touchi
   await act(async () => pressable(r.root, '导入运动员').props.onPress());
   await act(async () => {});
   expect(alert.mock.calls[0][0]).toBe('更新小明的数据？');
+  expect(alert.mock.calls[0][1]).toContain('手机上现在：1 个测试对象、');
   expect((await listAthletes(mockDb)).map((a) => a.name)).toEqual(['我自己', '小明']);
+
+  // The profile on screen is the file's, so 保存 can't write the old values back over it.
+  const field = (label: string) => r.root.find((n) => n.type === TextInput && n.props.accessibilityLabel === label);
+  await act(async () => field('站立摸高（cm）').props.onChangeText('230'));
+  await act(async () => pressable(r.root, '保存').props.onPress());
+  expect((await listAthletes(mockDb))[1].standing_reach_cm).toBe(230);
+  await act(async () => pressable(r.root, '导入运动员').props.onPress());
+  await act(async () => {});
+  expect(field('站立摸高（cm）').props.value).toBe('236');
+  await act(async () => pressable(r.root, '保存').props.onPress());
+  expect((await listAthletes(mockDb))[1].standing_reach_cm).toBe(236);
 
   // A whole-phone backup is not taken for one athlete.
   mockPicked = JSON.stringify({ format: 'jump-attack-backup', schema_version: 1, exported_at: '', tables: { athlete: [{ id: 1, name: 'x' }] } });

@@ -33,7 +33,7 @@ export default function Team() {
       {rows.map((row) => (
         <Member key={row.id} row={row} onPress={() => open(row.id)} />
       ))}
-      <Button label="测试日 · 全队轮流测" variant="secondary" onPress={() => router.push('/test-day')} />
+      <Button label="测试日 · 全队轮流测" variant="secondary" onPress={() => router.push({ pathname: '/test-day', params: { crew: 'all' } })} />
     </ScrollView>
   );
 }

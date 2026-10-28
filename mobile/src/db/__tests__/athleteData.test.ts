@@ -131,6 +131,13 @@ describe('importAthlete', () => {
     expect(await records(db, 1)).toEqual(ownBefore);
   });
 
+  it('still recognises an athlete renamed on either phone, by when they were added', async () => {
+    const { db, mate } = await coachPhone();
+    const file = await exportAthlete(db, mate);
+    await updateAthlete(db, { ...(await getAthlete(db, mate))!, name: '王小明' });
+    expect((await findSameAthlete(db, file))?.id).toBe(mate);
+  });
+
   it("does not take a new phone's default athlete for the same person", async () => {
     const { db } = await coachPhone();
     expect(await findSameAthlete(await setup(), await exportAthlete(db, 1))).toBeNull();

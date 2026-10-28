@@ -32,9 +32,15 @@ const MISSING: Record<Missing, string> = { body_mass: '体重', standing_reach: 
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
 
+/** Says what the dunk page says (domain/dunkSummary.ts gapHeading): over the line only once the touch's error clears it. */
 function gapText(d: DunkDiagnosis): string {
-  if (d.gapCm == null) return '还没测摸高';
-  const text = d.gapCm <= 0 ? `过线 ${(-d.gapCm).toFixed(1)} cm` : `差 ${d.gapCm.toFixed(1)} cm`;
+  const gap = d.gapCm;
+  if (gap == null) return '还没测摸高';
+  let text: string;
+  if (d.verdict === 'over') text = gap < 0 ? `过线 ${(-gap).toFixed(1)} cm` : '正好摸到线';
+  else if (d.verdict === 'close') text = gap <= 0 ? '摸到线 · 在误差内' : `差 ${gap.toFixed(1)} cm · 在误差内`;
+  // A touch a hair under the line rounds to a 0.0 cm gap.
+  else text = gap > 0 ? `差 ${gap.toFixed(1)} cm` : '差不到 0.1 cm';
   return d.touch.source === 'standing' ? `${text} · 原地估算` : text;
 }
 

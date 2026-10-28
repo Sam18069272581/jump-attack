@@ -36,8 +36,8 @@ export default function Me() {
 
           <Athletes />
 
-          {/* Keyed so the form starts fresh when switching athlete. */}
-          {current && <ProfileForm key={current.id} athlete={current} onSaved={reload} />}
+          {/* Keyed on the whole row so the form starts fresh when switching athlete or when an import replaces the profile. */}
+          {current && <ProfileForm key={JSON.stringify(current)} athlete={current} onSaved={reload} />}
 
           <Pressable accessibilityRole="button" onPress={() => router.push('/backup')} style={styles.athlete}>
             <Icon name="cloud" size={18} color={colors.textMuted} />
@@ -110,10 +110,15 @@ function Athletes() {
       await run();
       return;
     }
-    Alert.alert(`更新${same.name}的数据？`, `文件里：${describeBackup(file)}\n\n${same.name}在这台手机上的记录会换成文件里的，不能撤销；其他人的数据不受影响。`, [
-      { text: '取消', style: 'cancel' },
-      { text: '更新', style: 'destructive', onPress: () => void run(same.id) },
-    ]);
+    const here = describeBackup(await exportAthlete(db, same.id));
+    Alert.alert(
+      `更新${same.name}的数据？`,
+      `文件里：${describeBackup(file)}\n手机上现在：${here}\n\n${same.name}在这台手机上的记录会换成文件里的，只在这台手机上记的会没有，不能撤销；需要的话先导出一份。其他人的数据不受影响。`,
+      [
+        { text: '取消', style: 'cancel' },
+        { text: '更新', style: 'destructive', onPress: () => void run(same.id) },
+      ],
+    );
   }
 
   return (

@@ -7,6 +7,12 @@ import { toISODate } from './dates';
  */
 export const BACKUP_FORMAT = 'jump-attack-backup';
 
+/**
+ * One athlete and everything recorded for them, in the same shape as a backup, for handing a teammate their own data
+ * or bringing it to another phone. Imported next to the people already there, never in place of them.
+ */
+export const ATHLETE_FORMAT = 'jump-attack-athlete';
+
 export type BackupValue = string | number | null;
 export type BackupRow = Record<string, BackupValue>;
 
@@ -24,9 +30,20 @@ export type BackupParse = { ok: true; backup: Backup } | { ok: false; problem: s
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isValue = (v: unknown) => v === null || typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v));
 
+/** How a file's problems name it: a whole backup to restore, or one athlete's data to import. */
+const WORDS = {
+  [BACKUP_FORMAT]: { notOurs: '这不是 Jump Attack 的备份文件。', newer: '这份备份来自更新版本的 App，先更新 App 再恢复。', broken: '备份文件里的' },
+  [ATHLETE_FORMAT]: { notOurs: '这不是 Jump Attack 的运动员数据文件。', newer: '这份文件来自更新版本的 App，先更新 App 再导入。', broken: '文件里的' },
+};
+
 /** The tables of a file in `format`, checked row by row, or what is wrong with it. */
-function readTables(text: string, format: string, latestVersion: number): { ok: true; schema_version: number; exported_at: string; tables: Backup['tables'] } | { ok: false; problem: string; format?: unknown } {
-  const notOurs = { ok: false, problem: '这不是 Jump Attack 的备份文件。' } as const;
+function readTables(
+  text: string,
+  format: typeof BACKUP_FORMAT | typeof ATHLETE_FORMAT,
+  latestVersion: number,
+): { ok: true; schema_version: number; exported_at: string; tables: Backup['tables'] } | { ok: false; problem: string; format?: unknown } {
+  const words = WORDS[format];
+  const notOurs = { ok: false, problem: words.notOurs } as const;
   let data: unknown;
   try {
     data = JSON.parse(text);
@@ -37,11 +54,11 @@ function readTables(text: string, format: string, latestVersion: number): { ok: 
   if (data.format !== format) return { ...notOurs, format: data.format };
   if (!Number.isInteger(data.schema_version) || !isObject(data.tables)) return notOurs;
   // A newer app's columns are unknown here and would be silently dropped.
-  if ((data.schema_version as number) > latestVersion) return { ok: false, problem: '这份备份来自更新版本的 App，先更新 App 再恢复。' };
+  if ((data.schema_version as number) > latestVersion) return { ok: false, problem: words.newer };
 
   const tables = data.tables;
   for (const [name, rows] of Object.entries(tables)) {
-    if (!Array.isArray(rows) || !rows.every((r) => isObject(r) && Object.values(r).every(isValue))) return { ok: false, problem: `备份文件里的 ${name} 有损坏的记录。` };
+    if (!Array.isArray(rows) || !rows.every((r) => isObject(r) && Object.values(r).every(isValue))) return { ok: false, problem: `${words.broken} ${name} 有损坏的记录。` };
   }
   return { ok: true, schema_version: data.schema_version as number, exported_at: typeof data.exported_at === 'string' ? data.exported_at : '', tables: tables as Backup['tables'] };
 }
@@ -56,12 +73,6 @@ export function parseBackup(text: string, latestVersion: number): BackupParse {
   if (!Array.isArray(read.tables.athlete) || read.tables.athlete.length === 0) return { ok: false, problem: '备份里没有测试对象。' };
   return { ok: true, backup: { format: BACKUP_FORMAT, schema_version: read.schema_version, exported_at: read.exported_at, tables: read.tables } };
 }
-
-/**
- * One athlete and everything recorded for them, in the same shape as a backup, for handing a teammate their own data
- * or bringing it to another phone. Imported next to the people already there, never in place of them.
- */
-export const ATHLETE_FORMAT = 'jump-attack-athlete';
 
 export type AthleteFile = Omit<Backup, 'format'> & { format: typeof ATHLETE_FORMAT };
 

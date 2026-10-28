@@ -46,6 +46,17 @@ describe('teamBoard', () => {
     expect(teamBoard([entry(1, '甲', {})])[0].gap).toBe('差 35.0 cm · 原地估算');
   });
 
+  it('only claims the line when the dunk page does, counting the touch’s error (domain/touch.ts lineVerdict)', () => {
+    const gap = (approachTouch: number, errorCm: number | null) => teamBoard([entry(1, '甲', { approachTouch: [approachTouch], approachSpread: { jumps: 3, errorCm } })])[0].gap;
+    // 319.96 rounds to a 0.0 cm gap but is still under 320.
+    expect(gap(319.96, null)).toBe('差不到 0.1 cm');
+    expect(gap(320, null)).toBe('正好摸到线');
+    // 321 ± 2.1: the line is inside the error, so not yet for sure.
+    expect(gap(321, 2.1)).toBe('摸到线 · 在误差内');
+    expect(gap(318.5, 2.3)).toBe('差 1.5 cm · 在误差内');
+    expect(gap(323, 2.1)).toBe('过线 3.0 cm');
+  });
+
   it('names the weak link the diagnosis found, and says when one test is all it rests on', () => {
     // 1RM 100 kg at 75 kg is 1.33× body mass, under 1.5×: strength (Suchomel 2018, see domain/dunk.ts).
     const weak = teamBoard([entry(1, '甲', { squat1rm: [100] })])[0];

@@ -43,10 +43,13 @@ export async function exportAthlete(db: SQLiteDatabase, athleteId: number): Prom
   return { format: ATHLETE_FORMAT, schema_version: version?.user_version ?? 0, exported_at: new Date().toISOString(), tables };
 }
 
-/** The athlete on this phone the file came from or went to before: same name and the same moment they were added. */
+/**
+ * The athlete on this phone the file came from or went to before: added at the same moment (to the millisecond, and
+ * copied unchanged by export, import and restore), whatever either phone renamed them to since.
+ */
 export async function findSameAthlete(db: SQLiteDatabase, file: AthleteFile): Promise<Athlete | null> {
   const a = file.tables.athlete[0];
-  const row = await db.getFirstAsync<{ id: number }>('SELECT id FROM athlete WHERE name = ? AND created_at = ?', a.name, a.created_at ?? '');
+  const row = await db.getFirstAsync<{ id: number }>('SELECT id FROM athlete WHERE created_at = ? ORDER BY (name = ?) DESC, id LIMIT 1', a.created_at ?? '', a.name);
   return row && (await db.getFirstAsync<Athlete>('SELECT * FROM athlete WHERE id = ?', row.id));
 }
 

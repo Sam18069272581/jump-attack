@@ -141,6 +141,12 @@ describe('one athlete\'s file', () => {
     expect(parseAthleteFile('not json', 7).ok).toBe(false);
   });
 
+  it('calls it a data file to import in its own problems, not a backup to restore', () => {
+    expect(parseAthleteFile(JSON.stringify({ ...file(), schema_version: 8 }), 7)).toEqual({ ok: false, problem: '这份文件来自更新版本的 App，先更新 App 再导入。' });
+    expect(parseAthleteFile(JSON.stringify({ hello: 1 }), 7)).toEqual({ ok: false, problem: '这不是 Jump Attack 的运动员数据文件。' });
+    expect(parseAthleteFile(JSON.stringify({ ...file(), tables: { ...file().tables, trial: [{ id: 1, value: [1] }] } }), 7)).toEqual({ ok: false, problem: '文件里的 trial 有损坏的记录。' });
+  });
+
   it('is named after the athlete and the day, without characters a file name cannot hold', () => {
     expect(athleteFileName('小明', new Date(2026, 9, 28, 23, 30))).toBe('jump-attack-小明-2026-10-28.json');
     expect(athleteFileName('A/B: "C"', new Date(2026, 9, 28))).toBe('jump-attack-A_B_ _C_-2026-10-28.json');
