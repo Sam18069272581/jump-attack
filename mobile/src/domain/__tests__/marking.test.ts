@@ -14,6 +14,11 @@ describe('markedTrial', () => {
     expect(t).toEqual({ value: 37.1, flight_ms: expect.closeTo(550, 6), fps: 240, takeoff_frame: 120, landing_frame: 252 });
   });
 
+  it('remembers which photo-library video the marks came from', () => {
+    const t = markedTrial(measured('cmj', [120, 252], 240), [120, 252], 240, { asset: 'ABC-123/L0/001' });
+    expect(t.detail).toEqual({ source: 'video', asset_id: 'ABC-123/L0/001' });
+  });
+
   it('stores a drop jump’s touch-down frame and box height in the detail', () => {
     // Touch-down 0, take-off 48 (200 ms), landing 168 (0.5 s flight = 30.7 cm), RSI 1.53.
     const marks = [0, 48, 168];

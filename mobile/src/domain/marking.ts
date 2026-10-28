@@ -199,8 +199,11 @@ export function returnsToLogger(from: string | undefined): boolean {
   return from != null && LOGGERS.includes(from);
 }
 
-/** What the screens above the marking screen pass along: the load, reps and bar travel of a VBT set, a drop jump's box. */
-export type MarkContext = { from?: string; load?: string; reps?: string; rom?: string; box?: string };
+/**
+ * What the screens above the marking screen pass along: the load, reps and bar travel of a VBT set, a drop jump's box,
+ * and the photo-library id of the clip, so the video can be found again without the app keeping a copy.
+ */
+export type MarkContext = { from?: string; load?: string; reps?: string; rom?: string; box?: string; asset?: string };
 
 export type MarkedTrial = {
   value: number;
@@ -222,6 +225,7 @@ export function markedTrial(outcome: Extract<MarkOutcome, { ok: true }>, marks: 
     ...(vbt ? { rom_cm: Number(ctx.rom), ...(Number(ctx.reps) ? { reps: Number(ctx.reps) } : {}) } : {}),
     ...outcome.detail,
     ...(ctx.box ? { box_cm: Number(ctx.box) } : {}),
+    ...(ctx.asset ? { asset_id: ctx.asset } : {}),
   };
   return {
     value: outcome.value,

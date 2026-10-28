@@ -1,13 +1,14 @@
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ui';
-import { createAthlete, updateAthlete, type Athlete } from '@/db/repo';
+import { clearSavedVideoUris, createAthlete, updateAthlete, type Athlete } from '@/db/repo';
 import { CLEARANCE_CM, dunkLine, RIM_CM } from '@/domain/dunk';
 import { pushOff } from '@/domain/fvp';
+import { deleteSavedVideos, savedVideos } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
 import { colors, radius, text } from '@/theme';
 
@@ -53,7 +54,9 @@ export default function Me() {
           {/* Keyed so the form starts fresh when switching athlete. */}
           {current && <ProfileForm key={current.id} athlete={current} onSaved={reload} />}
 
-          <Text style={styles.footnote}>数据只保存在这台手机上。Apple 健康、训练计划和云同步会在后续版本加入。</Text>
+          <OldVideos />
+
+          <Text style={styles.footnote}>数据只保存在这台手机上。</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -113,6 +116,44 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
         扣篮线 {dunkLine(toNumber(rim), toNumber(clearance))} cm。单手能抓住球约需高出篮筐 15 cm；手小要托球或想双手扣，余量再加大。
       </Text>
       <Button label="保存" onPress={save} busy={saving} disabled={!name.trim()} />
+    </View>
+  );
+}
+
+/** Copies of marked clips that earlier versions kept; the originals are still in the photo library. */
+function OldVideos() {
+  const db = useSQLiteContext();
+  const [stored, setStored] = useState<{ count: number; bytes: number } | null>(null);
+
+  useEffect(() => {
+    savedVideos().then(setStored, () => setStored(null));
+  }, []);
+
+  if (!stored?.count) return null;
+  const mb = Math.round(stored.bytes / 1e6);
+
+  function confirmClear() {
+    Alert.alert('清理旧录像？', `删除 App 里保存的 ${stored!.count} 段录像副本，释放约 ${mb} MB。原视频还在相册里，测试成绩不受影响。`, [
+      { text: '取消', style: 'cancel' },
+      {
+        text: '清理',
+        style: 'destructive',
+        onPress: async () => {
+          await deleteSavedVideos();
+          await clearSavedVideoUris(db);
+          setStored({ count: 0, bytes: 0 });
+        },
+      },
+    ]);
+  }
+
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={text.section}>存储</Text>
+      <Text style={text.muted}>
+        {stored.count} 段旧录像，共 {mb} MB
+      </Text>
+      <Button label="清理旧录像" variant="secondary" onPress={confirmClear} />
     </View>
   );
 }

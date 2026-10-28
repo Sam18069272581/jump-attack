@@ -111,6 +111,15 @@ export async function deleteTrial(db: SQLiteDatabase, id: number): Promise<void>
   await db.runAsync('DELETE FROM test_session WHERE id NOT IN (SELECT DISTINCT session_id FROM trial)');
 }
 
+/** Folder the app used to copy every marked video into; see media/videos.ts. */
+export const SAVED_VIDEO_DIR = '/videos/';
+
+/** Drops references to the app's own video copies once they are deleted. Returns how many trials pointed at one. */
+export async function clearSavedVideoUris(db: SQLiteDatabase): Promise<number> {
+  const r = await db.runAsync("UPDATE trial SET video_uri = NULL WHERE instr(video_uri, ?) > 0", SAVED_VIDEO_DIR);
+  return r.changes;
+}
+
 export async function listTrials(db: SQLiteDatabase, sessionId: string): Promise<Trial[]> {
   const rows = await db.getAllAsync<Omit<Trial, 'detail'> & { detail: string | null }>('SELECT * FROM trial WHERE session_id = ? ORDER BY id', sessionId);
   return rows.map((r) => ({ ...r, detail: r.detail ? JSON.parse(r.detail) : null }));

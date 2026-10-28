@@ -40,11 +40,11 @@ export default function Capture() {
       preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
     });
     if (res.canceled || !res.assets[0]) return;
-    goMark(res.assets[0].uri, 0);
+    goMark(res.assets[0].uri, 0, res.assets[0].assetId);
   }
 
-  function goMark(uri: string, recordedFps: number) {
-    router.push({ pathname: '/measure/mark', params: { ...pass, uri, fps: String(recordedFps) } });
+  function goMark(uri: string, recordedFps: number, asset?: string | null) {
+    router.push({ pathname: '/measure/mark', params: { ...pass, uri, fps: String(recordedFps), ...(asset ? { asset } : {}) } });
   }
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));

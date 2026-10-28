@@ -1,16 +1,19 @@
 // Drives the profile screen with the real athlete provider and an in-memory database: edit the profile, save, switch athlete.
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
-import { Text, TextInput } from 'react-native';
+import { Alert, Text, TextInput, type AlertButton } from 'react-native';
 
 import { migrate } from '@/db/migrations';
-import { createAthlete, getAthlete } from '@/db/repo';
+import { addTrial, createAthlete, ensureSession, getAthlete, listTrials } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
+import { deleteSavedVideos } from '@/media/videos';
 import { AthleteProvider } from '@/state/athlete';
 
 import Me from '../(tabs)/me';
 
 const mockDb = openMemoryDb();
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
+// Three old copies of slow-motion clips, 94 MB in all.
+jest.mock('@/media/videos', () => ({ savedVideos: jest.fn(async () => ({ count: 3, bytes: 94_000_000 })), deleteSavedVideos: jest.fn(async () => {}) }));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
 
 function texts(root: ReactTestInstance): string {
@@ -65,4 +68,20 @@ it('switches to another athlete with their own profile', async () => {
   await act(async () => r.root.find((n) => n.props.accessibilityRole === 'radio' && n.findAllByType(Text).some((t) => t.props.children === '队友')).props.onPress());
   expect(field(r.root, '名字').props.value).toBe('队友');
   expect(field(r.root, '体重（kg）').props.value).toBe('');
+});
+
+it('clears old video copies after confirming', async () => {
+  await ensureSession(mockDb, 'v', 1, 'cmj');
+  await addTrial(mockDb, { session_id: 'v', value: 40, video_uri: 'file:///Documents/videos/v-1.mov' });
+  const r = await render();
+  expect(texts(r.root)).toContain('3 段旧录像，共 94 MB');
+
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons?: AlertButton[]) => {
+    buttons?.find((b) => b.style === 'destructive')?.onPress?.();
+  });
+  await act(async () => pressable(r.root, '清理旧录像').props.onPress());
+  await act(async () => {});
+  expect(alert).toHaveBeenCalled();
+  expect(deleteSavedVideos).toHaveBeenCalled();
+  expect((await listTrials(mockDb, 'v'))[0].video_uri).toBeNull();
 });

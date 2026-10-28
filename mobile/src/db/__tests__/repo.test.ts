@@ -1,7 +1,7 @@
 import { LATEST_VERSION, migrate } from '../migrations';
 import { getMetric } from '@/domain/metrics';
 
-import { addTrial, deleteTrial, ensureSession, listAthletes, listMetricResults, listSessionResults, listSessionValues, listTrials, saveSession, sessionCounts } from '../repo';
+import { addTrial, clearSavedVideoUris, deleteTrial, ensureSession, listAthletes, listMetricResults, listSessionResults, listSessionValues, listTrials, saveSession, sessionCounts } from '../repo';
 import { openMemoryDb } from '../testing/memoryDb';
 
 async function setup() {
@@ -69,5 +69,18 @@ describe('sessions and trials', () => {
     expect(r.trials).toBe(3);
     expect(await listSessionValues(db, 1, 'rsa')).toEqual({ r1: [7.0, 7.2, 7.4] });
     expect(await listSessionValues(db, 1, 'cmj')).toEqual({});
+  });
+});
+
+describe('saved videos', () => {
+  it('forgets copies in the app’s video folder and leaves other video references alone', async () => {
+    const db = await setup();
+    await ensureSession(db, 'a', 1, 'cmj');
+    await addTrial(db, { ...trial('a', 35), video_uri: 'file:///var/mobile/Documents/videos/a-1.mov' });
+    await addTrial(db, { ...trial('a', 36), video_uri: 'file:///var/mobile/Caches/ImagePicker/x.mov' });
+    await addTrial(db, trial('a', 37));
+
+    expect(await clearSavedVideoUris(db)).toBe(1);
+    expect((await listTrials(db, 'a')).map((t) => t.video_uri)).toEqual([null, 'file:///var/mobile/Caches/ImagePicker/x.mov', null]);
   });
 });

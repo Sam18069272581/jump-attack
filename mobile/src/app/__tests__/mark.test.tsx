@@ -6,6 +6,8 @@ import { migrate } from '@/db/migrations';
 import { listTrials } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 
+import { persistVideo } from '@/media/videos';
+
 import Mark from '../measure/mark';
 
 const mockDb = openMemoryDb();
@@ -93,7 +95,9 @@ it('marks a CMJ frame by frame and saves it as a trial', async () => {
 
   await press(pressable(r.root, '保存这一次'));
   const [t] = await listTrials(mockDb, 'cmj-1');
-  expect(t).toMatchObject({ value: 37.1, fps: 240, takeoff_frame: 120, landing_frame: 252 });
+  expect(t).toMatchObject({ value: 37.1, fps: 240, takeoff_frame: 120, landing_frame: 252, video_uri: null });
+  // The clip stays in the photo library; the app keeps no copy of it.
+  expect(persistVideo).not.toHaveBeenCalled();
   expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/measure/result', params: { metric: 'cmj', session: 'cmj-1' } });
 });
 

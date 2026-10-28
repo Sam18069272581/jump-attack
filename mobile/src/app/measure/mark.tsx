@@ -13,7 +13,6 @@ import { addTrial, ensureSession } from '@/db/repo';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
 import { markedTrial, markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
-import { persistVideo } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -25,7 +24,7 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
 }
 
 export default function Mark() {
-  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; reps?: string; rom?: string; box?: string }>();
+  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; reps?: string; rom?: string; box?: string; asset?: string }>();
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const def = getMetric(params.metric);
@@ -84,9 +83,9 @@ export default function Mark() {
     if (!result.ok || !current) return;
     setSaving(true);
     try {
-      const videoUri = await persistVideo(params.uri, params.session).catch(() => params.uri);
       await ensureSession(db, params.session, current.id, params.metric);
-      await addTrial(db, { session_id: params.session, video_uri: videoUri, ...markedTrial(result, marked, fps, params) });
+      // The clip stays in the photo library (its id is in the detail); copying every one filled the phone.
+      await addTrial(db, { session_id: params.session, ...markedTrial(result, marked, fps, params) });
       // A VBT set or a profile jump goes straight back to its log (capture and marking are the two screens above it).
       if (returnsToLogger(params.from)) return router.dismiss(2);
       router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
