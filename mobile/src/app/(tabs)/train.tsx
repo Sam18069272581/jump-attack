@@ -13,6 +13,7 @@ import { insertDeload } from '@/db/training';
 import { addDays, daysBetween, shortDate, weekday, WEEKDAY_NAMES, type ISODate } from '@/domain/dates';
 import { isRetestWeek, nextBlockStart, retestCodes } from '@/domain/blocks';
 import { blockPosition, DELOAD_DAYS, missedThisWeek, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
+import { APPROACH_TOUCH } from '@/domain/metrics';
 import { DELOAD_STREAK } from '@/domain/readiness';
 import { STATUS_TEXT } from '@/domain/recovery';
 import { useAthlete } from '@/state/athlete';
@@ -222,8 +223,15 @@ function PlanView({
                 {planned.session.code} · {planned.session.name}
               </Text>
               <Text style={text.muted}>
-                {planned.session.focus} · {planned.block && !planned.inserted && template.blocks?.[planned.block.type].weeks[planned.block.week].retest ? '减量复测周' : PHASE_NAMES[planned.phase]}
-                {planned.inserted ? '（疲劳后插入）' : ''}
+                {planned.session.focus} ·{' '}
+                {planned.goal === 'test'
+                  ? '目标日'
+                  : planned.goal === 'taper'
+                    ? '赛前减量：量减半，强度不变'
+                    : planned.block && !planned.inserted && template.blocks?.[planned.block.type].weeks[planned.block.week].retest
+                      ? '减量复测周'
+                      : PHASE_NAMES[planned.phase]}
+                {planned.inserted && !planned.goal ? '（疲劳后插入）' : ''}
               </Text>
             </View>
             <AdjustmentNote
@@ -232,7 +240,9 @@ function PlanView({
               dropPct={workout ? workout.cmjDrop : readiness.dropPct}
             />
             <SessionItems session={shown.session} />
-            {daysBetween(selected, today) >= 0 ? (
+            {planned.goal === 'test' ? (
+              <TestDayActions today={isToday} />
+            ) : daysBetween(selected, today) >= 0 ? (
               <Button
                 label={workout?.finishedAt ? '查看训练记录' : workout ? '继续训练' : isToday ? '开始训练' : '补记这次训练'}
                 variant={workout?.finishedAt ? 'secondary' : 'primary'}
@@ -261,6 +271,17 @@ function PlanView({
         )}
       </Card>
     </>
+  );
+}
+
+/** The goal day is the real test: the touch test, then attempts at the rim. Nothing to tick off as a workout. */
+function TestDayActions({ today }: { today: boolean }) {
+  if (!today) return <Text style={text.caption}>到那天：热身，测助跑摸高，再去篮下试扣。</Text>;
+  return (
+    <View style={{ gap: 10 }}>
+      <Button label="测助跑摸高" onPress={() => router.push({ pathname: '/measure/capture', params: { metric: APPROACH_TOUCH.code, session: newSessionId(), from: 'train' } })} />
+      <Button label="记扣篮尝试" variant="secondary" onPress={() => router.push('/attempts')} />
+    </View>
   );
 }
 

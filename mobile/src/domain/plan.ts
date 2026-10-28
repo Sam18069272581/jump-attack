@@ -1,6 +1,7 @@
 import { type Readiness } from './assess';
 import { addDays, daysBetween, mondayOf, weekday, type ISODate } from './dates';
 import type { BlockType } from './dunk';
+import { DUNK_TEST_SESSION, goalDay, TAPER } from './goal';
 import { roundLoad } from './vbt';
 
 /**
@@ -100,6 +101,8 @@ export type PlanSettings = {
   deloads?: ISODate[];
   /** Block plans only: the blocks in order. The first starts with the plan. */
   blocks?: PlanBlock[];
+  /** The athlete's dunk goal date (see domain/goal.ts): the taper before it and the dunk test on it. */
+  goalDate?: ISODate | null;
 };
 
 export type PlannedSession = {
@@ -112,6 +115,8 @@ export type PlannedSession = {
   inserted?: boolean;
   /** Block plans: where in which block the day falls. */
   block?: BlockPosition;
+  /** The taper before the goal date, or the dunk test on it. */
+  goal?: 'taper' | 'test';
 };
 
 export const MIN_RPE = 5;
@@ -172,19 +177,23 @@ export function planDay(t: PlanTemplate, s: PlanSettings, date: ISODate): Planne
   if (daysBetween(s.startDate, date) < 0) return null;
   const { planDate, inserted } = planPosition(s, date);
   const week = Math.floor(daysBetween(mondayOf(s.startDate), planDate) / 7);
+  const goal = goalDay(s.goalDate, date);
+  if (goal === 'test') return { date, week, phase: TAPER.phase, session: DUNK_TEST_SESSION, goal };
   if (!t.repeat && week >= t.weeks.length) return null;
   // Weekdays are kept: an inserted week is exactly 7 days, so the original date falls on the same weekday.
   const slot = [...s.weekdays].sort((a, b) => a - b).indexOf(weekday(date));
   if (slot < 0) return null;
+  // The taper replaces whatever the week planned, an inserted deload included.
+  const tapered = goal === 'taper' ? { goal } : {};
   const block = t.blocks ? blockAt(s, planDate) : null;
   if (t.blocks && block) {
     const bt = t.blocks[block.type];
-    const spec = inserted ? (bt.weeks.find((w) => w.phase === 'deload') ?? INSERTED_DELOAD) : bt.weeks[block.week];
+    const spec = goal ? TAPER : inserted ? (bt.weeks.find((w) => w.phase === 'deload') ?? INSERTED_DELOAD) : bt.weeks[block.week];
     const session = blockSession(bt, slot, s.blocks![block.index].extras ?? []);
-    return { date, week, phase: spec.phase, session: scaleSession(session, spec), ...(inserted ? { inserted } : {}), block };
+    return { date, week, phase: spec.phase, session: scaleSession(session, spec), ...(inserted ? { inserted } : {}), block, ...tapered };
   }
-  const spec = inserted ? (t.weeks.find((w) => w.phase === 'deload') ?? INSERTED_DELOAD) : t.weeks[week % t.weeks.length];
-  return { date, week, phase: spec.phase, session: scaleSession(t.sessions[slot % t.sessions.length], spec), ...(inserted ? { inserted } : {}) };
+  const spec = goal ? TAPER : inserted ? (t.weeks.find((w) => w.phase === 'deload') ?? INSERTED_DELOAD) : t.weeks[week % t.weeks.length];
+  return { date, week, phase: spec.phase, session: scaleSession(t.sessions[slot % t.sessions.length], spec), ...(inserted ? { inserted } : {}), ...tapered };
 }
 
 /** Weeks in a training block: three to train, the fourth to deload and retest. */

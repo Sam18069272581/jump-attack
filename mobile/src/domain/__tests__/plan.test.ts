@@ -13,10 +13,12 @@ import {
   planFinished,
   planPosition,
   planWeekOf,
+  scaleSession,
   summarizeWorkout,
   type PlanSettings,
   type SessionTemplate,
 } from '../plan';
+import { DUNK_TEST_SESSION, TAPER } from '../goal';
 import { BLOCK_PLAN_CODE, defaultWeekdays, getTemplate, TEMPLATES } from '../templates';
 
 const fourPlusOne = getTemplate('jump-4-1')!;
@@ -221,6 +223,33 @@ describe('block plans', () => {
     const r1 = planDay(blocks, s, '2026-10-19')!.session;
     expect(summarizeWorkout(r1, [{ exercise_code: 'pogo', set_no: 1, reps: 15, load_kg: null, rpe: null }]).jumps).toBe(15);
     expect(isJump({ code: 'sprint_20', name: '20 m 冲刺', kind: 'transfer', sets: 1, reps: 1 })).toBe(false);
+  });
+});
+
+describe('goal date', () => {
+  const blocks = getTemplate(BLOCK_PLAN_CODE)!;
+  const s: PlanSettings = { templateCode: BLOCK_PLAN_CODE, startDate: '2026-10-19', weekdays: [1, 3, 5], blocks: [{ start: '2026-10-19', type: 'transfer' }] };
+  const goal: PlanSettings = { ...s, goalDate: '2026-12-01' };
+
+  it('halves the sets in the last 10 days, keeping the intensity and the training days', () => {
+    expect(planDay(blocks, goal, '2026-11-20')).toEqual(planDay(blocks, s, '2026-11-20')); // 11 days out
+    const taper = planDay(blocks, goal, '2026-11-23')!; // Monday, 8 days out
+    expect(taper.goal).toBe('taper');
+    expect(taper.session).toEqual(scaleSession(blocks.blocks!.transfer.sessions[0], TAPER));
+    expect(taper.session.items.map((p) => p.sets)).toEqual(blocks.blocks!.transfer.sessions[0].items.map((p) => Math.max(1, Math.round(p.sets / 2))));
+    expect(planDay(blocks, goal, '2026-11-24')).toBeNull(); // still a rest day
+  });
+
+  it('makes the goal day the dunk test, even on a rest day or after the plan ends', () => {
+    expect(planDay(blocks, goal, '2026-12-01')).toMatchObject({ goal: 'test', session: DUNK_TEST_SESSION });
+    expect(planDay(blocks, s, '2026-12-01')).toBeNull();
+    const ended: PlanSettings = { ...settings, goalDate: '2027-03-02' };
+    expect(planFinished(fourPlusOne, ended, '2027-03-02')).toBe(true);
+    expect(planDay(fourPlusOne, ended, '2027-03-02')?.goal).toBe('test');
+  });
+
+  it('goes back to the plan after the goal day', () => {
+    expect(planDay(blocks, goal, '2026-12-02')).toEqual(planDay(blocks, s, '2026-12-02'));
   });
 });
 

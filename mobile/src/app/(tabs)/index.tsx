@@ -15,6 +15,7 @@ import { dayState, RIM_CM, type DayState, type DunkDiagnosis } from '@/domain/du
 import { attemptSummary, BALL_NAME, type AttemptSummary } from '@/domain/dunkAttempts';
 import { CATEGORIES, SUPPORT_CATEGORIES, type CategoryDef } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
+import { loadGoalSummary } from '@/state/goal';
 import { loadReadiness, todayISO } from '@/state/training';
 import { colors, radius, text } from '@/theme';
 
@@ -22,7 +23,7 @@ import { colors, radius, text } from '@/theme';
 export default function Home() {
   const db = useSQLiteContext();
   const { current } = useAthlete();
-  const [goal, setGoal] = useState<{ diagnosis: DunkDiagnosis; state: DayState; attempts: AttemptSummary | null } | null>(null);
+  const [goal, setGoal] = useState<{ diagnosis: DunkDiagnosis; state: DayState; attempts: AttemptSummary | null; due: GoalText } | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
   const main = CATEGORIES.filter((c) => !SUPPORT_CATEGORIES.includes(c.key));
   const support = CATEGORIES.filter((c) => SUPPORT_CATEGORIES.includes(c.key));
@@ -30,12 +31,14 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       if (!current) return;
-      Promise.all([loadDiagnosis(db, current), loadReadiness(db, current.id, todayISO()), listDunkAttempts(db, current.id)]).then(([diagnosis, readiness, attempts]) =>
+      const today = todayISO();
+      Promise.all([loadDiagnosis(db, current), loadReadiness(db, current.id, today), listDunkAttempts(db, current.id)]).then(async ([diagnosis, readiness, attempts]) =>
         setGoal({
           diagnosis,
           state: dayState(readiness),
           // The goal setup first; practice at a lower rim or with a smaller ball when that is all there is.
           attempts: attemptSummary(attempts, { rimCm: current.rim_height_cm ?? RIM_CM, ball: 'basketball' }) ?? attemptSummary(attempts),
+          due: await loadGoalSummary(db, current, diagnosis, today),
         }),
       );
     }, [db, current]),
@@ -49,6 +52,9 @@ export default function Home() {
             <ReachHero diagnosis={goal.diagnosis} standingReach={current?.standing_reach_cm ?? null} name={current?.name ?? ''} onSwitchAthlete={() => router.push('/me')} />
             <Rise index={1}>
               <DunkSummary diagnosis={goal.diagnosis} />
+            </Rise>
+            <Rise index={2}>
+              <GoalRow due={goal.due} />
             </Rise>
             <Rise index={2}>
               <AttemptsRow summary={goal.attempts} />
@@ -77,6 +83,28 @@ export default function Home() {
         </Rise>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+type GoalText = { title: string; lines: string[] };
+
+/** The goal date: the countdown, when the touch trend reaches the line, and what that does to training. Set in 我的. */
+function GoalRow({ due }: { due: GoalText }) {
+  return (
+    <PressScale accessibilityLabel="目标日" style={styles.module} onPress={() => router.push('/me')}>
+      <View style={[styles.tile, { backgroundColor: colors.surfaceRaised }]}>
+        <Icon name="plan" size={22} color={colors.accent} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.moduleTitle}>{due.title}</Text>
+        {due.lines.map((l) => (
+          <Text key={l} style={styles.moduleSub}>
+            {l}
+          </Text>
+        ))}
+      </View>
+      <Icon name="chevronRight" size={18} color={colors.textMuted} />
+    </PressScale>
   );
 }
 

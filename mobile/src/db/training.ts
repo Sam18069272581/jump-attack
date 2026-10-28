@@ -21,7 +21,7 @@ export type Workout = {
   finishedAt: string | null;
 };
 
-type PlanRow = { id: number; athlete_id: number; template_code: string; start_date: string; weekdays: string; deloads: string; blocks: string };
+type PlanRow = { id: number; athlete_id: number; template_code: string; start_date: string; weekdays: string; deloads: string; blocks: string; goal_date?: string | null };
 type WorkoutRow = {
   id: number;
   plan_id: number;
@@ -43,6 +43,7 @@ const toPlan = (r: PlanRow): Plan => ({
   weekdays: JSON.parse(r.weekdays),
   deloads: JSON.parse(r.deloads),
   blocks: JSON.parse(r.blocks),
+  ...(r.goal_date ? { goalDate: r.goal_date } : {}),
 });
 
 const toWorkout = (r: WorkoutRow): Workout => ({
@@ -59,7 +60,11 @@ const toWorkout = (r: WorkoutRow): Workout => ({
 });
 
 export async function getActivePlan(db: SQLiteDatabase, athleteId: number): Promise<Plan | null> {
-  const row = await db.getFirstAsync<PlanRow>('SELECT * FROM plan WHERE athlete_id = ? AND ended_at IS NULL ORDER BY id DESC', athleteId);
+  // The goal date lives with the athlete; the plan counts back from it.
+  const row = await db.getFirstAsync<PlanRow>(
+    'SELECT plan.*, athlete.goal_date FROM plan JOIN athlete ON athlete.id = plan.athlete_id WHERE plan.athlete_id = ? AND plan.ended_at IS NULL ORDER BY plan.id DESC',
+    athleteId,
+  );
   return row ? toPlan(row) : null;
 }
 

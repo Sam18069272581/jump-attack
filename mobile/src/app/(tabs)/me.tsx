@@ -9,6 +9,7 @@ import { Button } from '@/components/ui';
 import { clearSavedVideoUris, createAthlete, updateAthlete, type Athlete } from '@/db/repo';
 import { CLEARANCE_CM, dunkLine, RIM_CM } from '@/domain/dunk';
 import { pushOff } from '@/domain/fvp';
+import { parseGoalDate } from '@/domain/goal';
 import { deleteSavedVideos, savedVideos } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
 import { colors, radius, text } from '@/theme';
@@ -84,13 +85,15 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
   const [squat, setSquat] = useState(athlete.squat_height_cm?.toString() ?? '');
   const [rim, setRim] = useState(athlete.rim_height_cm?.toString() ?? '');
   const [clearance, setClearance] = useState(athlete.dunk_clearance_cm?.toString() ?? '');
+  const [goal, setGoal] = useState(athlete.goal_date ?? '');
   const [saving, setSaving] = useState(false);
+  const goalDate = parseGoalDate(goal);
   const legCm = toNumber(leg);
   const squatCm = toNumber(squat);
   const hpo = legCm != null && squatCm != null ? pushOff(legCm, squatCm) : null;
 
   async function save() {
-    if (!name.trim()) return;
+    if (!name.trim() || !goalDate.ok) return;
     setSaving(true);
     await updateAthlete(db, {
       ...athlete,
@@ -101,6 +104,7 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
       squat_height_cm: squatCm,
       rim_height_cm: toNumber(rim),
       dunk_clearance_cm: toNumber(clearance),
+      goal_date: goalDate.date,
     });
     await onSaved();
     setSaving(false);
@@ -127,7 +131,11 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
       <Text style={styles.footnote}>
         扣篮线 {dunkLine(toNumber(rim), toNumber(clearance))} cm。单手能抓住球约需高出篮筐 15 cm；手小要托球或想双手扣，余量再加大。
       </Text>
-      <Button label="保存" onPress={save} busy={saving} disabled={!name.trim()} />
+      <Field label="目标日 · 哪天前要扣进" value={goal} onChangeText={setGoal} placeholder="2026-12-01" autoCapitalize="none" autoCorrect={false} />
+      <Text style={[styles.footnote, !goalDate.ok && { color: colors.warn }]}>
+        {goalDate.ok ? '计划按它倒推：不到 6 周不再开力量块，最后 10 天量减半，当天测摸高、试扣。' : goalDate.problem}
+      </Text>
+      <Button label="保存" onPress={save} busy={saving} disabled={!name.trim() || !goalDate.ok} />
     </View>
   );
 }
