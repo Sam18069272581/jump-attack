@@ -307,7 +307,8 @@ export function checkSetup(frames: SetupFrame[], gravity: GravitySample[]): Setu
   return {
     checks,
     ready: !blocking,
-    main: blocking ?? checks.find((c) => c.state === 'warn') ?? null,
+    // Something to fix comes before a wait: a wait isn't spoken, and facing the phone also leaves the run-up side unknown.
+    main: checks.find((c) => c.state === 'fix') ?? blocking ?? checks.find((c) => c.state === 'warn') ?? null,
     level: phone.level,
     athlete: picture.athlete,
   };

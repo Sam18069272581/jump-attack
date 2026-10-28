@@ -1,4 +1,4 @@
-import { LM } from '../pose';
+import { LM, SIDE } from '../pose';
 import { AHEAD_S, BEHIND_S, checkSetup, HEADROOM_S, SETUP_CHECKS, type GravitySample, type SetupCheckKey, type SetupFrame } from '../poseSetup';
 import { standing, type Stand } from '../testing/standing';
 
@@ -213,5 +213,18 @@ describe('checkSetup', () => {
   it('says the first thing to fix: the phone before the picture', () => {
     const r = checkSetup(frames({ ...GOOD, stature: 130 }), gravity({ roll: 6 }));
     expect(r.main?.key).toBe('phone');
+  });
+
+  it('facing the phone: the hint to say aloud is to turn side-on, not a silent wait', () => {
+    // Toes pointing at the lens: the run-up side can't be told yet ('room' waits), but turning is what to do first.
+    const p = standing({ ...GOOD, yaw: 90 });
+    for (const s of ['left', 'right'] as const) {
+      p[SIDE[s].heel] = { ...p[SIDE[s].heel], x: p[SIDE[s].ankle].x };
+      p[SIDE[s].toe] = { ...p[SIDE[s].toe], x: p[SIDE[s].ankle].x };
+    }
+    const r = checkSetup(frames(GOOD).map((f) => ({ ...f, poses: [p] })), gravity());
+    expect(stateOf(r, 'room').state).toBe('wait');
+    expect(r.ready).toBe(false);
+    expect(r.main).toMatchObject({ key: 'side', state: 'fix' });
   });
 });
