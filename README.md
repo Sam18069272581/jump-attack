@@ -144,7 +144,7 @@ npm run build:web                             # 网页版导出到 dist/
 npm test && npm run typecheck && npm run lint  # 提交前全部要过
 ```
 
-分层、测试和 Git 工作流（Conventional Commits、功能分支、Squash 合并）见 [CLAUDE.md](CLAUDE.md)，Expo 相关规则见 [mobile/AGENTS.md](mobile/AGENTS.md)，更多运行细节见 [mobile/README.md](mobile/README.md)。
+分层、测试和 Git 工作流（Conventional Commits、功能分支、普通合并）见 [CLAUDE.md](CLAUDE.md)，Expo 相关规则见 [mobile/AGENTS.md](mobile/AGENTS.md)，更多运行细节见 [mobile/README.md](mobile/README.md)。
 
 ## 文档
 
