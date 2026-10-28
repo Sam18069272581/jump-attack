@@ -135,7 +135,8 @@ describe('with results', () => {
   it('leads the history tab with touch height and the three limiter tiles', async () => {
     const r = await render(<History />);
     const t = texts(r.root);
-    expect(t).toContain('离扣篮线还差 28.0 cm');
+    // The mean of 288 and 292: 320 − 290 = 30.
+    expect(t).toContain('离扣篮线还差 30.0 cm');
     expect(r.root.findByProps({ accessibilityRole: 'image' }).props.accessibilityLabel).toBe('摸高趋势，助跑实测 1 次，原地估算 2 次，扣篮线 320 cm');
     expect(t).toContain('1.63×');
     expect(t).toContain('深蹲 ÷ 体重 · 目标 2.0×');
@@ -155,7 +156,8 @@ describe('with results', () => {
     await setAthlete({ dunk_clearance_cm: 20 });
     mockParams = { metric: 'approach_touch' };
     const r = await render(<MetricHistory />);
-    expect(texts(r.root)).toContain('离扣篮线 325 cm 还差 33.0 cm');
+    expect(texts(r.root)).toContain('离扣篮线 325 cm 还差 35.0 cm');
+    expect(texts(r.root)).toContain('最好 2 跳均值');
     expect(texts(r.root)).toContain('扣篮线 325');
   });
 });

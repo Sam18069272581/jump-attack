@@ -24,6 +24,23 @@ describe('gap to the dunk line', () => {
   });
 });
 
+describe('how sure the gap is', () => {
+  it('carries the error of the latest approach touch and says whether the line is inside it', () => {
+    const d = diagnose({ ...base, approachTouch: [317], approachSpread: { jumps: 3, errorCm: 2.3 } });
+    expect(d.touchError).toEqual({ jumps: 3, errorCm: 2.3 });
+    expect(d.verdict).toBe('short');
+    expect(diagnose({ ...base, approachTouch: [318.5], approachSpread: { jumps: 3, errorCm: 2.3 } }).verdict).toBe('close');
+    expect(diagnose({ ...base, approachTouch: [323], approachSpread: { jumps: 3, errorCm: 2.3 } }).verdict).toBe('over');
+  });
+
+  it('has no error for the standing estimate, and no verdict without a touch', () => {
+    const standing = diagnose({ ...base, cmj: [45] });
+    expect(standing.touchError).toBeNull();
+    expect(standing.verdict).toBe('short');
+    expect(diagnose(base).verdict).toBeNull();
+  });
+});
+
 describe('limiter', () => {
   it('asks for strength first under 1.5× body mass, whatever the RSI', () => {
     const d = diagnose({ ...base, squat1rm: [100, 105], dropJumps: [{ rsi: 2.4, contactMs: 180 }] });

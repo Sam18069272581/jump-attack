@@ -145,6 +145,19 @@ export async function listSessionResults(
   lowerIsBetter = false,
   aggregate: MetricDef['aggregate'] = 'best',
 ): Promise<SessionResult[]> {
+  if (aggregate === 'top3') {
+    const order = lowerIsBetter ? 'ASC' : 'DESC';
+    return db.getAllAsync<SessionResult>(
+      `SELECT s.id AS session_id, s.metric_code, s.started_at, AVG(CASE WHEN t.rank <= 3 THEN t.value END) AS best, COUNT(t.id) AS trials
+       FROM test_session s
+       JOIN (SELECT id, session_id, value, ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY value ${order}) AS rank FROM trial) t ON t.session_id = s.id
+       WHERE s.athlete_id = ? AND s.metric_code = ?
+       GROUP BY s.id
+       ORDER BY s.started_at`,
+      athleteId,
+      metricCode,
+    );
+  }
   const agg = aggregate === 'mean' ? 'AVG' : lowerIsBetter ? 'MIN' : 'MAX';
   return db.getAllAsync<SessionResult>(
     `SELECT s.id AS session_id, s.metric_code, s.started_at, ${agg}(t.value) AS best, COUNT(t.id) AS trials

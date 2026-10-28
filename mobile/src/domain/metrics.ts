@@ -35,8 +35,8 @@ export type MetricDef = {
   use?: string;
   /** Plausible values; anything outside is almost certainly a typo or a mis-marked frame. */
   range?: [number, number];
-  /** How a session's attempts become its result. Defaults to the best attempt. */
-  aggregate?: 'best' | 'mean';
+  /** How a session's attempts become its result. Defaults to the best attempt; `top3` is the mean of the best three. */
+  aggregate?: 'best' | 'mean' | 'top3';
   /** A figure estimated from the measured value, shown alongside it (VO2max from a run distance). */
   estimate?: { name: string; unit: string; decimals: number; from: (value: number) => number };
   /** The value is a touch height: a jump measured from video is saved as standing reach + jump height. */
@@ -88,8 +88,10 @@ export const APPROACH_TOUCH: MetricDef & { short: string; color: string } = {
   use: '离扣篮还差多少就看它',
   capture: ['flight', 'manual'],
   plusReach: true,
-  entryHint: '输入摸到的高度：从地面量到手指摸到的刻度',
+  entryHint: '输入摸到的高度：从地面量到手指摸到的刻度。跳 6 次，每次都填，成绩取最好 3 次的平均',
   range: [150, 420],
+  // One lucky jump isn't progress: a test is 6 jumps and the result the mean of the best 3 (domain/touch.ts).
+  aggregate: 'top3',
 };
 
 /** Typed-in jumps come from another flight-time app; a jump-and-reach mark measures something else. */
@@ -318,6 +320,13 @@ export function better(metric: MetricDef, a: number, b: number): number {
 /** Best of a list of results for this metric. */
 export function best(metric: MetricDef, values: number[]): number | null {
   return values.length ? values.reduce((x, y) => better(metric, x, y)) : null;
+}
+
+/** A session's result from its attempts: the best one, or for `top3` the mean of the best three. */
+export function sessionValue(metric: MetricDef, values: number[]): number | null {
+  if (metric.aggregate !== 'top3' || values.length === 0) return best(metric, values);
+  const top = [...values].sort((a, b) => (metric.lowerIsBetter ? a - b : b - a)).slice(0, 3);
+  return top.reduce((a, b) => a + b, 0) / top.length;
 }
 
 /** Colour of a change: good, bad, or muted when it's zero or the metric has no better direction. */

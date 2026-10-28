@@ -117,8 +117,9 @@ describe('with results', () => {
     const r = await render(<Dunk />);
     const t = texts(r.root);
     expect(t).toContain('还差');
-    expect(t).toContain('28.0');
-    expect(t).toContain('助跑摸高 292.0 cm（最近一次）');
+    // The mean of the two typed-in jumps, 290 and 292: 320 − 291 = 29.
+    expect(t).toContain('29.0');
+    expect(t).toContain('助跑摸高 291.0 cm（最好 2 跳均值 ± 2.8）');
     expect(t).toContain('反应块');
     expect(t).toContain('再测一次确认');
     expect(t).toContain('深蹲是体重的 1.73 倍，力量够了；跳深 RSI 1.60，不到 2.0：练反应。');
@@ -131,12 +132,13 @@ describe('with results', () => {
   it('shows the same gap, limiter and metrics on the home screen, with the run-up touch one tap away', async () => {
     const r = await render(<Home />);
     const t = texts(r.root);
-    expect(t).toContain('28.0');
+    expect(t).toContain('29.0');
+    expect(t).toContain('最好 2 跳均值 ± 2.8');
     expect(t).toContain('反应块');
     expect(t).toContain('1.73×');
     expect(t).not.toContain('还不知道离扣篮多远');
-    // 292 cm on a ruler from the 240 cm standing reach to the 320 cm line.
-    expect(r.root.findByProps({ accessibilityRole: 'progressbar' }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 65 });
+    // 291 cm on a ruler from the 240 cm standing reach to the 320 cm line.
+    expect(r.root.findByProps({ accessibilityRole: 'progressbar' }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 64 });
     await press(r.root, '测助跑摸高');
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/measure/capture', params: { metric: 'approach_touch', session: expect.any(String) } });
   });
@@ -156,7 +158,7 @@ describe('with results', () => {
   it('puts the drop-jump ladder first in the jump list while reactive strength is the limiter', async () => {
     const r = await render(<JumpTests />);
     const t = texts(r.root);
-    expect(t).toContain('还差 28.0 cm · 短板：反应块');
+    expect(t).toContain('还差 29.0 cm · 短板：反应块');
     expect(t.indexOf('DJ 跳深 · 找最佳箱高')).toBeLessThan(t.indexOf('力-速度曲线'));
     expect(texts(pressable(r.root, 'DJ 跳深 · 找最佳箱高'))).toContain('建议测');
     expect(texts(pressable(r.root, '助跑摸高'))).not.toContain('建议测');

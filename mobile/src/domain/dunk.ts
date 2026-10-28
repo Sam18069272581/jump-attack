@@ -1,6 +1,7 @@
 import { mean } from './assess';
 import { daysBetween, toISODate, type ISODate } from './dates';
 import type { DayReadiness } from './readiness';
+import { lineVerdict, type LineVerdict } from './touch';
 
 /** Regulation rim height, cm. */
 export const RIM_CM = 305;
@@ -63,10 +64,14 @@ export type DunkInput = {
   touchOffsetCm?: number | null;
   /** How the latest approach touch was measured: read off a wall, or estimated from video. */
   approachMethod?: 'wall' | 'video' | null;
+  /** How many jumps make the latest approach touch and its 95 % range, cm (null when unknown); see db/touch.ts. */
+  approachSpread?: TouchSpread | null;
   /** The day the diagnosis is for, and when each result was last tested (ISO date or timestamp), for the stale check. */
   asOf?: ISODate;
   latestAt?: Partial<Record<Testable, string>>;
 };
+
+export type TouchSpread = { jumps: number; errorCm: number | null };
 
 export type DunkMetricKey = 'squat_ratio' | 'rsi' | 'contact' | 'eur' | 'fv' | 'approach_gain';
 
@@ -124,6 +129,10 @@ export type DunkDiagnosis = {
   };
   /** Dunk line − touch, cm; zero or less means the reach is there. */
   gapCm: number | null;
+  /** How sure the approach touch is; null for the standing estimate. */
+  touchError: TouchSpread | null;
+  /** Whether the touch clears the line once its error is counted; null without a touch. */
+  verdict: LineVerdict | null;
   limiter: BlockType | null;
   /**
    * Every result that decides the limiter was on the same side of its line in the test before too, or the drop jump
@@ -204,6 +213,7 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
   const approach = input.approachTouch.at(-1) ?? null;
   const value = approach ?? standing;
   const source = approach != null ? 'approach' : standing != null ? 'standing' : null;
+  const touchError = source === 'approach' ? (input.approachSpread ?? null) : null;
 
   const now = snapshot(input, 0);
   const before = snapshot(input, 1);
@@ -292,6 +302,8 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
     line,
     touch: { standing, approach, value, source },
     gapCm: value != null ? Math.round((line - value) * 10) / 10 : null,
+    touchError,
+    verdict: value != null ? lineVerdict(value, touchError?.errorCm ?? null, line) : null,
     limiter,
     confirmed,
     technique,

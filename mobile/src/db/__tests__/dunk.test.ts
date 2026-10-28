@@ -61,19 +61,21 @@ it('gathers every result the diagnosis reads', async () => {
     clearanceCm: null,
     cmj: [45],
     sj: [40],
-    approachTouch: [292],
+    approachTouch: [291], // the mean of the best three jumps, or of all when fewer
     dropJumps: [{ rsi: 2.1, contactMs: 200 }],
   });
   expect(input.squat1rm[0]).toBeCloseTo(130);
   // The approach touch was typed in, and nothing is calibrated yet.
   expect(input).toMatchObject({ approachMethod: 'wall', touchOffsetCm: null });
+  // Two wall readings 290 and 292: SD 1.41, ±1.96 × √(1 + 2 ÷ 2) = ±2.8.
+  expect(input.approachSpread).toEqual({ jumps: 2, errorCm: 2.8 });
   // When each result was last tested, for the stale check.
   expect(Object.keys(input.latestAt!).sort()).toEqual(['approach', 'cmj', 'drop_jump', 'squat']);
   expect(input.fvPct).toHaveLength(1);
   expect(input.fvPct[0]).toBeCloseTo(71, 0);
 
   const d = await loadDiagnosis(db, athlete);
-  expect(d.gapCm).toBe(28);
+  expect(d.gapCm).toBe(29);
   expect(d.limiter).toBe('transfer');
   expect(d.missing).toEqual([]);
 });
