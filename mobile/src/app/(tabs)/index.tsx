@@ -5,7 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { DayStateRow } from '@/components/dunk';
-import { DunkPanel } from '@/components/DunkPanel';
+import { DunkHero, DunkSummary } from '@/components/DunkPanel';
 import { Icon } from '@/components/Icon';
 import { loadDiagnosis } from '@/db/dunk';
 import { dayState, type DayState, type DunkDiagnosis } from '@/domain/dunk';
@@ -46,36 +46,46 @@ export default function Home() {
           </Pressable>
         </View>
 
-        {goal && <DunkPanel diagnosis={goal.diagnosis} standingReach={current?.standing_reach_cm ?? null} />}
+        {goal && (
+          <View style={styles.goal}>
+            <DunkHero diagnosis={goal.diagnosis} standingReach={current?.standing_reach_cm ?? null} />
+            <DunkSummary diagnosis={goal.diagnosis} />
+          </View>
+        )}
 
         <View style={{ gap: 12 }}>
           <Text style={text.section}>训练和测试</Text>
           {goal && <DayStateRow state={goal.state} />}
-          {CATEGORIES.map((c) => {
-            const href = c.href as Href | null;
-            const ready = href != null;
-            const card = (
-              <View style={[styles.card, !ready && styles.cardDisabled]}>
-                <View style={[styles.tile, { backgroundColor: c.tile }]}>
-                  <Icon name={c.icon} size={28} color={c.color} />
+          <View style={styles.list}>
+            {CATEGORIES.map((c) => {
+              const href = c.href as Href | null;
+              const row = (
+                <View style={[styles.module, !href && styles.moduleDisabled]}>
+                  <View style={[styles.tile, { backgroundColor: c.tile }]}>
+                    <Icon name={c.icon} size={22} color={c.color} />
+                  </View>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.moduleTitle}>{c.name}</Text>
+                    <Text style={styles.moduleSub} numberOfLines={1}>
+                      {c.subtitle}
+                    </Text>
+                  </View>
+                  {href ? <Icon name="chevronRight" size={18} color={colors.textMuted} /> : <Text style={styles.moduleSub}>即将上线</Text>}
                 </View>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.cardTitle}>{c.name}</Text>
-                  <Text style={styles.cardSub}>{c.subtitle}</Text>
+              );
+              return href ? (
+                <Link key={c.key} href={href} asChild>
+                  <Pressable accessibilityRole="button" accessibilityLabel={c.name}>
+                    {row}
+                  </Pressable>
+                </Link>
+              ) : (
+                <View key={c.key} accessibilityState={{ disabled: true }}>
+                  {row}
                 </View>
-                {ready ? <Icon name="chevronRight" size={18} color={colors.textMuted} /> : <Text style={styles.soon}>即将上线</Text>}
-              </View>
-            );
-            return href ? (
-              <Link key={c.key} href={href} asChild>
-                <Pressable accessibilityRole="button">{card}</Pressable>
-              </Link>
-            ) : (
-              <View key={c.key} accessibilityState={{ disabled: true }}>
-                {card}
-              </View>
-            );
-          })}
+              );
+            })}
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -88,10 +98,11 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   athlete: { height: 44, maxWidth: 150, paddingHorizontal: 14, borderRadius: 22, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface, flexDirection: 'row', alignItems: 'center', gap: 6 },
   athleteName: { color: colors.text, fontSize: 13, flexShrink: 1 },
-  card: { backgroundColor: colors.surface, borderRadius: radius.card, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 16 },
-  cardDisabled: { opacity: 0.5 },
-  tile: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { color: colors.text, fontSize: 17, fontWeight: '700' },
-  cardSub: { color: colors.textMuted, fontSize: 12 },
-  soon: { color: colors.textMuted, fontSize: 11 },
+  goal: { gap: 12 },
+  list: { gap: 10 },
+  module: { backgroundColor: colors.surface, borderRadius: radius.row, minHeight: 68, paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 14 },
+  moduleDisabled: { opacity: 0.5 },
+  tile: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  moduleTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  moduleSub: { color: colors.textMuted, fontSize: 12 },
 });
