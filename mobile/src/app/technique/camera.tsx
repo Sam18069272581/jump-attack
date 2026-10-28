@@ -30,7 +30,8 @@ type Rec =
   | { name: 'starting' }
   | { name: 'recording'; since: number }
   | { name: 'stopping' }
-  | { name: 'recorded'; take: Recorded }
+  /** `lost`: the camera page went after the take was saved, so filming again needs a fresh one. */
+  | { name: 'recorded'; take: Recorded; lost?: boolean }
   | { name: 'failed'; stage: CameraErrorStage; message: string };
 
 const STATE_COLOR: Record<SetupCheck['state'], string> = { ok: colors.good, warn: colors.warn, fix: colors.record, wait: colors.textFaint };
@@ -136,7 +137,8 @@ export default function TechniqueCamera() {
   }
 
   function onError(stage: CameraErrorStage, message: string, name: string) {
-    setRec({ name: 'failed', stage, message: errorText(stage, message, name) });
+    // A take already saved is still good to analyse.
+    setRec((r) => (r.name === 'recorded' ? { ...r, lost: true } : { name: 'failed', stage, message: errorText(stage, message, name) }));
   }
 
   function record() {
@@ -151,6 +153,7 @@ export default function TechniqueCamera() {
 
   function retake() {
     if (rec.name === 'recorded') dropTake(rec.take.uri);
+    if (rec.name === 'recorded' && rec.lost) return retry();
     setRec({ name: 'live' });
   }
 
@@ -168,7 +171,8 @@ export default function TechniqueCamera() {
   }
 
   const live = rec.name === 'live';
-  const canRecord = live && (armed || unchecked);
+  // The page can record only once it holds the camera, which it says first.
+  const canRecord = live && info != null && (armed || unchecked);
   const recording = rec.name === 'recording' || rec.name === 'stopping';
   const fatal = rec.name === 'failed' && rec.stage !== 'record';
 
@@ -287,7 +291,8 @@ export default function TechniqueCamera() {
           <View style={styles.panelWrap}>
             <View style={styles.panel}>
               <Text style={styles.panelText}>{rec.message}</Text>
-              {fatal ? <Button label="重试" onPress={retry} /> : <Button label="重拍" onPress={retake} />}
+              {/* After a failed take the page may still be holding it: a fresh page films the next one. */}
+              <Button label={fatal ? '重试' : '重拍'} onPress={retry} />
               {fatal && <Button label="返回" variant="secondary" onPress={() => router.back()} />}
             </View>
           </View>

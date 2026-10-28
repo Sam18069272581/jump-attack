@@ -16,6 +16,7 @@ const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn() };
 const mockWeb: { props: Record<string, any> | null; inject: jest.Mock } = { props: null, inject: jest.fn() };
 const mockGravity: { cb: ((v: { x: number; y: number; z: number }) => void) | null } = { cb: null };
 const mockStaged = jest.fn();
+const mockDisk = { full: false };
 
 jest.mock('expo-router', () => ({
   get router() {
@@ -54,6 +55,7 @@ jest.mock('@/media/takes', () => {
         uri: `file:///app/Documents/technique/take-${++n}.mp4`,
         size: 0,
         async write(data: string) {
+          if (mockDisk.full) throw new Error('No space left on device');
           f.size += Buffer.from(data, 'base64').length;
         },
       };
@@ -234,4 +236,74 @@ it('says what went wrong with a take, and lets it be filmed again', async () => 
   expect(texts(r.root)).toContain('没录到画面');
   await press('重拍');
   expect(byLabel('开始录像')).toBeTruthy();
+});
+
+it('keeps the shutter off until the camera is up, even when filming without the checks', async () => {
+  await act(async () => {
+    r = create(<TechniqueCamera />);
+  });
+  await act(async () => {});
+  await press('不检查直接拍');
+  // The page can't record before it holds the camera, and wouldn't say so.
+  expect(recordDisabled()).toBe(true);
+  await post({ type: 'camera', label: 'Back Camera', physical: true, fps: 60, maxFps: 60, width: W, height: H });
+  expect(recordDisabled()).toBe(false);
+});
+
+it('when a piece of the take can’t be written: says so, lets the page wind the take down, and films again on a fresh page', async () => {
+  await open();
+  await press('不检查直接拍');
+  await press('开始录像');
+  await post({ type: 'recording', mime: 'video/mp4' });
+  const piece = Buffer.alloc(1000, 7).toString('base64');
+  mockDisk.full = true;
+  await post({ type: 'chunk', seq: 0, data: piece });
+  mockDisk.full = false;
+  expect(texts(r.root)).toContain('录像存不下来');
+  // The page is told to stop, and each piece is still answered, so it can let the take go.
+  expect(mockWeb.inject).toHaveBeenCalledWith('window.stopRecording(); true;');
+  expect(mockWeb.inject).toHaveBeenLastCalledWith('window.ack(0); true;');
+  await post({ type: 'chunk', seq: 1, data: piece });
+  expect(mockWeb.inject).toHaveBeenLastCalledWith('window.ack(1); true;');
+  await post({ type: 'recorded', chunks: 2, size: 2000, mime: 'video/mp4', seconds: 1 });
+  expect(texts(r.root)).toContain('录像存不下来');
+
+  const staged = mockStaged.mock.calls.length;
+  await press('重拍');
+  await act(async () => {});
+  expect(mockStaged.mock.calls.length).toBe(staged + 1);
+});
+
+it('keeps saying the camera was lost mid-take when the take’s last pieces still arrive', async () => {
+  await open();
+  await press('不检查直接拍');
+  await press('开始录像');
+  await post({ type: 'recording', mime: 'video/mp4' });
+  const piece = Buffer.alloc(1000, 7).toString('base64');
+  await post({ type: 'chunk', seq: 0, data: piece });
+  await post({ type: 'error', stage: 'camera', name: '', message: '相机断开了' });
+  await post({ type: 'chunk', seq: 1, data: piece });
+  expect(mockWeb.inject).toHaveBeenLastCalledWith('window.ack(1); true;');
+  await post({ type: 'recorded', chunks: 2, size: 2000, mime: 'video/mp4', seconds: 2 });
+  expect(texts(r.root)).toContain('相机断开了');
+  expect(byLabel('重试')).toBeTruthy();
+});
+
+it('keeps a filmed take when the camera page goes afterwards, and films again on a fresh page', async () => {
+  await open();
+  await press('不检查直接拍');
+  await press('开始录像');
+  await post({ type: 'recording', mime: 'video/mp4' });
+  await post({ type: 'chunk', seq: 0, data: Buffer.alloc(500, 1).toString('base64') });
+  await post({ type: 'recorded', chunks: 1, size: 500, mime: 'video/mp4', seconds: 3 });
+  await act(async () => mockWeb.props!.onContentProcessDidTerminate());
+  expect(texts(r.root)).toContain('录好了');
+  expect(byLabel('分析这一段')).toBeTruthy();
+  expect(dropTake).not.toHaveBeenCalled();
+
+  const staged = mockStaged.mock.calls.length;
+  await press('重拍');
+  await act(async () => {});
+  expect(dropTake).toHaveBeenCalledWith(expect.stringMatching(/technique\/take-\d+\.mp4$/));
+  expect(mockStaged.mock.calls.length).toBe(staged + 1);
 });

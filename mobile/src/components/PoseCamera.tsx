@@ -51,6 +51,8 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
   const web = useRef<Web>(null);
   const [stage, setStage] = useState<{ page: string; dir: string; root: string } | null>(null);
   const take = useRef<File | null>(null);
+  /** Something failed since the take began: its remaining pieces are answered but not written, and its end is no take. */
+  const broken = useRef(false);
   const handlers = useRef(props);
   useEffect(() => {
     handlers.current = props;
@@ -84,6 +86,9 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
   function fail(stage: CameraErrorStage, message: string, name = '') {
     if (take.current) dropTake(take.current.uri);
     take.current = null;
+    broken.current = true;
+    // A take still being recorded is no take now: the page stops it (nothing happens when there is none).
+    call('window.stopRecording()');
     handlers.current.onError(stage, message, name);
   }
 
@@ -101,19 +106,25 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
     if (m.type === 'recording') {
       if (take.current) dropTake(take.current.uri);
       take.current = null;
+      broken.current = false;
       return h.onRecording();
     }
     if (m.type === 'chunk') {
-      try {
-        // Each piece is written before the page sends the next: base64 to bytes, with no copy of the whole take in memory.
-        take.current ??= newTakeFile('mp4');
-        await take.current.write(m.data, { encoding: 'base64', append: true });
-      } catch (err) {
-        return fail('record', `录像存不下来：${err instanceof Error ? err.message : String(err)}`);
+      if (!broken.current) {
+        try {
+          // Each piece is written before the page sends the next: base64 to bytes, with no copy of the whole take in memory.
+          take.current ??= newTakeFile('mp4');
+          await take.current.write(m.data, { encoding: 'base64', append: true });
+        } catch (err) {
+          fail('record', `录像存不下来：${err instanceof Error ? err.message : String(err)}`);
+        }
       }
+      // Answered even when not written: the page holds the take until every piece is, and records nothing new meanwhile.
       return call(`window.ack(${m.seq})`);
     }
     if (m.type === 'recorded') {
+      // The first failure says what went wrong; the end of the take it broke would only say it came out short.
+      if (broken.current) return;
       const file = take.current;
       take.current = null;
       if (!file || m.chunks === 0) return fail('record', '没录到画面');
