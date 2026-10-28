@@ -245,7 +245,7 @@ describe('recovery and the training tab', () => {
     await press(r.root, '保存');
     const t = texts(r.root);
     expect(t).toContain('疲劳');
-    expect(t).toContain('HRV 48 ms，低于你 7 天基线');
+    expect(t).toContain('HRV 48 ms，低于你 30 天基线');
     expect((await listSessionResults(mockDb, 1, 'rec_hrv')).at(-1)?.best).toBe(48);
   });
 
