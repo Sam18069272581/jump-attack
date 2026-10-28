@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { AutoMarker } from '@/components/AutoMarker';
 import { Button, Chip, Empty } from '@/components/ui';
 import { addTrial, ensureSession } from '@/db/repo';
 import { recalibrateTouches, touchOffsetFor } from '@/db/touch';
@@ -17,6 +18,7 @@ import { markedTrial, markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { calibrationProblem } from '@/domain/touch';
 import { probeFrameRate } from '@/media/frameRate';
+import { isWeb } from '@/media/runtime';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -44,6 +46,8 @@ export default function Mark() {
   const [frame, setFrame] = useState(0);
   // The marks, in the profile's order: take-off/landing for a jump, start/finish for a sprint, touch-down/take-off/landing for a drop jump.
   const [marks, setMarks] = useState<(number | null)[]>([]);
+  // Marked by hand: automatic detection then only offers what it finds.
+  const [byHand, setByHand] = useState(false);
   const [saving, setSaving] = useState(false);
   // Attempts already saved from this clip.
   const [saved, setSaved] = useState(0);
@@ -98,6 +102,7 @@ export default function Mark() {
 
   function mark(i: number) {
     Haptics.selectionAsync();
+    setByHand(true);
     setMarks((m) => profile!.marks.map((_, j) => (j === i ? frame : (m[j] ?? null))));
   }
 
@@ -155,6 +160,23 @@ export default function Mark() {
             <Text style={[styles.phaseText, { color: phaseColor }]}>{phase}</Text>
           </View>
         </View>
+
+        {/* The web version has no WebView to read frames with. */}
+        {!isWeb && def && (def.capture.includes('flight') || def.capture.includes('contact')) && total > 0 && (
+          <AutoMarker
+            key={`${params.uri}@${fps}`}
+            uri={params.uri}
+            fileFps={fileFps}
+            captureFps={fps}
+            frames={total}
+            kind={profile.marks.length === 3 ? 'drop' : 'jump'}
+            keep={byHand}
+            onPick={(found) => {
+              setMarks(found);
+              show(found[0]);
+            }}
+          />
+        )}
 
         <View style={styles.fpsRow}>
           <Text style={styles.label}>拍摄帧率{detectedFps ? `（视频 ${detectedFps} fps）` : ''}</Text>
