@@ -11,7 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Chip, Empty } from '@/components/ui';
 import { addTrial, ensureSession } from '@/db/repo';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
-import { markProfile, returnsToLogger } from '@/domain/marking';
+import { markedTrial, markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { persistVideo } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
@@ -86,22 +86,7 @@ export default function Mark() {
     try {
       const videoUri = await persistVideo(params.uri, params.session).catch(() => params.uri);
       await ensureSession(db, params.session, current.id, params.metric);
-      await addTrial(db, {
-        session_id: params.session,
-        value: result.value,
-        flight_ms: result.elapsedS * 1000,
-        fps,
-        // The last two marks; a drop jump's touch-down frame goes in the detail.
-        takeoff_frame: marked.at(-2),
-        landing_frame: marked.at(-1),
-        video_uri: videoUri,
-        ...(params.from === 'vbt'
-          ? { load_kg: Number(params.load) || 0, detail: { source: 'video', rom_cm: Number(params.rom), ...(Number(params.reps) ? { reps: Number(params.reps) } : {}) } }
-          : params.load != null
-            ? { load_kg: Number(params.load) || 0 }
-            : {}),
-        ...(result.detail || params.box ? { detail: { source: 'video', ...result.detail, ...(params.box ? { box_cm: Number(params.box) } : {}) } } : {}),
-      });
+      await addTrial(db, { session_id: params.session, video_uri: videoUri, ...markedTrial(result, marked, fps, params) });
       // A VBT set or a profile jump goes straight back to its log (capture and marking are the two screens above it).
       if (returnsToLogger(params.from)) return router.dismiss(2);
       router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });

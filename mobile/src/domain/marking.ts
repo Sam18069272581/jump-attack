@@ -198,3 +198,38 @@ const LOGGERS = ['vbt', 'fvp', 'dj'];
 export function returnsToLogger(from: string | undefined): boolean {
   return from != null && LOGGERS.includes(from);
 }
+
+/** What the screens above the marking screen pass along: the load, reps and bar travel of a VBT set, a drop jump's box. */
+export type MarkContext = { from?: string; load?: string; reps?: string; rom?: string; box?: string };
+
+export type MarkedTrial = {
+  value: number;
+  flight_ms: number;
+  fps: number;
+  takeoff_frame: number | null;
+  landing_frame: number | null;
+  load_kg?: number;
+  detail?: Record<string, unknown>;
+};
+
+/**
+ * The trial a marked video saves. Only the last two marks fit the trial's take-off and landing columns, so a drop
+ * jump's touch-down frame goes in the detail along with whatever else the profile measured.
+ */
+export function markedTrial(outcome: Extract<MarkOutcome, { ok: true }>, marks: (number | null)[], fps: number, ctx: MarkContext): MarkedTrial {
+  const vbt = ctx.from === 'vbt';
+  const detail = {
+    ...(vbt ? { rom_cm: Number(ctx.rom), ...(Number(ctx.reps) ? { reps: Number(ctx.reps) } : {}) } : {}),
+    ...outcome.detail,
+    ...(ctx.box ? { box_cm: Number(ctx.box) } : {}),
+  };
+  return {
+    value: outcome.value,
+    flight_ms: outcome.elapsedS * 1000,
+    fps,
+    takeoff_frame: marks.at(-2) ?? null,
+    landing_frame: marks.at(-1) ?? null,
+    ...(vbt || ctx.load != null ? { load_kg: Number(ctx.load) || 0 } : {}),
+    ...(Object.keys(detail).length ? { detail: { source: 'video', ...detail } } : {}),
+  };
+}
