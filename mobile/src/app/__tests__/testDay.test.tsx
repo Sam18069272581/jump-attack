@@ -147,7 +147,8 @@ it('says when every test is done and points to the diagnosis', async () => {
   const shown = texts(r.root);
   expect(shown).toContain('今天三项都测完了');
   expect(shown).toContain('已测 1 跳 · 最好 2.20');
-  expect(shown).toContain('已测 6 跳 · 最好 316.0 cm');
+  // Run-up touches count the mean of the best three (316, 315, 314), like the result screen.
+  expect(shown).toContain('已测 6 跳 · 最好 3 跳均值 315.0 cm');
   await act(async () => pressable(r.root, '看扣篮诊断').props.onPress());
   expect(mockRouter.push).toHaveBeenCalledWith('/dunk');
 });

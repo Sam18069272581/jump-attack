@@ -16,6 +16,8 @@ export type Athlete = {
   rim_height_cm: number | null;
   /** How far above the rim the hand must reach to dunk; null means the default. */
   dunk_clearance_cm: number | null;
+  /** The dunk goal's date (YYYY-MM-DD), null until set. */
+  goal_date?: string | null;
 };
 
 export type Trial = {
@@ -48,11 +50,11 @@ export function newSessionId(): string {
 }
 
 export async function listAthletes(db: SQLiteDatabase): Promise<Athlete[]> {
-  return db.getAllAsync<Athlete>('SELECT id, name, body_mass_kg, standing_reach_cm, leg_length_cm, squat_height_cm, rim_height_cm, dunk_clearance_cm FROM athlete ORDER BY id');
+  return db.getAllAsync<Athlete>('SELECT id, name, body_mass_kg, standing_reach_cm, leg_length_cm, squat_height_cm, rim_height_cm, dunk_clearance_cm, goal_date FROM athlete ORDER BY id');
 }
 
 export async function getAthlete(db: SQLiteDatabase, id: number): Promise<Athlete | null> {
-  return db.getFirstAsync<Athlete>('SELECT id, name, body_mass_kg, standing_reach_cm, leg_length_cm, squat_height_cm, rim_height_cm, dunk_clearance_cm FROM athlete WHERE id = ?', id);
+  return db.getFirstAsync<Athlete>('SELECT id, name, body_mass_kg, standing_reach_cm, leg_length_cm, squat_height_cm, rim_height_cm, dunk_clearance_cm, goal_date FROM athlete WHERE id = ?', id);
 }
 
 export async function createAthlete(db: SQLiteDatabase, name: string): Promise<number> {
@@ -62,7 +64,7 @@ export async function createAthlete(db: SQLiteDatabase, name: string): Promise<n
 
 export async function updateAthlete(db: SQLiteDatabase, a: Athlete): Promise<void> {
   await db.runAsync(
-    'UPDATE athlete SET name = ?, body_mass_kg = ?, standing_reach_cm = ?, leg_length_cm = ?, squat_height_cm = ?, rim_height_cm = ?, dunk_clearance_cm = ? WHERE id = ?',
+    'UPDATE athlete SET name = ?, body_mass_kg = ?, standing_reach_cm = ?, leg_length_cm = ?, squat_height_cm = ?, rim_height_cm = ?, dunk_clearance_cm = ?, goal_date = ? WHERE id = ?',
     a.name,
     a.body_mass_kg,
     a.standing_reach_cm,
@@ -70,6 +72,7 @@ export async function updateAthlete(db: SQLiteDatabase, a: Athlete): Promise<voi
     a.squat_height_cm,
     a.rim_height_cm,
     a.dunk_clearance_cm,
+    a.goal_date ?? null,
     a.id,
   );
 }
@@ -142,6 +145,19 @@ export async function listSessionResults(
   lowerIsBetter = false,
   aggregate: MetricDef['aggregate'] = 'best',
 ): Promise<SessionResult[]> {
+  if (aggregate === 'top3') {
+    const order = lowerIsBetter ? 'ASC' : 'DESC';
+    return db.getAllAsync<SessionResult>(
+      `SELECT s.id AS session_id, s.metric_code, s.started_at, AVG(CASE WHEN t.rank <= 3 THEN t.value END) AS best, COUNT(t.id) AS trials
+       FROM test_session s
+       JOIN (SELECT id, session_id, value, ROW_NUMBER() OVER (PARTITION BY session_id ORDER BY value ${order}) AS rank FROM trial) t ON t.session_id = s.id
+       WHERE s.athlete_id = ? AND s.metric_code = ?
+       GROUP BY s.id
+       ORDER BY s.started_at`,
+      athleteId,
+      metricCode,
+    );
+  }
   const agg = aggregate === 'mean' ? 'AVG' : lowerIsBetter ? 'MIN' : 'MAX';
   return db.getAllAsync<SessionResult>(
     `SELECT s.id AS session_id, s.metric_code, s.started_at, ${agg}(t.value) AS best, COUNT(t.id) AS trials

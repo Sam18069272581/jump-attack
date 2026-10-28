@@ -7,10 +7,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { RecordHero } from '@/components/RecordHero';
 import { Button } from '@/components/ui';
-import { deleteTrial, listSessionResults, listTrials, sessionTimings, updateTrialValue, type Trial } from '@/db/repo';
+import { deleteTrial, listMetricResults, listTrials, sessionTimings, updateTrialValue, type Trial } from '@/db/repo';
 import { trendBaseline } from '@/domain/assess';
 import { manualProblem, parseNumber } from '@/domain/entry';
-import { best as bestOf, getCategory, getMetric } from '@/domain/metrics';
+import { getCategory, getMetric, sessionValue } from '@/domain/metrics';
 import { personalRecord, recordable } from '@/domain/record';
 import { assess, type Assessment } from '@/domain/verdict';
 import { useAthlete } from '@/state/athlete';
@@ -37,8 +37,8 @@ export default function Result() {
       let poorDay = false;
       let record: { by: number } | null = null;
       if (def && current && t.length > 0) {
-        const best = bestOf(def, t.map((x) => x.value))!;
-        const all = await listSessionResults(db, current.id, def.code, def.lowerIsBetter);
+        const best = sessionValue(def, t.map((x) => x.value))!;
+        const all = await listMetricResults(db, current.id, def);
         const baseline = trendBaseline(all, session, await loadPoorDaysOf(db, current.id, def.code, all));
         a = assess(def, baseline.previous, best);
         poorDay = baseline.poorDay;
@@ -76,7 +76,11 @@ export default function Result() {
     setVersion((v) => v + 1);
   }
 
-  const best = bestOf(def, trials.map((t) => t.value));
+  const best = sessionValue(def, trials.map((t) => t.value));
+  const top3 = def.aggregate === 'top3' && trials.length > 1;
+  const label = `${def.name} · ${top3 ? `最好 ${Math.min(3, trials.length)} 跳均值` : '最好成绩'}`;
+  // The attempts the result is made of: the best one, or the best three.
+  const counted = new Set(top3 ? [...trials].sort((a, b) => b.value - a.value).slice(0, 3).map((t) => t.id) : trials.filter((t) => t.value === best).map((t) => t.id));
   const scale = trials.length ? Math.max(...trials.map((t) => t.value)) * 1.1 : 1;
   const home = getCategory(def.category).href ?? '/';
   const flights = trials.filter((t) => t.flight_ms != null);
@@ -86,14 +90,14 @@ export default function Result() {
       <ScrollView contentContainerStyle={styles.content}>
         {record && best != null ? (
           <RecordHero
-            label={`${def.name} · 最好成绩`}
+            label={label}
             value={best.toFixed(def.decimals)}
             unit={def.unit}
             gain={def.lowerIsBetter ? `快了 ${record.by.toFixed(def.decimals)} ${def.unit}` : `+${record.by.toFixed(def.decimals)} ${def.unit}`}
           />
         ) : (
           <View style={styles.hero}>
-            <Text style={styles.heroLabel}>{def.name} · 最好成绩</Text>
+            <Text style={styles.heroLabel}>{label}</Text>
             <Text style={styles.heroValue}>
               {best != null ? best.toFixed(def.decimals) : '—'} <Text style={styles.heroUnit}>{def.unit}</Text>
             </Text>
@@ -105,7 +109,7 @@ export default function Result() {
             <View key={t.id} style={styles.trialRow}>
               <Text style={styles.trialN}>{i + 1}</Text>
               <View style={styles.barTrack}>
-                <View style={[styles.bar, { width: `${(t.value / scale) * 100}%`, backgroundColor: t.value === best ? colors.accent : colors.textFaint }]} />
+                <View style={[styles.bar, { width: `${(t.value / scale) * 100}%`, backgroundColor: counted.has(t.id) ? colors.accent : colors.textFaint }]} />
               </View>
               <Text style={styles.trialValue}>{t.value.toFixed(def.decimals)}</Text>
               {editable(t) && (

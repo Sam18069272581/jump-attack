@@ -111,6 +111,15 @@ it('opens every module from the home screen', async () => {
 });
 
 describe('jumps', () => {
+  it('reports an approach-touch test as the mean of its best three jumps', async () => {
+    await ensureSession(mockDb, 'touch-6', 1, 'approach_touch');
+    for (const value of [312, 318, 310, 316, 317, 315]) await addTrial(mockDb, { session_id: 'touch-6', value, detail: { source: 'manual' } });
+    mockParams = { metric: 'approach_touch', session: 'touch-6' };
+    const r = await render(<Result />);
+    expect(texts(r.root)).toContain('助跑摸高 · 最好 3 跳均值');
+    expect(texts(r.root)).toContain('317.0'); // (318 + 317 + 316) ÷ 3
+  });
+
   it('takes a typed CMJ height from another app and marks it as typed in', async () => {
     mockParams = { metric: 'cmj', session: 'cmj-typed' };
     const entry = await render(<ManualEntry />);

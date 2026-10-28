@@ -50,7 +50,9 @@ export default function TestDay() {
 
 function Step({ n, row, current, onPress }: { n: number; row: TestDayRow; current: boolean; onPress: () => void }) {
   const done = row.trials > 0;
-  const status = done && row.best != null ? `已测 ${row.trials} 跳 · 最好 ${`${row.best.toFixed(row.def.decimals)} ${row.def.unit}`.trim()}` : `${row.jumps} 跳`;
+  const top3 = row.def.aggregate === 'top3' && row.trials > 1;
+  const value = row.best != null ? `${row.best.toFixed(row.def.decimals)} ${row.def.unit}`.trim() : '';
+  const status = done ? `已测 ${row.trials} 跳 · ${top3 ? `最好 ${Math.min(3, row.trials)} 跳均值` : '最好'} ${value}` : `${row.jumps} 跳`;
   return (
     <Pressable
       accessibilityRole="button"

@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { roundTo } from '@/domain/interval';
 import { APPROACH_TOUCH } from '@/domain/metrics';
-import { touchOffset, type Calibration } from '@/domain/touch';
+import { TOUCH_BEST_OF, touchError, touchOffset, videoReadError, WALL_READ_ERROR_CM, type Calibration } from '@/domain/touch';
 
 type TouchDetail = { source?: string; jump_cm?: number; standing_reach_cm?: number; touched_cm?: number; offset_cm?: number };
 type TouchTrial = { id: number; session_id: string; value: number; detail: TouchDetail };
@@ -52,10 +52,35 @@ export async function recalibrateTouches(db: SQLiteDatabase, athleteId: number):
  * only estimated from video. Null without any touch.
  */
 export async function latestTouchMethod(db: SQLiteDatabase, athleteId: number): Promise<'wall' | 'video' | null> {
-  const trials = await listTouchTrials(db, athleteId);
+  const best = latestBest(await listTouchTrials(db, athleteId));
+  if (!best.length) return null;
+  return best.some(videoOnly) ? 'video' : 'wall';
+}
+
+const videoOnly = (t: TouchTrial) => t.detail.source === 'video' && t.detail.touched_cm == null;
+
+/** The attempts the latest session's result is made of: its best {@link TOUCH_BEST_OF}. */
+function latestBest(trials: TouchTrial[]): TouchTrial[] {
   const last = trials.at(-1);
-  if (!last) return null;
-  // The session's result is its best attempt.
-  const best = trials.filter((t) => t.session_id === last.session_id).reduce((a, b) => (b.value > a.value ? b : a));
-  return best.detail.source === 'video' && best.detail.touched_cm == null ? 'video' : 'wall';
+  if (!last) return [];
+  return trials
+    .filter((t) => t.session_id === last.session_id)
+    .sort((a, b) => b.value - a.value)
+    .slice(0, TOUCH_BEST_OF);
+}
+
+/**
+ * How sure the latest approach touch is: how many jumps make it and its 95 % range. A wall reading is off by
+ * {@link WALL_READ_ERROR_CM}; a video estimate by the spread of this athlete's calibrations, unknown before two.
+ */
+export async function latestTouchSpread(db: SQLiteDatabase, athleteId: number): Promise<{ jumps: number; errorCm: number | null } | null> {
+  const trials = await listTouchTrials(db, athleteId);
+  const best = latestBest(trials);
+  if (!best.length) return null;
+  const read = best.some(videoOnly) ? videoReadError(calibrations(trials)) : WALL_READ_ERROR_CM;
+  const { n, errorCm } = touchError(
+    best.map((t) => t.value),
+    read,
+  );
+  return { jumps: n, errorCm };
 }

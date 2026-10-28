@@ -1,8 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { listDropJumps } from '@/db/jumps';
+import { listCmjMeans } from '@/db/load';
+import { listPain } from '@/db/pain';
 import { listRecoveryDays } from '@/db/recovery';
-import { listSessionResults } from '@/db/repo';
 import { getActivePlan, listWorkouts, startWorkout, type Plan, type Workout } from '@/db/training';
 import { current1rm, ESTIMATE_MAX_AGE_DAYS, latestOneRm, listVbtSets } from '@/db/vbt';
 import { type Readiness } from '@/domain/assess';
@@ -20,10 +21,13 @@ import {
   type Prescription,
   type SessionTemplate,
 } from '@/domain/plan';
+import { adjustForKnee, kneeStatus, type KneeLight } from '@/domain/pain';
 import { dayReadiness, fatigueStreak, type DayReadiness } from '@/domain/readiness';
 import { poorDays, readDay, selfSignal, setTarget, type DayInputs, type DayReading, type SetTarget } from '@/domain/target';
 import { getTemplate } from '@/domain/templates';
 import { LOAD_FROM_VBT, pctOf1rm, roundLoad } from '@/domain/vbt';
+
+import { loadTrainingLoads } from './load';
 
 export type { DayReadiness };
 
@@ -39,8 +43,9 @@ export async function loadTraining(db: SQLiteDatabase, athleteId: number): Promi
   return { plan, template, workouts: await listWorkouts(db, plan.id) };
 }
 
+/** CMJ for readiness is each session's mean of its best 3 jumps (db/load.ts), today and in the baseline alike. */
 async function readinessInputs(db: SQLiteDatabase, athleteId: number) {
-  return Promise.all([listSessionResults(db, athleteId, 'cmj'), listRecoveryDays(db, athleteId)]);
+  return Promise.all([listCmjMeans(db, athleteId), listRecoveryDays(db, athleteId)]);
 }
 
 export async function loadReadiness(db: SQLiteDatabase, athleteId: number, date: ISODate): Promise<DayReadiness & { streak: number }> {
@@ -95,8 +100,13 @@ export async function loadPersonalNumbers(db: SQLiteDatabase, athleteId: number,
 export const WARMUP_LIFTS = [...new Set(Object.values(LOAD_FROM_VBT))];
 
 export async function loadDayInputs(db: SQLiteDatabase, athleteId: number): Promise<DayInputs> {
-  const [[cmj, recovery], warmups] = await Promise.all([readinessInputs(db, athleteId), Promise.all(WARMUP_LIFTS.map((l) => listVbtSets(db, athleteId, l)))]);
-  return { cmj, recovery, warmups: warmups.flat() };
+  const [[cmj, recovery], warmups, pain, loads] = await Promise.all([
+    readinessInputs(db, athleteId),
+    Promise.all(WARMUP_LIFTS.map((l) => listVbtSets(db, athleteId, l))),
+    listPain(db, athleteId),
+    loadTrainingLoads(db, athleteId),
+  ]);
+  return { cmj, recovery, warmups: warmups.flat(), pain, loads };
 }
 
 /**
@@ -122,12 +132,24 @@ export function loadPoorDaysOf(db: SQLiteDatabase, athleteId: number, metricCode
 /** Shown with a result from a poor day. */
 export const POOR_DAY_NOTE = '今天状态差（恢复、CMJ 或热身速度偏低），这次成绩不计入进步趋势，也不拉低基线。';
 
+/** The knee's light for training on `date` (domain/pain.ts). */
+export async function loadKnee(db: SQLiteDatabase, athleteId: number, date: ISODate) {
+  return kneeStatus(await listPain(db, athleteId), date);
+}
+
 /**
  * The session to do on a day. A started workout keeps the readiness it began with; today's not-yet-started
  * session follows the current readiness; any other day is shown as planned.
  */
-export function sessionFor(planned: PlannedSession, workout: Workout | null | undefined, readiness: Readiness | null): { session: SessionTemplate; adjustments: Adjustment[] } {
-  return adjustForReadiness(planned.session, workout?.readiness ?? readiness ?? 'unknown');
+export function sessionFor(
+  planned: PlannedSession,
+  workout: Workout | null | undefined,
+  readiness: Readiness | null,
+  knee?: KneeLight | null,
+): { session: SessionTemplate; adjustments: Adjustment[] } {
+  const r = adjustForReadiness(planned.session, workout?.readiness ?? readiness ?? 'unknown');
+  const k = adjustForKnee(r.session, knee);
+  return { session: k.session, adjustments: [...r.adjustments, ...k.adjustments] };
 }
 
 /**
@@ -139,7 +161,10 @@ export async function beginWorkout(db: SQLiteDatabase, data: TrainingData, date:
   if (!planned) return null;
   const r = date === todayISO() || makeUp ? await loadReadiness(db, data.plan.athleteId, todayISO()) : null;
   const readiness = r?.readiness ?? 'unknown';
-  const { adjustments } = adjustForReadiness(planned.session, readiness);
+  const knee = await loadKnee(db, data.plan.athleteId, date);
+  const { adjustments } = sessionFor(planned, null, readiness, knee?.light);
+  const kneeCut = knee?.light === 'red' || knee?.light === 'stop';
+  const reasons = [...(r?.signals ?? []), ...(kneeCut ? knee.reasons : [])];
   return startWorkout(db, {
     planId: data.plan.id,
     date,
@@ -147,6 +172,6 @@ export async function beginWorkout(db: SQLiteDatabase, data: TrainingData, date:
     readiness,
     cmjDrop: r?.today != null ? r.dropPct : null,
     adjustments,
-    reason: r?.signals.length ? r.signals.join('；') : null,
+    reason: reasons.length ? reasons.join('；') : null,
   });
 }

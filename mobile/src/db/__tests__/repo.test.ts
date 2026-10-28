@@ -20,7 +20,7 @@ describe('migrate', () => {
     await migrate(db);
     const v = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
     expect(v?.user_version).toBe(LATEST_VERSION);
-    expect(await listAthletes(db)).toEqual([{ id: 1, name: '我自己', body_mass_kg: null, standing_reach_cm: null, leg_length_cm: null, squat_height_cm: null, rim_height_cm: null, dunk_clearance_cm: null }]);
+    expect(await listAthletes(db)).toEqual([{ id: 1, name: '我自己', body_mass_kg: null, standing_reach_cm: null, leg_length_cm: null, squat_height_cm: null, rim_height_cm: null, dunk_clearance_cm: null, goal_date: null }]);
   });
 });
 
@@ -41,6 +41,20 @@ describe('sessions and trials', () => {
     ]);
     expect((await listSessionResults(db, 1, 'cmj', true))[0].best).toBe(35.1);
     expect(await sessionCounts(db, 1)).toEqual({ cmj: 2 });
+  });
+
+  it('reports the approach touch as the mean of the best three jumps, so one lucky jump is not progress', async () => {
+    const db = await setup();
+    await ensureSession(db, 't', 1, 'approach_touch');
+    for (const v of [312, 318, 310, 316, 317, 315]) await addTrial(db, trial('t', v));
+    await ensureSession(db, 'u', 1, 'approach_touch');
+    await addTrial(db, trial('u', 319)); // a single-jump session stays as it was
+    await db.runAsync("UPDATE test_session SET started_at = CASE id WHEN 't' THEN '2026-10-01T10:00:00Z' ELSE '2026-10-08T10:00:00Z' END");
+    const results = await listMetricResults(db, 1, getMetric('approach_touch')!);
+    expect(results.map((r) => [r.session_id, r.best, r.trials])).toEqual([
+      ['t', 317, 6],
+      ['u', 319, 1],
+    ]);
   });
 
   it('removes a session once its last trial is deleted', async () => {
