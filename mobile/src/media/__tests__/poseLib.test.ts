@@ -27,7 +27,9 @@ jest.mock('expo-file-system', () => {
     get size() {
       return sizes.get(this.uri) ?? files.get(this.uri)?.length ?? 0;
     }
-    write(content: string) {
+    // As in SDK 58: the write is done on another thread, and the promise settles once it is.
+    async write(content: string) {
+      await new Promise((r) => setTimeout(r, 1));
       files.set(this.uri, content);
       sizes.delete(this.uri);
     }

@@ -89,7 +89,7 @@ export async function downloadPoseLib(onProgress?: (share: number) => void, sign
     }
     done += f.bytes;
   }
-  new File(dir, CLASSIC_BUNDLE).write(classicBundle(await new File(dir, 'vision_bundle.mjs').text()));
+  await new File(dir, CLASSIC_BUNDLE).write(classicBundle(await new File(dir, 'vision_bundle.mjs').text()));
   onProgress?.(1);
 }
 
@@ -110,7 +110,7 @@ export async function stagePosePage(page: (clipName: string | null) => string, c
     name = clip.name;
   }
   const html = new File(dir, 'page.html');
-  html.write(page(name));
+  await html.write(page(name));
   return { page: html.uri, dir: dir.uri, root: root().uri };
 }
 
