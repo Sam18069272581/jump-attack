@@ -150,3 +150,10 @@ it('shows the athlete’s own box height and trap-bar load in the exercise cards
   mockParams = { date: addDays(today, 4) };
   expect(texts((await render(<WorkoutScreen />)).root)).toContain('建议 25–40 kg（后蹲 1RM 130 kg 的 20–30%）');
 });
+
+it('opens an exercise’s demo from its card', async () => {
+  mockParams = { date: addDays(today, 2) };
+  const r = await render(<WorkoutScreen />);
+  await act(async () => r.root.find((n) => typeof n.props.onPress === 'function' && n.props.accessibilityLabel === '跌落跳怎么做').props.onPress());
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/exercise/[code]', params: { code: 'depth_jump' } });
+});
