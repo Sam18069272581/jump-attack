@@ -7,6 +7,7 @@ import { captureGuide } from '@/components/capture/guides';
 import SlowMoImport from '@/components/capture/SlowMoImport';
 import { listTrials } from '@/db/repo';
 import { analysisKindFor } from '@/domain/analysisTrials';
+import { firstClip, IMPORT_LIMIT } from '@/domain/importQueue';
 import { returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { isWeb } from '@/media/runtime';
@@ -27,18 +28,26 @@ export default function Capture() {
 
   const pass = { metric, session, ...extra };
 
+  // A logger needs new settings (load, box) for every jump, so it takes one clip at a time.
+  const several = !returnsToLogger(extra.from);
+
   async function importVideo() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
       // Keep the original high-frame-rate file instead of a re-encoded copy.
       preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+      // In the order they were tapped, which is the order they are analysed in.
+      ...(several ? { allowsMultipleSelection: true, selectionLimit: IMPORT_LIMIT, orderedSelection: true } : {}),
     });
-    if (res.canceled || !res.assets[0]) return;
-    const { uri, assetId } = res.assets[0];
-    // The file's own frame rate is read on the next screen; 0 means the picker didn't report one. Jump clips are analysed
-    // automatically where a WebView can read their frames (not on the web, not for loaded jumps logged one at a time).
+    if (res.canceled) return;
+    // Jump clips are analysed automatically where a WebView can read their frames (not on the web, not for loaded jumps
+    // logged one at a time).
     const auto = def != null && analysisKindFor(def) != null && !isWeb && extra.from !== 'fvp';
-    router.push({ pathname: auto ? '/measure/analyse' : '/measure/mark', params: { ...pass, uri, fps: '0', ...(assetId ? { asset: assetId } : {}) } });
+    const route = firstClip(
+      res.assets.map((a) => ({ uri: a.uri, ...(a.assetId ? { asset: a.assetId } : {}) })),
+      auto ? 'analyse' : 'mark',
+    );
+    if (route) router.push({ pathname: route.pathname, params: { ...pass, ...route.params } });
   }
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));

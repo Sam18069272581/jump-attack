@@ -91,6 +91,12 @@ it('shows the block, its reason and the retest in week 4', async () => {
   expect(t).toContain('建议下一块换成转化块');
 });
 
+it('runs the retest jumps in one pass from the test-day wizard', async () => {
+  const r = await render(<Train />);
+  await act(async () => pressable(r.root, '测试日向导：按顺序测完三项跳跃').props.onPress());
+  expect(mockRouter.push).toHaveBeenCalledWith('/test-day');
+});
+
 it('switches block only when accepted, from the Monday after the retest week', async () => {
   const r = await render(<Train />);
   await act(async () => pressable(r.root, '换块').props.onPress());

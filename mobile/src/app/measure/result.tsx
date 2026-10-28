@@ -175,7 +175,7 @@ export default function Result() {
         ) : (
           <>
             <Button label="再测一次" variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} />
-            <Button label="完成" onPress={() => (from === 'train' ? router.dismissAll() : router.dismissTo(home as Href))} style={{ flex: 1 }} />
+            <Button label="完成" onPress={() => (from === 'train' ? router.dismissAll() : router.dismissTo((from === 'testday' ? '/test-day' : home) as Href))} style={{ flex: 1 }} />
           </>
         )}
       </View>
