@@ -6,6 +6,7 @@ import {
   calendarDate,
   formatPrescription,
   isJump,
+  missedThisWeek,
   nextSession,
   personalNote,
   planDay,
@@ -237,5 +238,27 @@ describe('personalNote', () => {
 
   it('has nothing for other exercises', () => {
     expect(personalNote('pogo', { bestBoxCm: 40, squat1rmKg: 130 })).toBeNull();
+  });
+});
+
+describe('missedThisWeek', () => {
+  const t = getTemplate('jump-4-1')!;
+  // Starts Monday 2026-10-19, training Monday, Wednesday and Friday.
+  const s: PlanSettings = { templateCode: 'jump-4-1', startDate: '2026-10-19', weekdays: [1, 3, 5] };
+
+  it('lists this week’s training days before today that were never started, oldest first', () => {
+    // Thursday: Monday's A and Wednesday's B are open.
+    expect(missedThisWeek(t, s, [], '2026-10-22').map((p) => [p.date, p.session.code])).toEqual([
+      ['2026-10-19', 'A'],
+      ['2026-10-21', 'B'],
+    ]);
+    expect(missedThisWeek(t, s, ['2026-10-19'], '2026-10-22').map((p) => p.date)).toEqual(['2026-10-21']);
+  });
+
+  it('does not reach into last week or before the plan started', () => {
+    // Next Tuesday: only that week's Monday counts, not last Friday.
+    expect(missedThisWeek(t, s, [], '2026-10-27').map((p) => p.date)).toEqual(['2026-10-26']);
+    expect(missedThisWeek(t, { ...s, startDate: '2026-10-21' }, [], '2026-10-22').map((p) => p.date)).toEqual(['2026-10-21']);
+    expect(missedThisWeek(t, s, [], '2026-10-19')).toEqual([]);
   });
 });

@@ -132,11 +132,14 @@ export function sessionFor(planned: PlannedSession, workout: Workout | null | un
   return adjustForReadiness(planned.session, workout?.readiness ?? readiness ?? 'unknown');
 }
 
-/** Starts a day's workout, applying the readiness rule when it is today. Returns the existing one if already started. */
-export async function beginWorkout(db: SQLiteDatabase, data: TrainingData, date: ISODate): Promise<Workout | null> {
+/**
+ * Starts a day's workout, applying the readiness rule when it is today, or when a missed day is made up today.
+ * Returns the existing one if already started.
+ */
+export async function beginWorkout(db: SQLiteDatabase, data: TrainingData, date: ISODate, makeUp = false): Promise<Workout | null> {
   const planned = planDay(data.template, data.plan, date);
   if (!planned) return null;
-  const r = date === todayISO() ? await loadReadiness(db, data.plan.athleteId, date) : null;
+  const r = date === todayISO() || makeUp ? await loadReadiness(db, data.plan.athleteId, todayISO()) : null;
   const readiness = r?.readiness ?? 'unknown';
   const { adjustments } = adjustForReadiness(planned.session, readiness);
   return startWorkout(db, {

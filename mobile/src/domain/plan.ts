@@ -272,6 +272,18 @@ export function nextSession(t: PlanTemplate, s: PlanSettings, from: ISODate, hor
   return null;
 }
 
+/**
+ * This week's training days before `today` that were never started (`started` holds the dates of started
+ * workouts), oldest first: the sessions that can still be made up on a rest day.
+ */
+export function missedThisWeek(t: PlanTemplate, s: PlanSettings, started: Iterable<ISODate>, today: ISODate): PlannedSession[] {
+  const done = new Set(started);
+  return weekDays(today)
+    .filter((d) => d < today && !done.has(d))
+    .map((d) => planDay(t, s, d))
+    .filter((p): p is PlannedSession => p != null);
+}
+
 /** True once a non-repeating plan has no more sessions on or after `date`. */
 export function planFinished(t: PlanTemplate, s: PlanSettings, date: ISODate): boolean {
   if (t.repeat) return false;

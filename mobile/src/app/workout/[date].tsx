@@ -10,7 +10,7 @@ import { AdjustmentNote } from '@/components/training';
 import { Button, Card, Empty } from '@/components/ui';
 import { finishWorkout, getWorkout, lastLoads, listSets, logSet, unlogSet, type Workout } from '@/db/training';
 import { addVbtSet, listVbtSets } from '@/db/vbt';
-import { shortDate } from '@/domain/dates';
+import { shortDate, toISODate } from '@/domain/dates';
 import { parseNumber } from '@/domain/entry';
 import { formatPrescription, formatRpe, isLoaded, personalNote, planDay, summarizeWorkout, type LoggedSet, type PersonalNumbers, type Prescription } from '@/domain/plan';
 import { allowanceText, checkSet, setTarget, STATE_LABEL, usualWarmupLoad, type DayReading } from '@/domain/target';
@@ -77,6 +77,8 @@ export default function WorkoutScreen() {
   }
 
   const { workout, sets, loads, suggested, day, warmupKg, personal } = loaded;
+  // A session made up (or logged) on a later day than planned.
+  const startedOn = toISODate(new Date(workout.startedAt));
   const { session } = sessionFor(planned, workout, null);
   const summary = summarizeWorkout(session, sets);
   const done = workout.finishedAt != null;
@@ -128,6 +130,7 @@ export default function WorkoutScreen() {
         <Text style={text.muted}>
           {shortDate(date)} · {session.focus}
         </Text>
+        {startedOn > date && <Text style={styles.suggest}>{startedOn === toISODate(new Date()) ? '今天' : shortDate(startedOn)}补上这节课</Text>}
 
         {done && (
           <Card style={{ gap: 10 }}>
