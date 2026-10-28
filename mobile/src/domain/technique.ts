@@ -725,7 +725,12 @@ function contactsOf(traces: Record<Side, FootTrace>, s: Series, floor: Floor, fp
           return { x, y, sd };
         };
         const unknown = { t: NaN, err: Infinity };
-        const downs = i === 0 ? [] : [heel, toe].flatMap((pt) => edgeTime(pt, i, 'down', fps, [i, j], at(pt, i, half), scale) ?? []);
+        // A touch-down is in the clip only if the foot is seen in the air before it, heel and toe above where they then
+        // stand: a clip that starts inside the contact shows the foot down from its first frame, even where the model
+        // missed that frame or the filter's start reads its jitter as motion.
+        const stand = { heel: at(heel, i, half), toe: at(toe, i, half) };
+        const seenInAir = down.slice(0, i).some((_, k) => !s.lost[k] && heel.sy[k] - stand.heel.y > tol && toe.sy[k] - stand.toe.y > tol);
+        const downs = seenInAir ? [heel, toe].flatMap((pt) => edgeTime(pt, i, 'down', fps, [i, j], pt === heel ? stand.heel : stand.toe, scale) ?? []) : [];
         // The heel or the toe, whichever comes down first.
         const dn = acrossGap(downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 }, s.lost, fps);
         const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: j - 0.5 }), s.lost, fps);

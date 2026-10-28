@@ -231,6 +231,25 @@ describe('what the clip lacks or gets wrong', () => {
     expect(grossMisses(scene, result)).toEqual([]);
   });
 
+  it('a clip that starts inside the plant whose first frames read as moving or were missed: still leaves out the contact time', () => {
+    // The filter reads the first frames' jitter as motion, and the model can miss the first frames: the contact then
+    // seems to start a frame or three into the clip, with no touch-down before it to time.
+    const cases: [number, number, number][] = [
+      [4, 14, 0], // seed, frames into the plant, first frames missed
+      [1, 12, 1],
+      [1, 12, 2],
+      [1, 12, 3],
+    ];
+    for (const [seed, into, missed] of cases) {
+      const scene = poseScene({ seed });
+      const cut = Math.ceil(scene.truth.plantDownS * 240) + into;
+      const frames = scene.frames.slice(cut).map((f, k) => ({ ...f, frame: k, t: k / 240, poses: k < missed ? [] : f.poses }));
+      const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: scene.markers }));
+      expect([seed, into, missed, result.metrics.plant]).toEqual([seed, into, missed, undefined]);
+      expect(result.flags).toContain('unseen');
+    }
+  });
+
   it('at 60 fps with the athlete lost for 4 frames at take-off: no endless error, and says why figures are missing', () => {
     const scene = poseScene({ fps: 60 });
     const tk = scene.truth.takeoffFrame;
