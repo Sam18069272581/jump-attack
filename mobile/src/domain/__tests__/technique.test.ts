@@ -1,4 +1,4 @@
-import { analyseTechnique, findJumpWindow, PASS_LINE, polyFit, type MetricKey, type TechniqueInput, type TechniqueResult } from '../technique';
+import { analyseTechnique, findJumpWindow, PASS_LINE, polyFit, TAP_PX, type MetricKey, type TechniqueInput, type TechniqueResult } from '../technique';
 import { poseScene, type PoseScene, type PoseSceneOptions } from '../testing/poseScene';
 
 function analyse(over: Partial<PoseSceneOptions> = {}, input: Partial<TechniqueInput> = {}) {
@@ -88,8 +88,16 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
     expect(misses(scene, result)).toEqual([]);
   });
 
-  it('is precise enough to act on for take-off velocity and angle, run-up speed, contact time and the last step', () => {
-    for (const k of ['vz', 'vx', 'angle', 'approach', 'plant', 'step'] as const) expect([k, result.metrics[k]?.status]).toEqual([k, 'ok']);
+  it('is precise enough to act on for the take-off angle and horizontal velocity, contact time and the last step', () => {
+    for (const k of ['vx', 'angle', 'plant', 'step'] as const) expect([k, result.metrics[k]?.status]).toEqual([k, 'ok']);
+  });
+
+  it('with the lines tapped by hand, can’t tell the vertical take-off velocity to 0.05 m/s or the run-up speed to 0.15 m/s, and says so', () => {
+    // A line tapped 4 px high or low, 590 px from the other, tilts up by 0.4°: of 3.2 m/s forward, 0.03 m/s (1 SD)
+    // leaks into the vertical. The hips pass the take-off line braking, at half the run-up's speed, so a tap there
+    // moves its time twice as much.
+    expect(result.metrics.vz?.status).toBe('imprecise');
+    expect(result.metrics.approach?.status).toBe('imprecise');
   });
 
   it('can’t tell joint angles to the 5° worth acting on, and says so (markerless pose is good to about 7° RMSE)', () => {
@@ -107,7 +115,7 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
 });
 
 describe('stated errors', () => {
-  // The full check is tools/pose-validation (14 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
+  // The full check is tools/pose-validation (16 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
   const WAYS: [string, Partial<PoseSceneOptions>][] = [
     ['as the guide asks', {}],
     ['twice the jitter', { noisePx: 3 }],
@@ -291,6 +299,54 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     const scene = poseScene();
     const b = scene.markers!.b;
     expect(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { a: { x: b.x + 5, y: b.y }, b, distanceM: 3 } })).toEqual({ ok: false, problem: 'markers' });
+  });
+});
+
+/** Normal draws (mean 0, SD 1) from a seed: mulberry32, then Box–Muller. */
+function normals(seed: number): () => number {
+  let s = seed >>> 0;
+  const next = () => {
+    s = (s + 0x6d2b79f5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  return () => Math.sqrt(-2 * Math.log(Math.max(1e-12, next()))) * Math.cos(2 * Math.PI * next());
+}
+
+describe('lines tapped by hand, and no lines where the floor is hard to read', () => {
+  it('lines tapped as well as TAP_PX says: take-off velocity and angle, run-up speed and the last step still cover the truth in 95 % of clips', () => {
+    // Each tap off by TAP_PX (1 SD) either way: a line tapped a little high or low tilts which way is up, and the
+    // run-up's horizontal speed then leaks into the vertical one.
+    const normal = normals(35);
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (let seed = 11; seed <= 50; seed++) {
+      const scene = poseScene({ seed });
+      const { a, b } = scene.markers!;
+      const tap = (p: { x: number; y: number }) => ({ x: p.x + TAP_PX * normal(), y: p.y + TAP_PX * normal() });
+      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { a: tap(a), b: tap(b), distanceM: 3 } }));
+      const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+      for (const k of ['vz', 'angle', 'approach', 'step'] as const) {
+        if (!result.metrics[k]) continue;
+        tally[k] ??= { n: 0, covered: 0 };
+        tally[k].n++;
+        if (!missed.has(k)) tally[k].covered++;
+      }
+    }
+    expect(Object.entries(tally).filter(([, c]) => c.n < 40 || c.covered < 0.95 * c.n)).toEqual([]);
+  });
+
+  it.each([
+    ['comes in at 10° to the picture', { curveDeg: 10 }],
+    ['comes in at 15° to the picture', { curveDeg: 15 }],
+    ['ends with a hand on the rim', { hangAfterS: 0.35 }],
+  ])('no lines, and the run-up %s: the floor can’t be told from a tilted phone, and the take-off says how unsure it is', (_, over) => {
+    for (const seed of [1, 2, 3]) {
+      const { scene, r } = analyse({ ...over, seed, markers: null });
+      const result = resultOf(r);
+      expect(misses(scene, result).filter((m) => /^(vz|vx|angle):/.test(m))).toEqual([]);
+    }
   });
 });
 

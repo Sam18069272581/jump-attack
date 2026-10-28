@@ -815,7 +815,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const offPx = 0.1 / roughScale;
   const floor0 = fitFloor(traces, nearPx, offPx);
   if (!floor0) return { ok: false, problem: 'no-plant' };
-  if (!markers && abs(floor0.c1) > 1e-3) {
+  // How far the frame is turned to level the floor (rad); none with markers, whose line is the floor.
+  const releveled = !markers && abs(floor0.c1) > 1e-3 ? Math.atan(abs(floor0.c1)) : 0;
+  if (releveled) {
     // A tilted phone: turn the frame so the floor is level, and read everything again.
     const along = unit({ x: frame.xAxis.x + floor0.c1 * frame.up.x, y: frame.xAxis.y + floor0.c1 * frame.up.y });
     up = { x: along.y, y: -along.x };
@@ -932,9 +934,16 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const seApex = sqrt((fy.se[1] / curvature) ** 2 + ((fy.c[1] * 2 * fy.se[2]) / (curvature * curvature)) ** 2);
   const span = pts.ts[pts.ts.length - 1] - pts.ts[0];
   const drift = COM_DRIFT_M / span;
-  const vzErr = sqrt((G * off.err) ** 2 / fps ** 2 + (G * 1.96 * seApex) ** 2 + drift ** 2);
   const vx = fx.c[1] * gravityScale;
-  const vxErr = sqrt((1.96 * fx.se[1] * gravityScale) ** 2 + (vx * 1.96 * gravityScaleRel) ** 2 + drift ** 2);
+  // Which way is up, to 1 SD (rad). Two lines each tapped to `TAP_PX`: one a little high or low tilts it. Without lines,
+  // a run-up that comes at the camera makes the floor drop towards the lens, and still feet hanging from the rim sit
+  // above it: either way the floor fit can't be told from a tilted phone, so its whole turn is in doubt.
+  const tilt = markerPx != null ? (sqrt(2) * TAP_PX) / markerPx : flags.includes('curved') || flags.includes('hang') ? releveled : 0;
+  // A tilt θ adds θ·vx to the vertical take-off velocity, and θ·(vz − g·t̄) to the horizontal one, t̄ the middle of the
+  // fitted stretch: nothing over a whole flight, whose rise and fall cancel, but not so when the fit stops at a hang.
+  const tMid = (pts.ts[0] + pts.ts[pts.ts.length - 1]) / 2;
+  const vzErr = sqrt((G * off.err) ** 2 / fps ** 2 + (G * 1.96 * seApex) ** 2 + drift ** 2 + (1.96 * tilt * vx) ** 2);
+  const vxErr = sqrt((1.96 * fx.se[1] * gravityScale) ** 2 + (vx * 1.96 * gravityScaleRel) ** 2 + drift ** 2 + (1.96 * tilt * (vz - G * tMid)) ** 2);
   const angle = (atan2(vz, vx) * 180) / PI;
   // The two velocities' errors added outright, not in quadrature: both lean on the same fit, and a take-off timed early
   // pulls them the same way.
@@ -965,23 +974,28 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // --- Run-up speed: the time the hips take between the markers.
   if (markers) {
     const hx = smoothSeries(s.hip.x, fps, 10);
+    // When the hips cross a line (s), and how fast they go there (px/s).
     const crossing = (x: number) => {
       for (let i = 1; i < hx.length; i++) {
         if (Number.isNaN(hx[i - 1]) || Number.isNaN(hx[i])) continue;
-        if ((hx[i - 1] - x) * (hx[i] - x) <= 0 && hx[i] !== hx[i - 1]) return (s.frame[i - 1] + ((x - hx[i - 1]) / (hx[i] - hx[i - 1])) * (s.frame[i] - s.frame[i - 1])) / fps;
+        if ((hx[i - 1] - x) * (hx[i] - x) <= 0 && hx[i] !== hx[i - 1]) {
+          const df = s.frame[i] - s.frame[i - 1];
+          return { t: (s.frame[i - 1] + ((x - hx[i - 1]) / (hx[i] - hx[i - 1])) * df) / fps, speed: (abs(hx[i] - hx[i - 1]) * fps) / df };
+        }
       }
       return null;
     };
-    const ta = crossing(toWorld(frame, markers.a).x);
-    const tb = crossing(toWorld(frame, markers.b).x);
-    if (ta != null && tb != null && tb !== ta) {
-      const dt = abs(tb - ta);
+    const ca = crossing(toWorld(frame, markers.a).x);
+    const cb = crossing(toWorld(frame, markers.b).x);
+    if (ca && cb && cb.t !== ca.t) {
+      const dt = abs(cb.t - ca.t);
       const v = markers.distanceM / dt;
-      // Each crossing's time: the jitter a 10 Hz filter leaves (white noise keeps 2·10/fps of its variance) over the
-      // hips' speed in the picture. Each marker's place: a tap is good to `TAP_PX`.
+      // Each crossing's place: the jitter a 10 Hz filter leaves (white noise keeps 2·10/fps of its variance), and the
+      // tap (`TAP_PX`). Its time: that over the hips' speed there, which at the take-off line is the plant's, about
+      // half the run-up's.
       const jitter = median(s.hip.x.flatMap((x, i) => (Number.isNaN(x) || Number.isNaN(hx[i]) ? [] : [abs(x - hx[i])]))) * 1.4826;
-      const sdCross = (jitter * sqrt((2 * 10) / fps)) / max(1, v / markerScale!);
-      const rel = sqrt(((sqrt(2) * sdCross) / dt) ** 2 + ((sqrt(2) * TAP_PX) / markerPx!) ** 2);
+      const sdPx = hypot(jitter * sqrt((2 * 10) / fps), TAP_PX);
+      const rel = hypot(sdPx / max(1, ca.speed), sdPx / max(1, cb.speed)) / dt;
       // A run-up at an angle to the picture is foreshortened, by about as much as the body's size changes along it.
       metrics.approach = measured('approach', v, v * hypot(1.96 * rel, sizeChange));
     }
