@@ -505,11 +505,12 @@ export function bareFloor(strips: Grey[]): Grey {
     }
   const sigma = max(1, 1.4826 * histMedian(dev, total));
   const thr = max(MIN_THRESHOLD, 4 * sigma);
-  // Still pixels: never more than noise away from usual, bar a few frames. "More than noise" is 2.5 sigmas, not the
-  // 4 that mark the athlete: a shin barely lighter than the wall, there in most frames, must not pass for still.
+  // Still pixels: never more than noise away from usual, bar three frames. "More than noise" is 3 sigmas, not the 4
+  // that mark the athlete: a shin barely lighter than the wall, there in most frames, must not pass for still. And
+  // three frames, not a share of the clip: a short flight in a long clip uncovers the floor in only a few samples.
   const still = new Uint8Array(w * h);
-  const stillThr = max(MIN_THRESHOLD / 2, 2.5 * sigma);
-  const allowed = max(2, ceil(0.03 * n));
+  const stillThr = max(MIN_THRESHOLD / 2, 3 * sigma);
+  const allowed = 3;
   for (let p = 0; p < w * h; p++) {
     let moved = 0;
     for (let k = 0; k < n && moved <= allowed; k++) if (abs(norm[k][p] - usual.data[p]) > stillThr) moved++;

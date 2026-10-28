@@ -48,6 +48,7 @@ jest.mock('expo', () => {
 jest.mock('@/media/frameGrabber', () => ({
   ...jest.requireActual('@/media/frameGrabber'),
   stageForGrabbing: async () => ({ page: 'file:///cache/jump-detect/grab.html', dir: 'file:///cache/jump-detect/' }),
+  unstage: jest.fn(),
 }));
 jest.mock('@/media/videos', () => ({ persistVideo: async () => 'file:///docs/videos/cmj-1.mov' }));
 jest.mock('react-native-webview', () => {
@@ -90,6 +91,10 @@ let r: ReactTestRenderer;
 
 beforeAll(async () => {
   await migrate(mockDb);
+});
+
+afterEach(async () => {
+  await act(async () => r?.unmount());
 });
 
 it('marks take-off and landing by itself, and saves them once checked', async () => {
@@ -140,4 +145,40 @@ it('leaves marking to the athlete in the web version, which has no frame reader'
   expect(texts(r.root)).not.toContain('正在自动找起跳和落地');
   expect(mockWeb.props).toBeNull();
   mockRuntime.isWeb = false;
+});
+
+it('keeps marks set by hand while it was still looking, and offers its own as a choice', async () => {
+  mockWeb.inject.mockClear();
+  await act(async () => {
+    r = create(<Mark />);
+  });
+  await act(async () => {});
+  await post({ type: 'ready', duration: mockClip.frames / mockClip.fps, width: scene.width, height: scene.height });
+  const press = (label: string) => r.root.find((n) => n.props.accessibilityLabel === label && typeof n.props.onPress === 'function');
+  // Frame 0 by hand as take-off, then ten frames on as landing.
+  await act(async () => press('把当前帧标为起跳帧').props.onPress());
+  await act(async () => press('前进 10 帧').props.onPress());
+  await act(async () => press('把当前帧标为落地帧').props.onPress());
+  await answerGrabs();
+
+  const shown = texts(r.root);
+  expect(shown).toContain('#0');
+  expect(shown).toContain('#10');
+  const truth = sceneTruth(scene);
+  const offer = r.root.find((n) => typeof n.props.onPress === 'function' && n.findAllByType(Text).some((t) => /^换成自动找到的/.test(String(t.props.children))));
+  await act(async () => offer.props.onPress());
+  const marks = [...texts(r.root).matchAll(/^#(\d+)$/gm)].map((m) => Number(m[1]));
+  expect(Math.abs(marks[1] - truth.takeoff)).toBeLessThanOrEqual(1);
+  expect(Math.abs(marks[2] - truth.landing)).toBeLessThanOrEqual(1);
+});
+
+it('gives up, rather than spin for ever, when the page dies', async () => {
+  mockWeb.inject.mockClear();
+  await act(async () => {
+    r = create(<Mark />);
+  });
+  await act(async () => {});
+  await act(async () => mockWeb.props!.onContentProcessDidTerminate({ nativeEvent: {} }));
+  expect(texts(r.root)).toContain('读不到视频画面，请手动标');
+  expect(texts(r.root)).not.toContain('正在自动找起跳和落地');
 });

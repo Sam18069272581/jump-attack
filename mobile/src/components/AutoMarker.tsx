@@ -4,7 +4,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { Chip } from '@/components/ui';
 import { analyseCoarse, analyseFine, coarseRequest, type DetectedJump, type DetectKind, type DetectProblem, type FinePlan, type FrameRequest, type Grey, type VideoInfo } from '@/domain/autoMark';
-import { decodeBase64, stageForGrabbing } from '@/media/frameGrabber';
+import { decodeBase64, stageForGrabbing, unstage } from '@/media/frameGrabber';
 import { frameGrabberHtml } from '@/media/frameGrabberHtml';
 import { colors, radius } from '@/theme';
 
@@ -26,12 +26,31 @@ const PROBLEMS: Record<DetectProblem | 'error', string> = {
 
 /** Frames the fine pass usually asks for, to make the progress bar honest before it is known. */
 const FINE_GUESS = 110;
+/** The page answers every seek within a few seconds; this long without a word means it is stuck. */
+const SILENCE_MS = 30000;
 
 /**
  * Finds take-off and landing (and a drop jump's touch-down) in the clip by itself, and hands the frames to the marking
- * screen to check. A small page in a WebView reads the frames; `domain/autoMark` decides.
+ * screen to check. A small page in a WebView reads the frames; `domain/autoMark` decides. Once the athlete has marked
+ * something by hand (`keep`), what it finds is only offered, never put over their marks.
  */
-export function AutoMarker({ uri, fileFps, captureFps, frames, kind, onPick }: { uri: string; fileFps: number; captureFps: number; frames: number; kind: DetectKind; onPick: (marks: number[]) => void }) {
+export function AutoMarker({
+  uri,
+  fileFps,
+  captureFps,
+  frames,
+  kind,
+  keep,
+  onPick,
+}: {
+  uri: string;
+  fileFps: number;
+  captureFps: number;
+  frames: number;
+  kind: DetectKind;
+  keep: boolean;
+  onPick: (marks: number[]) => void;
+}) {
   const web = useRef<Web>(null);
   const [stage, setStage] = useState<{ page: string; dir: string } | null>(null);
   const [state, setState] = useState<{ phase: 'running'; done: number; total: number } | { phase: 'found'; jumps: DetectedJump[]; picked: number } | { phase: 'failed'; message: string }>({
@@ -41,20 +60,47 @@ export function AutoMarker({ uri, fileFps, captureFps, frames, kind, onPick }: {
   });
   const job = useRef<{ info?: VideoInfo; coarse?: FrameRequest; plan?: FinePlan; got: Grey[]; total: number }>({ got: [], total: 1 });
   const pick = useRef(onPick);
+  const kept = useRef(keep);
   useEffect(() => {
     pick.current = onPick;
+    kept.current = keep;
   });
 
   useEffect(() => {
     if (!frames) return;
     let gone = false;
+    let dir: string | null = null;
     stageForGrabbing(uri, (video) => frameGrabberHtml({ video, bg: colors.surface, accent: colors.accent }))
-      .then((s) => !gone && setStage(s))
+      .then((s) => {
+        if (gone) return unstage(s.dir);
+        dir = s.dir;
+        setStage(s);
+      })
       .catch(() => !gone && setState({ phase: 'failed', message: PROBLEMS.error }));
     return () => {
       gone = true;
+      if (dir) unstage(dir);
     };
   }, [uri, frames]);
+
+  // Done or given up: the copy of the clip goes, and so does the watchdog.
+  const running = state.phase === 'running';
+  useEffect(() => {
+    if (!running && stage) unstage(stage.dir);
+  }, [running, stage]);
+  const watchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function hear() {
+    if (watchdog.current) clearTimeout(watchdog.current);
+    watchdog.current = setTimeout(() => fail('error'), SILENCE_MS);
+  }
+  useEffect(() => {
+    if (!running || !stage) return;
+    hear();
+    return () => {
+      if (watchdog.current) clearTimeout(watchdog.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- armed once the page is there, re-armed by each message
+  }, [running, stage]);
 
   function grab(id: number, req: FrameRequest) {
     job.current.got = [];
@@ -63,16 +109,26 @@ export function AutoMarker({ uri, fileFps, captureFps, frames, kind, onPick }: {
   }
 
   function fail(problem: DetectProblem | 'error') {
-    setState({ phase: 'failed', message: PROBLEMS[problem] });
+    setState((s) => (s.phase === 'running' ? { phase: 'failed', message: PROBLEMS[problem] } : s));
   }
 
   function onMessage(e: WebViewMessageEvent) {
+    if (state.phase !== 'running') return;
+    hear();
     let m: Msg;
     try {
       m = JSON.parse(e.nativeEvent.data);
     } catch {
       return;
     }
+    try {
+      handle(m);
+    } catch {
+      fail('error');
+    }
+  }
+
+  function handle(m: Msg) {
     const j = job.current;
     if (m.type === 'error') return fail('error');
     if (m.type === 'ready') {
@@ -101,6 +157,7 @@ export function AutoMarker({ uri, fileFps, captureFps, frames, kind, onPick }: {
     if (m.type === 'done' && m.id === 2) {
       const r = analyseFine(j.plan!, j.got);
       if (!r.ok) return fail(r.problem);
+      if (kept.current) return setState({ phase: 'found', jumps: r.jumps, picked: -1 });
       setState({ phase: 'found', jumps: r.jumps, picked: 0 });
       pick.current(r.jumps[0].marks);
     }
@@ -131,6 +188,10 @@ export function AutoMarker({ uri, fileFps, captureFps, frames, kind, onPick }: {
                 scrollEnabled={false}
                 bounces={false}
                 onMessage={onMessage}
+                onError={() => fail('error')}
+                onHttpError={() => fail('error')}
+                onContentProcessDidTerminate={() => fail('error')}
+                onRenderProcessGone={() => fail('error')}
                 style={{ backgroundColor: colors.surface }}
               />
             )}
@@ -146,11 +207,18 @@ export function AutoMarker({ uri, fileFps, captureFps, frames, kind, onPick }: {
       )}
       {state.phase === 'found' && (
         <View style={{ gap: 8 }}>
-          <Text style={styles.title}>{state.jumps.length > 1 ? `认出 ${state.jumps.length} 跳，已标好第 ${state.picked + 1} 跳` : '已自动标好'}</Text>
-          {state.jumps.length > 1 && (
+          <Text style={styles.title}>
+            {state.picked < 0 ? '自动也找到了，你标的没动' : state.jumps.length > 1 ? `认出 ${state.jumps.length} 跳，已标好第 ${state.picked + 1} 跳` : '已自动标好'}
+          </Text>
+          {(state.jumps.length > 1 || state.picked < 0) && (
             <View style={styles.chips}>
               {state.jumps.map((jmp, i) => (
-                <Chip key={jmp.marks.join('-')} label={`第 ${i + 1} 跳 · ${Math.round(jmp.flightS * 1000)} ms`} selected={i === state.picked} onPress={() => choose(i)} />
+                <Chip
+                  key={jmp.marks.join('-')}
+                  label={`${state.picked < 0 ? '换成自动找到的' : ''}${state.jumps.length > 1 ? `第 ${i + 1} 跳` : '帧'} · ${Math.round(jmp.flightS * 1000)} ms`}
+                  selected={i === state.picked}
+                  onPress={() => choose(i)}
+                />
               ))}
             </View>
           )}

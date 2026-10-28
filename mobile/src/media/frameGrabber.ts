@@ -5,8 +5,8 @@ import { Directory, File, Paths } from 'expo-file-system';
  * exactly that folder and the page can load the clip by its name. Returns the page's file:// URI and the folder's.
  */
 export async function stageForGrabbing(videoUri: string, page: (videoName: string) => string): Promise<{ page: string; dir: string }> {
-  const dir = new Directory(Paths.cache, 'jump-detect');
-  if (dir.exists) dir.delete();
+  // A folder of its own each time: a clip can be hundreds of MB, and `unstage` removes it as soon as detection is done.
+  const dir = new Directory(Paths.cache, 'jump-detect', String(Date.now()));
   dir.create({ intermediates: true, idempotent: true });
   const source = new File(videoUri);
   const ext = source.extension ? (source.extension.startsWith('.') ? source.extension : `.${source.extension}`) : '.mov';
@@ -15,6 +15,16 @@ export async function stageForGrabbing(videoUri: string, page: (videoName: strin
   const html = new File(dir, 'grab.html');
   html.write(page(clip.name));
   return { page: html.uri, dir: dir.uri };
+}
+
+/** Removes what `stageForGrabbing` put in place. */
+export function unstage(dir: string) {
+  try {
+    const d = new Directory(dir);
+    if (d.exists) d.delete();
+  } catch {
+    // Already gone, or the cache was cleared: nothing to keep.
+  }
 }
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';

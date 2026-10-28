@@ -80,7 +80,9 @@ function scenarios(S, n) {
     // 1080 x 1920 slow-motion file; --scale renders bigger (and slower).
     const base = S.defaultScene(kind === 'single' ? 'cmj' : kind, over);
     // Lens at ankle height: the far foot's contact sits a few mm higher in the picture than the near one's.
-    base.farFootPx = Math.round(over.farFootMm / base.mmPerPx);
+    base.farFootPx = Math.round((over.farFootMm * SCALE) / base.mmPerPx);
+    delete base.farFootMm;
+    if (kind === 'single') base.singleLeg = true;
     const big = { width: Math.round(base.width * SCALE), height: Math.round(base.height * SCALE) };
     out.push({ name: `${String(i + 1).padStart(2, '0')}-${kind}`, kind, o: { ...base, ...big, mmPerPx: base.mmPerPx / SCALE, floorRow: Math.round(base.floorRow * SCALE), durationS: base.durationS + (kind === 'drop' ? 0.2 : 0) } });
   }
@@ -243,7 +245,8 @@ async function main() {
     }
     await page.close();
     const want = c.kind === 'drop' ? [c.truth.touchdown, c.truth.takeoff, c.truth.landing] : [c.truth.takeoff, c.truth.landing];
-    const got = r.ok ? r.jumps.reduce((best, j) => (Math.abs(j.marks.at(-2) - c.truth.takeoff) < Math.abs(best.marks.at(-2) - c.truth.takeoff) ? j : best)).marks : null;
+    // Scored as the app uses it: the first jump found is the one it marks.
+    const got = r.ok ? r.jumps[0].marks : null;
     const trueFlight = c.o ? c.o.flightS : (c.truth.landing - c.truth.takeoff) / c.captureFps;
     const row = {
       name: c.name,
@@ -276,6 +279,7 @@ async function main() {
     flightMs: stats(okRows.map((r) => r.flightErrMs)),
     heightCm: stats(okRows.map((r) => r.heightErrCm)),
     withinOneFrame: okRows.filter((r) => r.frameErr.every((e) => Math.abs(e) <= 1)).length,
+    withExtraJumps: results.filter((r) => r.extraJumps > 0).map((r) => `${r.name}: +${r.extraJumps}`),
   };
   fs.writeFileSync(path.join(OUT, 'report.json'), JSON.stringify({ summary, results }, null, 2));
   const md = [
@@ -296,6 +300,7 @@ async function main() {
       .map(([k, s]) => `| ${k} | ${s.n} | ${s.mean} | ${s.sd} | ${s.loa[0]} … ${s.loa[1]} | ${s.maxAbs} |`),
     '',
     summary.failed.length ? `没认出：${summary.failed.join('；')}` : '',
+    summary.withExtraJumps.length ? `多认出的跳（App 标的是第一跳）：${summary.withExtraJumps.join('；')}` : '',
   ].join('\n');
   fs.writeFileSync(path.join(OUT, 'report.md'), md);
   console.log(`\n${md}\n\n${OUT}`);

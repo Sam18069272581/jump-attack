@@ -40,6 +40,8 @@ export type SceneOptions = {
   secondFootLagS?: number;
   /** The far foot sits this many pixels higher in the picture (it is further from the lens). */
   farFootPx?: number;
+  /** CMJ on the near leg only: the far foot is held up behind, about 25 cm off the floor, the whole time. */
+  singleLeg?: boolean;
   shadow?: number;
   reflection?: number;
   noise?: number;
@@ -96,7 +98,9 @@ function pose(o: SceneOptions, t: number): Pose {
     const hipZ =
       t < t0 - 0.6 ? 920 : t < t0 - 0.25 ? lerp(920, 640, smooth((t - (t0 - 0.6)) / 0.35)) : t <= t0 ? lerp(640, 980, smooth((t - (t0 - 0.25)) / 0.25)) : t < t1 ? 980 + flightZ(o, t) : lerp(960, 700, smooth((t - t1) / 0.25));
     const near: Foot = { x: toe, z: flightZ(o, t), lift: liftAt(t, t1), dir: 1 };
-    const far: Foot = { x: toe - 40, z: flightZ(o, t, lag), lift: liftAt(t, t1 + lag), dir: 1 };
+    const far: Foot = o.singleLeg
+      ? { x: toe - 380, z: 250 + (t > t0 && t < t1 ? flightZ(o, t) : 0), lift: 0.7, dir: 1 }
+      : { x: toe - 40, z: flightZ(o, t, lag), lift: liftAt(t, t1 + lag), dir: 1 };
     return { feet: [near, far], hip: { x: toe - 160, z: hipZ } };
   }
 

@@ -46,6 +46,8 @@ export default function Mark() {
   const [frame, setFrame] = useState(0);
   // The marks, in the profile's order: take-off/landing for a jump, start/finish for a sprint, touch-down/take-off/landing for a drop jump.
   const [marks, setMarks] = useState<(number | null)[]>([]);
+  // Marked by hand: automatic detection then only offers what it finds.
+  const [byHand, setByHand] = useState(false);
   const [saving, setSaving] = useState(false);
   // Attempts already saved from this clip.
   const [saved, setSaved] = useState(0);
@@ -100,6 +102,7 @@ export default function Mark() {
 
   function mark(i: number) {
     Haptics.selectionAsync();
+    setByHand(true);
     setMarks((m) => profile!.marks.map((_, j) => (j === i ? frame : (m[j] ?? null))));
   }
 
@@ -167,6 +170,7 @@ export default function Mark() {
             captureFps={fps}
             frames={total}
             kind={profile.marks.length === 3 ? 'drop' : 'jump'}
+            keep={byHand}
             onPick={(found) => {
               setMarks(found);
               show(found[0]);
