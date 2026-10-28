@@ -26,11 +26,17 @@ class FakeCanvas {
   clientWidth = 400;
   clientHeight = 300;
   last: Draw | null = null;
+  /** Whether the frame drawn on it locks it, as WebKit does with another origin's video. */
+  constructor(readonly locked: () => boolean = () => false) {}
   addEventListener() {}
   getContext() {
     const c = this;
     const noop = () => {};
     return {
+      getImageData() {
+        if (c.locked()) throw Object.assign(new Error('The operation is insecure.'), { name: 'SecurityError' });
+        return { data: new Uint8ClampedArray(4) };
+      },
       fillStyle: '',
       strokeStyle: '',
       lineWidth: 1,
@@ -80,7 +86,10 @@ class FakeVideo {
       this.fire('seeked');
     });
   }
-  set src(_: string) {}
+  source = '';
+  set src(v: string) {
+    this.source = v;
+  }
   load() {
     this.videoWidth = W;
     this.videoHeight = H;
@@ -114,9 +123,10 @@ type Opened = {
   created: { fileset: { wasmLoaderPath: string; wasmBinaryPath: string }; opts: { baseOptions: { delegate: string; modelAssetBuffer: Uint8Array } } }[];
   scripts: string[];
   reads: string[];
+  video: FakeVideo;
 };
 
-async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback?: boolean } = {}): Promise<Opened> {
+async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback?: boolean; locked?: boolean } = {}): Promise<Opened> {
   const html = poseReaderHtml({ video: 'clip.mov', bg: '#000', accent: '#f80' });
   const start = html.indexOf('<script id="main">') + '<script id="main">'.length;
   const script = html.slice(start, html.indexOf('</script>', start));
@@ -145,13 +155,21 @@ async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback
         if (!win.ModuleFactory) throw new Error('ModuleFactory not set.');
         win.ModuleFactory = undefined;
         if (o.gpuFails && opts.baseOptions.delegate === 'GPU') throw new Error('WebGL unavailable');
-        return { detect: (c: FakeCanvas) => landmarksOn(c, video), close() {} };
+        return {
+          // WebGL won't take a locked canvas, nor will the CPU path read one.
+          detect: (c: FakeCanvas) => {
+            if (c.locked()) throw Object.assign(new Error('The operation is insecure.'), { name: 'SecurityError' });
+            return landmarksOn(c, video);
+          },
+          close() {},
+        };
       },
     },
   };
   const document = {
     getElementById: (id: string) => (id === 'video' ? video : view),
-    createElement: (tag: string) => (tag === 'canvas' ? new FakeCanvas() : { src: '', onload: null as null | (() => void), onerror: null }),
+    createElement: (tag: string) =>
+      tag === 'canvas' ? new FakeCanvas(() => !!o.locked && !video.source.startsWith('blob:')) : { src: '', onload: null as null | (() => void), onerror: null },
     body: {
       appendChild(s: { src: string; onload: () => void }) {
         scripts.push(s.src);
@@ -184,7 +202,12 @@ async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback
   // Only the short waits run: the 4 s guard against a seek that never ends never fires here.
   const timer = (fn: () => void, ms: number) => (ms <= 100 ? setImmediate(fn) : 0);
   const location = { href: 'file:///app/Documents/pose/run-1/page.html' };
-  new Function('window', 'self', 'document', 'setTimeout', 'XMLHttpRequest', 'location', 'fetch', script)(win, win, document, timer, XHR, location, undefined);
+  class PageURL extends URL {
+    static createObjectURL() {
+      return 'blob:file:///clip';
+    }
+  }
+  new Function('window', 'self', 'document', 'setTimeout', 'XMLHttpRequest', 'location', 'fetch', 'URL', script)(win, win, document, timer, XHR, location, undefined, PageURL);
   const next = (type: string, id?: number) =>
     new Promise<Msg>((resolve, reject) => {
       const failed = messages.find((m) => m.type === 'error');
@@ -197,7 +220,7 @@ async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback
       waiting.push({ type, id, resolve, reject });
     });
   await next('ready');
-  return { messages, win: win as Opened['win'], next, created, scripts, reads };
+  return { messages, win: win as Opened['win'], next, created, scripts, reads, video };
 }
 
 /** A runner across the picture: hips 200 px in at frame 0, 6 px a frame (about 6 m/s seen from 7 m at 240 fps). */
@@ -287,6 +310,14 @@ describe('the clip page', () => {
     page.win.everyone({ id: 6, frames: [40], fps: FPS });
     const [g] = await collect(page, 6);
     expect(g.people.map((p) => Math.round(hipOf(p).x)).sort((a, b) => a - b)).toEqual([440, 1500]);
+  });
+
+  it('loads a clip the canvas is locked for (another origin to WebKit) again as a blob, and reads it', async () => {
+    const page = await openPage([runner], { locked: true });
+    expect(page.reads).toContain('clip.mov');
+    expect(page.video.source).toBe('blob:file:///clip');
+    page.win.crops({ id: 8, frames: [100], fps: FPS, crops: [{ x: 300, y: 300, s: 800 }] });
+    expect((await collect(page, 8))[0].people).toHaveLength(1);
   });
 
   it('reports each frame’s own time in the file when the browser gives it', async () => {

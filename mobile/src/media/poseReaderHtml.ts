@@ -168,10 +168,36 @@ ${POSE_SHARED_JS}
   window.crops = function (req) { enqueue(function () { return crops(req); }); };
   window.everyone = function (req) { enqueue(function () { return everyone(req); }); };
 
+  // A file:// video can count as another origin and lock a canvas it is drawn on, and the model can't read a locked
+  // canvas. Loaded as a blob it is this page's own. The check draws on a canvas of its own, so the model's stays open.
+  function locked() {
+    try {
+      var c = document.createElement('canvas');
+      c.width = 2; c.height = 2;
+      var x = c.getContext('2d');
+      x.drawImage(video, 0, 0, 2, 2);
+      x.getImageData(0, 0, 1, 1);
+      return null;
+    } catch (e) { return e; }
+  }
+  var viaBlob = false;
+  function reloadAsBlob(why) {
+    viaBlob = true;
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', CFG.video);
+    xhr.responseType = 'blob';
+    xhr.onload = function () { video.src = URL.createObjectURL(xhr.response); video.load(); };
+    xhr.onerror = function () { post({ type: 'error', stage: 'video', message: '读不到视频画面（' + why.name + '）' }); };
+    xhr.send();
+  }
+
   video.addEventListener('error', function () { post({ type: 'error', stage: 'video', message: '视频打不开：' + ((video.error && video.error.message) || '格式不支持') }); });
   video.addEventListener('loadedmetadata', function () {
     W = video.videoWidth; H = video.videoHeight; duration = video.duration;
     seekTo(Math.min(0.05, duration / 2)).then(function () {
+      var e = locked();
+      if (e && !viaBlob) return reloadAsBlob(e);
+      if (e) return post({ type: 'error', stage: 'video', message: '读不到视频画面（' + e.name + '）' });
       preview({ x: 0, y: 0, s: 0 }, null);
       post({ type: 'ready', duration: duration, width: W, height: H });
     });
