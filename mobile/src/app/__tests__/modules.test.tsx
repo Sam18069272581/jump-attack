@@ -6,7 +6,7 @@ import { saveRecoveryDay } from '@/db/recovery';
 import { migrate } from '@/db/migrations';
 import { addTrial, ensureSession, listSessionResults, listTrials } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
-import { getActivePlan, startPlan } from '@/db/training';
+import { getActivePlan, getWorkout, listSets, startPlan } from '@/db/training';
 import { addVbtSet } from '@/db/vbt';
 import { addDays, toISODate } from '@/domain/dates';
 
@@ -292,9 +292,35 @@ describe('VBT', () => {
     mockParams = { date: today };
     const r = await render(<WorkoutScreen />);
     // 1RM 120 kg. The deload week and today's low HRV bring the squat to 1 × 5 at RPE 5: 120 / (1 + 10/30) = 90 kg.
-    expect(texts(r.root)).toContain('按 VBT 估算 1RM 120 kg，5 次 @ RPE 5 建议 90 kg');
+    // A poor day outside a strength block takes another 10 % off and keeps the bar speed: 80 kg at 1.5 − 0.01 × 80 = 0.70 m/s.
+    const t = texts(r.root);
+    expect(t).toContain('按 VBT 估算 1RM 120 kg，5 次 @ RPE 5 建议 90 kg，今天按状态减到 80 kg · 达标线 0.70 m/s');
+    expect(t).toContain('今天状态差');
     const kg = r.root.findAll((n) => n.type === TextInput && n.props.accessibilityLabel === 'kg')[0];
-    expect(kg.props.placeholder).toBe('90');
+    expect(kg.props.placeholder).toBe('80');
+  });
+
+  it('reads the warm-up and stops a set below the day’s line', async () => {
+    for (const daysAgo of [9, 6, 3]) {
+      const id = `warm-${daysAgo}`;
+      await mockDb.runAsync("INSERT INTO test_session (id, athlete_id, metric_code, started_at) VALUES (?, 1, 'vbt_squat', ?)", id, new Date(2026, 9, 19 - daysAgo, 10).toISOString());
+      await mockDb.runAsync('INSERT INTO trial (session_id, value, load_kg) VALUES (?, 0.9, 70)', id);
+    }
+    mockParams = { date: today };
+    const r = await render(<WorkoutScreen />);
+    await type(r.root, '热身重量', '70');
+    await type(r.root, '热身速度', '0.75');
+    await press(r.root, '记录');
+    expect(texts(r.root)).toContain('热身 70 kg：0.75 m/s，是 30 天均值 0.90 的 83%（差）');
+
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    await type(r.root, 'm/s', '0.62');
+    await press(r.root, '杠铃后蹲 第 1 组');
+    expect(alert).toHaveBeenCalledWith('今天到这里为止', '这组 0.62 m/s，低于今天的达标线 0.70 m/s。杠铃后蹲剩下的组今天不做了，硬练只会积累疲劳。');
+    const plan = await mockDb.getFirstAsync<{ id: number }>('SELECT id FROM plan WHERE ended_at IS NULL');
+    const w = (await getWorkout(mockDb, plan!.id, today))!;
+    expect((await listSets(mockDb, w.id)).find((x) => x.exercise_code === 'back_squat')).toMatchObject({ load_kg: 80, mean_velocity: 0.62 });
+    alert.mockRestore();
   });
 });
 

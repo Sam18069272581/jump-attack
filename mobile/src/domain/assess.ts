@@ -63,3 +63,23 @@ export function readinessOn(results: { started_at: string; best: number }[], dat
   const today = Math.max(...todays);
   return { today, ...cmjReadiness(before, today) };
 }
+
+/** Whether a result was recorded on one of the `poor` days (days the athlete was in poor shape). */
+export function onPoorDay(r: { started_at: string }, poor?: ReadonlySet<ISODate>): boolean {
+  return poor?.has(toISODate(new Date(r.started_at))) ?? false;
+}
+
+/**
+ * What session `sessionId` is judged against: the bests of the sessions before it, leaving out those from
+ * `poor` days so one bad day doesn't drag the trend down, and whether the session itself fell on a poor day
+ * (it then doesn't count toward the trend either). `results` are in recording order.
+ */
+export function trendBaseline<T extends { session_id: string; started_at: string; best: number }>(
+  results: T[],
+  sessionId: string,
+  poor?: ReadonlySet<ISODate>,
+): { previous: number[]; poorDay: boolean } {
+  const i = results.findIndex((r) => r.session_id === sessionId);
+  const earlier = i < 0 ? results : results.slice(0, i);
+  return { previous: earlier.filter((r) => !onPoorDay(r, poor)).map((r) => r.best), poorDay: i >= 0 && onPoorDay(results[i], poor) };
+}
