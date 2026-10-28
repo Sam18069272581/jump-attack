@@ -11,7 +11,7 @@ import { Button, Card } from '@/components/ui';
 import { newSessionId } from '@/db/repo';
 import { insertDeload } from '@/db/training';
 import { addDays, daysBetween, shortDate, type ISODate } from '@/domain/dates';
-import { isRetestWeek, nextBlockStart } from '@/domain/blocks';
+import { isRetestWeek, nextBlockStart, retestCodes } from '@/domain/blocks';
 import { blockPosition, DELOAD_DAYS, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
 import { DELOAD_STREAK } from '@/domain/readiness';
 import { STATUS_TEXT } from '@/domain/recovery';
@@ -184,7 +184,7 @@ function PlanView({
       )}
 
       {retest && template.blocks && (
-        <RetestCard codes={template.blocks[block.type].retest} diagnosis={advice.diagnosis} nextStart={nextBlockStart(plan, today)} />
+        <RetestCard codes={retestCodes(template, block.type, advice.diagnosis)} diagnosis={advice.diagnosis} nextStart={nextBlockStart(plan, today)} />
       )}
 
       <WeekStrip

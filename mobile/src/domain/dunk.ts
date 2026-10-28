@@ -104,7 +104,10 @@ export type DunkDiagnosis = {
   /** Dunk line − touch, cm; zero or less means the reach is there. */
   gapCm: number | null;
   limiter: BlockType | null;
-  /** Every result that decides the limiter was on the same side of its line in the test before too. */
+  /**
+   * Every result that decides the limiter was on the same side of its line in the test before too, or the drop jump
+   * is clearly under the RSI floor.
+   */
   confirmed: boolean;
   /** The run-up adds too little over a standing jump: the last two steps and the arm swing need work. */
   technique: boolean;
@@ -160,8 +163,13 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
   const source = approach != null ? 'approach' : standing != null ? 'standing' : null;
 
   const now = snapshot(input, 0);
+  const before = snapshot(input, 1);
   const limiter = limiterOf(now);
-  const confirmed = limiter != null && limiterOf(snapshot(input, 1)) === limiter;
+  // A drop jump under the RSI floor is reactive whatever the noise, the way FV% trusts a test far outside its band
+  // (fvp.ts): one ladder is enough once the squat was past its line in the test before too.
+  const clearlyReactive =
+    limiter === 'reactive' && now.rsi != null && now.rsi < THRESHOLDS.rsi.low && before.squatRatio != null && before.squatRatio >= THRESHOLDS.squatRatio.low;
+  const confirmed = limiter != null && (limiterOf(before) === limiter || clearlyReactive);
   const eur = cmj != null && sj ? cmj / sj : null;
   const fv = input.fvPct.at(-1) ?? null;
   const gain = approach != null && standing != null ? approach - standing : null;

@@ -71,6 +71,15 @@ describe('limiter', () => {
     expect(diagnose({ ...base, squat1rm: [125, 130], dropJumps: [{ rsi: 1.8, contactMs: 200 }] }).confirmed).toBe(false);
   });
 
+  it('trusts a single drop jump that is clearly below the RSI floor', () => {
+    // RSI 1.3 is under the 1.5 line that holds an athlete back, not just under the 2.0 target: one test is enough,
+    // as long as the squat was past 1.5× in the test before too.
+    expect(diagnose({ ...base, squat1rm: [125, 130], dropJumps: [{ rsi: 1.3, contactMs: 200 }] }).confirmed).toBe(true);
+    expect(diagnose({ ...base, squat1rm: [100, 130], dropJumps: [{ rsi: 1.3, contactMs: 200 }] }).confirmed).toBe(false);
+    // Passing 2.0 once still needs a second test before moving on to transfer.
+    expect(diagnose({ ...base, squat1rm: [125, 130], dropJumps: [{ rsi: 2.6, contactMs: 160 }] }).confirmed).toBe(false);
+  });
+
   it('waits for a drop jump once the squat is past 1.5×', () => {
     const d = diagnose({ ...base, squat1rm: [130] });
     expect(d.limiter).toBeNull();

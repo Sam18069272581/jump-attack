@@ -87,6 +87,7 @@ it('shows the block, its reason and the retest in week 4', async () => {
   expect(t).toContain('跳深 RSI 1.60，不到 2.0：练反应。');
   expect(t).toContain('本周复测');
   expect(t).toContain('测 DJ 跳深');
+  expect(t).toContain('测 助跑摸高');
   expect(t).toContain('建议下一块换成转化块');
 });
 
