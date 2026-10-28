@@ -2,57 +2,18 @@ import { decodePose, LANDMARK_COUNT, LANDMARK_FIELDS, LM, type Pose } from '@/do
 import { standing } from '@/domain/testing/standing';
 
 import { poseReaderHtml } from '../poseReaderHtml';
+import { FakeCanvas, runPage, type Page, type Picture } from '../testing/posePage';
 
 /**
- * The clip page's script, run against a minimal DOM and a stand-in for MediaPipe's pose landmarker. The stand-in
- * reports the people of the current frame wherever the page drew them on its canvas, but, like the real model's
- * person detector, which looks at the picture shrunk to 224 px, it misses anyone under 60 px tall at that size, and
- * anyone mostly outside the square drawn.
+ * The clip page's script, run against a minimal DOM and a stand-in for MediaPipe's pose landmarker that, like the real
+ * model, misses people too small in the square it is given (media/testing/posePage.ts).
  */
 
 const W = 1920;
 const H = 1080;
 const FPS = 240;
-const DETECTOR_PX = 224;
-const SMALLEST = 60;
 
-type Draw = { sx: number; sy: number; sw: number; sh: number; dx: number; dy: number; dw: number; dh: number };
 type Person = (frame: number) => Pose | null;
-type Msg = { type: string; id?: number; items?: [number, number | null, ...number[][]][]; frame?: number; delegate?: string; source?: string; message?: string; stage?: string };
-
-class FakeCanvas {
-  width = 300;
-  height = 150;
-  clientWidth = 400;
-  clientHeight = 300;
-  last: Draw | null = null;
-  /** Whether the frame drawn on it locks it, as WebKit does with another origin's video. */
-  constructor(readonly locked: () => boolean = () => false) {}
-  addEventListener() {}
-  getContext() {
-    const c = this;
-    const noop = () => {};
-    return {
-      getImageData() {
-        if (c.locked()) throw Object.assign(new Error('The operation is insecure.'), { name: 'SecurityError' });
-        return { data: new Uint8ClampedArray(4) };
-      },
-      fillStyle: '',
-      strokeStyle: '',
-      lineWidth: 1,
-      lineCap: '',
-      fillRect: noop,
-      strokeRect: noop,
-      beginPath: noop,
-      moveTo: noop,
-      lineTo: noop,
-      stroke: noop,
-      drawImage(_src: unknown, sx: number, sy: number, sw: number, sh: number, dx: number, dy: number, dw: number, dh: number) {
-        c.last = { sx, sy, sw, sh, dx, dy, dw, dh };
-      },
-    };
-  }
-}
 
 class FakeVideo {
   videoWidth = 0;
@@ -60,14 +21,21 @@ class FakeVideo {
   duration = 4;
   frame = 0;
   error = null;
+  source = '';
   private listeners: Record<string, (() => void)[]> = {};
   private callbacks: ((now: number, meta: { mediaTime: number }) => void)[] = [];
   requestVideoFrameCallback?: (cb: (now: number, meta: { mediaTime: number }) => void) => void;
   constructor(
     public people: Person[],
     frameCallback: boolean,
+    /** Whether WebKit takes the clip for another origin's, and locks a canvas it is drawn on. */
+    private locks: boolean,
   ) {
     if (frameCallback) this.requestVideoFrameCallback = (cb) => void this.callbacks.push(cb);
+  }
+  get picture(): Picture {
+    const people = this.people.map((p) => p(this.frame)).filter((p): p is Pose => p != null);
+    return { w: this.videoWidth, h: this.videoHeight, people, luma: () => 128, locked: this.locks && !this.source.startsWith('blob:') };
   }
   addEventListener(type: string, fn: () => void) {
     (this.listeners[type] ??= []).push(fn);
@@ -86,7 +54,6 @@ class FakeVideo {
       this.fire('seeked');
     });
   }
-  source = '';
   set src(v: string) {
     this.source = v;
   }
@@ -97,130 +64,13 @@ class FakeVideo {
   }
 }
 
-/** What the stand-in landmarker sees on a canvas the page drew a square of the frame on. */
-function landmarksOn(canvas: FakeCanvas, video: FakeVideo) {
-  const m = canvas.last;
-  if (!m) return { landmarks: [] };
-  const d = canvas.width;
-  const out: { x: number; y: number; z: number; visibility: number }[][] = [];
-  for (const person of video.people) {
-    const p = person(video.frame);
-    if (!p) continue;
-    const q = p.map((l) => ({ x: m.dx + ((l.x - m.sx) * m.dw) / m.sw, y: m.dy + ((l.y - m.sy) * m.dh) / m.sh, z: l.z, v: l.v }));
-    const ys = q.map((l) => l.y);
-    if (((Math.max(...ys) - Math.min(...ys)) * DETECTOR_PX) / d < SMALLEST) continue;
-    const inside = q.filter((l) => l.x >= m.dx && l.x <= m.dx + m.dw && l.y >= m.dy && l.y <= m.dy + m.dh).length;
-    if (inside < 0.8 * q.length) continue;
-    out.push(q.map((l) => ({ x: l.x / d, y: l.y / d, z: l.z, visibility: l.v })));
-  }
-  return { landmarks: out };
-}
-
-type Opened = {
-  messages: Msg[];
-  win: Record<string, unknown> & { follow: (r: object) => void; crops: (r: object) => void; everyone: (r: object) => void };
-  next: (type: string, id?: number) => Promise<Msg>;
-  created: { fileset: { wasmLoaderPath: string; wasmBinaryPath: string }; opts: { baseOptions: { delegate: string; modelAssetBuffer: Uint8Array } } }[];
-  scripts: string[];
-  reads: string[];
-  video: FakeVideo;
-};
+type Opened = Page & { video: FakeVideo };
 
 async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback?: boolean; locked?: boolean } = {}): Promise<Opened> {
-  const html = poseReaderHtml({ video: 'clip.mov', bg: '#000', accent: '#f80' });
-  const start = html.indexOf('<script id="main">') + '<script id="main">'.length;
-  const script = html.slice(start, html.indexOf('</script>', start));
-  const video = new FakeVideo(people, o.frameCallback ?? false);
-  const view = new FakeCanvas();
-  const messages: Msg[] = [];
-  const waiting: { type: string; id?: number; resolve: (m: Msg) => void; reject: (e: Error) => void }[] = [];
-  const created: Opened['created'] = [];
-  const scripts: string[] = [];
-  const reads: string[] = [];
-  const win: Record<string, unknown> = {
-    devicePixelRatio: 1,
-    onPoseMessage: (m: Msg) => {
-      messages.push(m);
-      // A page error fails whatever the test waits for, rather than leaving it to time out.
-      if (m.type === 'error') return waiting.splice(0).forEach((w) => w.reject(new Error(`${m.stage ?? ''} ${m.message}`)));
-      const i = waiting.findIndex((w) => w.type === m.type && (w.id == null || w.id === m.id));
-      if (i >= 0) waiting.splice(i, 1)[0].resolve(m);
-    },
-  };
-  const vision = {
-    PoseLandmarker: {
-      createFromOptions: async (fileset: Opened['created'][0]['fileset'], opts: Opened['created'][0]['opts']) => {
-        created.push({ fileset, opts });
-        // As the library does: it takes the loader's factory, and clears it.
-        if (!win.ModuleFactory) throw new Error('ModuleFactory not set.');
-        win.ModuleFactory = undefined;
-        if (o.gpuFails && opts.baseOptions.delegate === 'GPU') throw new Error('WebGL unavailable');
-        return {
-          // WebGL won't take a locked canvas, nor will the CPU path read one.
-          detect: (c: FakeCanvas) => {
-            if (c.locked()) throw Object.assign(new Error('The operation is insecure.'), { name: 'SecurityError' });
-            return landmarksOn(c, video);
-          },
-          close() {},
-        };
-      },
-    },
-  };
-  const document = {
-    getElementById: (id: string) => (id === 'video' ? video : view),
-    createElement: (tag: string) =>
-      tag === 'canvas' ? new FakeCanvas(() => !!o.locked && !video.source.startsWith('blob:')) : { src: '', onload: null as null | (() => void), onerror: null },
-    body: {
-      appendChild(s: { src: string; onload: () => void }) {
-        scripts.push(s.src);
-        Promise.resolve().then(() => {
-          if (s.src.endsWith('/vision.js')) win.MPVision = vision;
-          if (s.src.endsWith('/vision_wasm_internal.js')) win.ModuleFactory = () => {};
-          s.onload();
-        });
-      },
-    },
-  };
-  class XHR {
-    status = 0;
-    response: ArrayBuffer | null = null;
-    onload: () => void = () => {};
-    onerror: () => void = () => {};
-    responseType = '';
-    private url = '';
-    open(_method: string, url: string) {
-      this.url = url;
-    }
-    send() {
-      reads.push(this.url);
-      Promise.resolve().then(() => {
-        this.response = new Uint8Array([1, 2, 3]).buffer;
-        this.onload();
-      });
-    }
-  }
-  // Only the short waits run: the 4 s guard against a seek that never ends never fires here.
-  const timer = (fn: () => void, ms: number) => (ms <= 100 ? setImmediate(fn) : 0);
-  const location = { href: 'file:///app/Documents/pose/run-1/page.html' };
-  class PageURL extends URL {
-    static createObjectURL() {
-      return 'blob:file:///clip';
-    }
-  }
-  new Function('window', 'self', 'document', 'setTimeout', 'XMLHttpRequest', 'location', 'fetch', 'URL', script)(win, win, document, timer, XHR, location, undefined, PageURL);
-  const next = (type: string, id?: number) =>
-    new Promise<Msg>((resolve, reject) => {
-      const failed = messages.find((m) => m.type === 'error');
-      if (failed) return reject(new Error(`${failed.stage ?? ''} ${failed.message}`));
-      const seen = messages.find((m) => m.type === type && (id == null || m.id === id) && !(m as { taken?: boolean }).taken);
-      if (seen) {
-        (seen as { taken?: boolean }).taken = true;
-        return resolve(seen);
-      }
-      waiting.push({ type, id, resolve, reject });
-    });
-  await next('ready');
-  return { messages, win: win as Opened['win'], next, created, scripts, reads, video };
+  const video = new FakeVideo(people, o.frameCallback ?? false, o.locked ?? false);
+  const page = runPage(poseReaderHtml({ video: 'clip.mov', bg: '#000', accent: '#f80' }), { elements: { video, view: new FakeCanvas() }, gpuFails: o.gpuFails });
+  await page.next('ready');
+  return { ...page, video };
 }
 
 /** A runner across the picture: hips 200 px in at frame 0, 6 px a frame (about 6 m/s seen from 7 m at 240 fps). */
@@ -235,7 +85,7 @@ async function collect(page: Opened, id: number): Promise<{ frame: number; time:
   await page.next('done', id);
   return page.messages
     .filter((m) => m.type === 'poses' && m.id === id)
-    .flatMap((m) => m.items!)
+    .flatMap((m) => m.items as [number, number | null, ...number[][]][])
     .map(([frame, time, ...people]) => ({ frame, time, people: people.map((v) => decodePose(v, W, H)) }));
 }
 
