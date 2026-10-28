@@ -26,6 +26,17 @@
 
 **记录跟着启动它的电脑走**：Expo Go 按电脑区分数据，换一台电脑 `npm start`，手机上看到的是另一份空数据。一直用同一台电脑启动。
 
+### 不开电脑也能用
+
+合并到 main 后由 GitHub Actions 自动更新，两种都免费：
+
+- **网页版**：https://sam18069272581.github.io/jump-attack/ 。iPhone 用 Safari 打开，点「分享 → 添加到主屏幕」，之后全屏打开，断网也能用。数据存在这个浏览器里。录像只能从相册导入，逐帧定位不如 App 精确；量角度要先点「允许使用运动传感器」。微信、QQ 内置浏览器打不开。
+- **Expo Go 云端版**：Expo Go 登录自己的 Expo 账号，打开 `exp://u.expo.dev/589a8a7c-8269-46a9-a6f1-a9fa25be2636?channel-name=main`。只能打开自己账号（或所在组织）的项目。
+
+网页版、云端版和电脑启动的版本各存各的数据，互不相通。
+
+第一次设置（只做一次）：仓库 Settings → Pages → Source 选「GitHub Actions」；expo.dev → Access tokens 新建 token，填到仓库 Settings → Secrets and variables → Actions，名字 `EXPO_TOKEN`。也可以在电脑上 `npx eas-cli@latest login` 后 `npm run update` 手动发布。
+
 ### 拍视频
 
 设置 → 相机 → 录制慢动作，选 1080p 240 fps。手机放稳在侧面，镜头对准脚踝，起跳前 2 秒开拍。在 App 里选项目 → 从相册导入 → 逐帧标记。每个项目的拍法写在导入页上。
@@ -36,6 +47,7 @@
 
 ```sh
 npm test && npm run typecheck && npm run lint
+npm run build:web   # 网页版导出到 dist/（npx expo start --web 可本地预览）
 ```
 
 代码分层见仓库根目录的 `CLAUDE.md`。

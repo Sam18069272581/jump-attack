@@ -16,6 +16,7 @@ import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
 import { markedTrial, markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { calibrationProblem } from '@/domain/touch';
+import { probeFrameRate } from '@/media/frameRate';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -60,6 +61,18 @@ export default function Mark() {
     const rate = availableVideoTracks[0]?.frameRate;
     if (rate && rate > 0) setDetectedFps(Math.round(rate));
   });
+
+  // The web player sends no sourceLoad: take the length once it can play, and time the frames for the rate.
+  useEventListener(player, 'statusChange', ({ status }) => {
+    if (status === 'readyToPlay') setDuration((d) => d || player.duration);
+  });
+  useEffect(() => {
+    let alive = true;
+    probeFrameRate(params.uri).then((rate) => alive && rate != null && setDetectedFps((d) => d ?? rate));
+    return () => {
+      alive = false;
+    };
+  }, [params.uri]);
 
   // Frames are stepped at the file's own rate and measured at the rate they were captured.
   const { file: fileFps, capture: fps } = markingRates({ detected: detectedFps, chosen: captureOverride, reported: Number(params.fps) || 0 });

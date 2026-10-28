@@ -48,15 +48,20 @@ export default function Me() {
                 </Pressable>
               );
             })}
-            {Platform.OS === 'ios' && <Button label="添加测试对象" variant="secondary" onPress={add} />}
+            {Platform.OS !== 'android' && <Button label="添加测试对象" variant="secondary" onPress={add} />}
           </View>
 
           {/* Keyed so the form starts fresh when switching athlete. */}
           {current && <ProfileForm key={current.id} athlete={current} onSaved={reload} />}
 
-          <OldVideos />
+          {/* Copies of clips in the app's folder: only the native app ever made them. */}
+          {Platform.OS !== 'web' && <OldVideos />}
 
-          <Text style={styles.footnote}>数据只保存在这台手机上。</Text>
+          <Text style={styles.footnote}>
+            {Platform.OS === 'web'
+              ? '网页版的数据只保存在这个浏览器里，换浏览器或清除网站数据就看不到了。iPhone 上用 Safari 点「分享 → 添加到主屏幕」，之后从主屏幕图标打开，数据保存更稳。'
+              : '数据只保存在这台手机上。'}
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
