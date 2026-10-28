@@ -22,11 +22,17 @@ export const METRIC_TEXT: Record<MetricKey, MetricText> = {
 
 export const METRIC_ORDER = Object.keys(METRIC_TEXT) as MetricKey[];
 
+/** A figure's error to the figure's precision, never less than one unit of the last digit: "± 0" would claim it exact. */
+export function formatError(key: MetricKey, error: number): string {
+  const d = METRIC_TEXT[key].decimals;
+  return Math.max(error, 10 ** -d).toFixed(d);
+}
+
 /** "3.30 ± 0.04 m/s"; a figure less sure than its pass line says so instead of passing for a number to trust. */
 export function formatMeasured(key: MetricKey, m: Measured): string {
   const t = METRIC_TEXT[key];
   const sep = t.unit === '°' ? '' : ' ';
-  const text = `${m.value.toFixed(t.decimals)} ± ${m.error.toFixed(t.decimals)}${sep}${t.unit}`;
+  const text = `${m.value.toFixed(t.decimals)} ± ${formatError(key, m.error)}${sep}${t.unit}`;
   return m.status === 'ok' ? text : `${text}（不够准）`;
 }
 

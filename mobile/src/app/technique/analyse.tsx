@@ -18,7 +18,7 @@ import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { Pt } from '@/domain/pose';
 import { analyseTechnique, type Markers, type TechniqueProblem, type TechniqueResult } from '@/domain/technique';
 import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, planWindow, TAP_REACH_S, windowOf } from '@/domain/techniqueRead';
-import { FLAG_TEXT, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT } from '@/domain/techniqueText';
+import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT } from '@/domain/techniqueText';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -383,7 +383,7 @@ function Summary({ result, fps, reach }: { result: TechniqueResult; fps: number;
                 <Text style={styles.unit}> {t.unit}</Text>
               </Text>
               <Text style={styles.muted}>
-                ± {m.error.toFixed(t.decimals)}
+                ± {formatError(k, m.error)}
                 {m.status !== 'ok' ? ' 不够准' : ''}
               </Text>
             </View>
