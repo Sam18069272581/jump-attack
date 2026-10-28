@@ -35,8 +35,8 @@ jest.mock('expo', () => {
   return {
     ...jest.requireActual('expo'),
     // The clip reports its length and its real frame rate as soon as it loads.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- like the real hook, it listens per player, not per callback
     useEventListener: (p: unknown, _e: string, cb: (x: unknown) => void) =>
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- like the real hook, it listens per player, not per callback
       React.useEffect(() => cb({ duration: mockState.scene.durationS, availableVideoTracks: [{ frameRate: mockState.scene.fps }] }), [p]),
   };
 });

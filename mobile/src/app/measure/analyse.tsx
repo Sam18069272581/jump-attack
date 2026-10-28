@@ -2,7 +2,7 @@ import Slider from '@react-native-community/slider';
 import { useEventListener } from 'expo';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -25,6 +25,11 @@ import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
 const FPS_CHOICES = [60, 120, 240];
+
+// AVPlayer seeks exactly by default (zero tolerance), so this lands on the requested frame.
+function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
+  player.currentTime = frameToSeconds(frame, fps);
+}
 
 const PROBLEMS: Record<DetectProblem | 'error', { what: string; advice: string }> = {
   shaky: { what: '画面在晃，没法分析', advice: '下次把手机放在地上或三脚架上，别手持' },
@@ -105,7 +110,7 @@ export default function Analyse() {
 
   function show(f: number) {
     setFrame(f);
-    player.currentTime = frameToSeconds(f, fileFps);
+    seekToFrame(player, f, fileFps);
   }
 
   // Video pixels ↔ the video box on screen (the player letterboxes the picture).
@@ -129,14 +134,15 @@ export default function Analyse() {
     const opts: CoarseOptions = { range: span, ...(target ? { target } : {}), rebound: kind === 'repeat' };
     const req = coarseRequest(video, opts);
     // The fine pass usually asks for about as many frames again; the bar is honest once it is known.
-    let sum = req.frames.length * 2;
-    setPhase({ name: 'running', done: 0, total: sum, label: target ? '锁定运动员，粗扫整段' : '找运动员，粗扫整段' });
+    const guess = req.frames.length * 2;
+    const label0 = target ? '锁定运动员，粗扫整段' : '找运动员，粗扫整段';
+    setPhase({ name: 'running', done: 0, total: guess, label: label0 });
     try {
-      const coarseFrames = await reader.current.read(req, (n) => setPhase({ name: 'running', done: n, total: sum, label: '找运动员，粗扫整段' }));
+      const coarseFrames = await reader.current.read(req, (n) => setPhase({ name: 'running', done: n, total: guess, label: label0 }));
       const c = analyseCoarse(video, req, coarseFrames, kind === 'drop' ? 'drop' : 'jump', opts);
       if (!c.ok) return setPhase({ name: 'failed', problem: c.problem });
       setBox(c.plan.box);
-      sum = req.frames.length + c.plan.request.frames.length;
+      const sum = req.frames.length + c.plan.request.frames.length;
       const label = `认出 ${c.plan.jumps.length} 跳，逐帧定起跳和落地`;
       const fine = await reader.current.read(c.plan.request, (n) => setPhase({ name: 'running', done: req.frames.length + n, total: sum, label }));
       const r = analyseFine(c.plan, fine);
@@ -191,6 +197,7 @@ export default function Analyse() {
         from: String(span.from),
         to: String(span.to),
         events: JSON.stringify(analysis.jumps.map((j) => ({ ...j.events, counted: j.counted }))),
+        ...(box ? { focus: JSON.stringify(box) } : {}),
         ...(params.box ? { box: params.box } : {}),
       },
     });
