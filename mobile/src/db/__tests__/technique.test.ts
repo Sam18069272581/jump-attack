@@ -3,7 +3,7 @@ import { poseScene } from '@/domain/testing/poseScene';
 
 import { migrate } from '../migrations';
 import { addTrial, createAthlete, ensureSession, listTrials, sessionCounts } from '../repo';
-import { addTechniqueTake, deleteTechniqueTake, listTechniqueTakes, reachByDay, TECHNIQUE_CODE } from '../technique';
+import { addTechniqueTake, deleteTechniqueTake, listTechniqueTakes, reachByDay, TECHNIQUE_CODE, techniqueVideoUris } from '../technique';
 import { openMemoryDb } from '../testing/memoryDb';
 
 async function setup() {
@@ -57,6 +57,18 @@ it('lists each athlete’s own takes, newest first, and deletes one', async () =
   await deleteTechniqueTake(db, second);
   expect((await listTechniqueTakes(db, 1)).map((t) => t.id)).toEqual([first]);
   expect(await listTrials(db, 's2')).toEqual([]);
+});
+
+it('lists the video of every take filmed in the app, whoever’s it is: the files to keep', async () => {
+  const db = await setup();
+  const other = await createAthlete(db, '队友');
+  await addTechniqueTake(db, 1, { sessionId: 's1', result, captureFps: 60, source: 'camera', markers: null, videoUri: 'file:///app/Documents/technique/a.mp4' });
+  await addTechniqueTake(db, other, { sessionId: 's2', result, captureFps: 60, source: 'camera', markers: null, videoUri: 'file:///app/Documents/technique/b.mp4' });
+  await addTechniqueTake(db, 1, { sessionId: 's3', result, captureFps: 240, source: 'import', markers: null });
+  // Another test's clip is no take's.
+  await ensureSession(db, 's4', 1, 'cmj');
+  await addTrial(db, { session_id: 's4', value: 40, video_uri: 'file:///app/Documents/videos/c.mov' });
+  expect((await techniqueVideoUris(db)).sort()).toEqual(['file:///app/Documents/technique/a.mp4', 'file:///app/Documents/technique/b.mp4']);
 });
 
 it('gives the run-up touch of each day, the better session’s on a day of two', async () => {
