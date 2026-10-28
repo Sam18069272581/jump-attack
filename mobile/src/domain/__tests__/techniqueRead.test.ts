@@ -1,6 +1,6 @@
 import { LM, type Pose } from '../pose';
 import { analyseTechnique, findJumpWindow, type PoseFrame } from '../technique';
-import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, squareAround, TAP_REACH_S, windowOf, type WireFrame } from '../techniqueRead';
+import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, planWindow, squareAround, TAP_REACH_S, windowOf, type WireFrame } from '../techniqueRead';
 import { asWire, poseScene, type PoseScene } from '../testing/poseScene';
 
 /** The scene's frames as the page would send them, for the frames asked. */
@@ -86,6 +86,32 @@ describe('denseSquares', () => {
 
   it('is the page’s square: 2.7 body lengths across, a little above the hips', () => {
     expect(squareAround({ x: 1000, y: 600 }, 200)).toEqual({ x: 730, y: 250, s: 540 });
+  });
+});
+
+describe('planWindow', () => {
+  const scene = poseScene();
+  const fps = scene.options.fps;
+  const step = coarseStep(fps);
+  const coarseOf = (frames: number[]) => framesFromWire(read(scene, frames), scene.width, scene.height, fps);
+  const every = scene.frames.filter((f) => f.frame % step === 0).map((f) => f.frame);
+  const target = hipOf(scene.frames[scene.truth.takeoffFrame].poses[0]);
+
+  it('finds the jump around the tap, from the run-up’s last 3 m to after the landing', () => {
+    const plan = planWindow(coarseOf(every), fps, target);
+    if (!plan.ok) throw new Error(plan.problem);
+    expect(plan.win.from).toBeLessThan(Math.round(scene.truth.plantDownS * fps) - 0.5 * fps);
+    expect(plan.win.to).toBeGreaterThan(scene.truth.landingFrame!);
+  });
+
+  it('says nobody was followed when the page found no one', () => {
+    const empty = every.map((frame) => ({ frame, t: frame / fps, poses: [] }));
+    expect(planWindow(empty, fps, target)).toEqual({ ok: false, problem: 'no-athlete' });
+  });
+
+  it('says there was no jump when the stretch read holds only the run-up', () => {
+    const runUp = every.filter((f) => f / fps < scene.truth.plantDownS - 0.1);
+    expect(planWindow(coarseOf(runUp), fps, target)).toEqual({ ok: false, problem: 'no-jump' });
   });
 });
 

@@ -10,7 +10,7 @@
  *    there is near enough a straight line.
  */
 import { decodePose, dist, LM, mid, type Pose, type Pt } from './pose';
-import { pickAthlete, type PoseFrame } from './technique';
+import { findJumpWindow, pickAthlete, type PoseFrame, type TechniqueProblem } from './technique';
 
 /** The coarse pass's rate, frames a second of real time. */
 export const COARSE_HZ = 60;
@@ -116,6 +116,21 @@ export function denseSquares(coarse: PoseFrame[], target: Pt, frames: number[]):
     const u = b.frame === a.frame ? 0 : Math.max(0, Math.min(1, (f - a.frame) / (b.frame - a.frame)));
     return squareAround({ x: a.hip.x + (b.hip.x - a.hip.x) * u, y: a.hip.y + (b.hip.y - a.hip.y) * u }, length);
   });
+}
+
+/**
+ * The stretch around the jump to read closely, from the coarse pass and the tap (`JUMP_WINDOW`), or why there is none:
+ * the page never found the athlete, or they didn't jump in the stretch read.
+ */
+export function planWindow(
+  coarse: PoseFrame[],
+  fps: number,
+  target: Pt,
+): { ok: true; win: { from: number; to: number; target: Pt } } | { ok: false; problem: Extract<TechniqueProblem, 'no-athlete' | 'no-jump'> } {
+  // findJumpWindow needs five frames of the athlete too, but can't say which of the two went wrong.
+  if (pickAthlete(coarse, target).filter(Boolean).length < 5) return { ok: false, problem: 'no-athlete' };
+  const win = findJumpWindow(coarse, fps, { ...JUMP_WINDOW, target });
+  return win ? { ok: true, win } : { ok: false, problem: 'no-jump' };
 }
 
 /** The frames in the jump's window the coarse pass hasn't read, in file order. */
