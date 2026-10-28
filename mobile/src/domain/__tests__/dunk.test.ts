@@ -37,6 +37,14 @@ describe('limiter', () => {
     expect(d.missing).toEqual(['approach', 'cmj']);
   });
 
+  it('divides each squat by the body mass of its own test day when there is one', () => {
+    // 105 kg at 70 kg that week is 1.50×, past the line; at the profile's 75 kg it would be 1.40×.
+    const d = diagnose({ ...base, squat1rm: [100, 105], squatMassKg: [null, 70], dropJumps: [{ rsi: 2.4, contactMs: 180 }] });
+    expect(d.metrics.find((m) => m.key === 'squat_ratio')!.value).toBeCloseTo(1.5);
+    // The earlier squat had no weigh-in near it: 100 / 75.
+    expect(d.limiter).not.toBe('strength');
+  });
+
   it('trains reactive strength when the squat is strong enough but RSI lags', () => {
     const d = diagnose({ ...base, squat1rm: [120, 130], dropJumps: [{ rsi: 1.7, contactMs: 200 }, { rsi: 1.8, contactMs: 190 }] });
     expect(d.limiter).toBe('reactive');

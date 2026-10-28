@@ -6,8 +6,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ui';
+import { listBodyMass, recordBodyMass } from '@/db/bodyMass';
 import { clearSavedVideoUris, createAthlete, updateAthlete, type Athlete } from '@/db/repo';
 import { CLEARANCE_CM, dunkLine, RIM_CM } from '@/domain/dunk';
+import { toISODate } from '@/domain/dates';
 import { pushOff } from '@/domain/fvp';
 import { parseGoalDate } from '@/domain/goal';
 import { deleteSavedVideos, savedVideos } from '@/media/videos';
@@ -95,6 +97,11 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
   async function save() {
     if (!name.trim() || !goalDate.ok) return;
     setSaving(true);
+    // A new weight goes into the history too, so tests are read against the mass of their own week.
+    const kg = toNumber(mass);
+    if (kg != null && (kg !== athlete.body_mass_kg || (await listBodyMass(db, athlete.id)).length === 0)) {
+      await recordBodyMass(db, athlete.id, kg, toISODate(new Date()));
+    }
     await updateAthlete(db, {
       ...athlete,
       name: name.trim(),

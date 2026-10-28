@@ -266,7 +266,23 @@ export const RECOVERY_METRICS: MetricDef[] = [
   { code: 'rec_resp', name: '呼吸频率', category: 'recovery', unit: '次/分', decimals: 1, neutral: true, capture: ['manual'], range: [5, 40] },
 ];
 
-export const METRICS: MetricDef[] = [APPROACH_TOUCH, ...JUMP_TESTS, LOADED_SJ, DROP_JUMP, REPEATED_JUMP, ...CONDITIONING_TESTS, ...SPEED_TESTS, ...VBT_LIFTS, SQUAT_1RM, ...MOBILITY_TESTS, ...RECOVERY_METRICS];
+/** Weigh-ins, kept as history so a squat or a jump test is read against the mass of its own week. */
+export const BODY_MASS: MetricDef = { code: 'body_mass', name: '体重', category: 'recovery', unit: 'kg', decimals: 1, neutral: true, capture: ['manual'], range: [30, 200] };
+
+export const METRICS: MetricDef[] = [
+  APPROACH_TOUCH,
+  ...JUMP_TESTS,
+  LOADED_SJ,
+  DROP_JUMP,
+  REPEATED_JUMP,
+  ...CONDITIONING_TESTS,
+  ...SPEED_TESTS,
+  ...VBT_LIFTS,
+  SQUAT_1RM,
+  ...MOBILITY_TESTS,
+  ...RECOVERY_METRICS,
+  BODY_MASS,
+];
 
 export function getMetric(code: string): MetricDef | undefined {
   const known = METRICS.find((m) => m.code === code);
