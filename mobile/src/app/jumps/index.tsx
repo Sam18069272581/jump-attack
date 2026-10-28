@@ -7,7 +7,7 @@ import { Icon } from '@/components/Icon';
 import { loadDiagnosis } from '@/db/dunk';
 import { newSessionId } from '@/db/repo';
 import { BLOCKS, type DunkDiagnosis } from '@/domain/dunk';
-import { APPROACH_TOUCH, DROP_JUMP, JUMP_TESTS, LOADED_SJ } from '@/domain/metrics';
+import { APPROACH_TOUCH, DROP_JUMP, JUMP_TESTS, LOADED_SJ, REPEATED_JUMP } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -74,6 +74,7 @@ export default function JumpTests() {
           onPress={() => router.push({ pathname: p.pathname, params: { session: newSessionId() } })}
         />
       ))}
+      <Row code={REPEATED_JUMP.short} color={REPEATED_JUMP.color} name={REPEATED_JUMP.name} hint="原地连跳 10 次，看 RSI 和触地稳不稳" onPress={() => capture(REPEATED_JUMP.code)} />
     </ScrollView>
   );
 }

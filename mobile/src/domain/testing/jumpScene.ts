@@ -13,7 +13,7 @@ import type { Grey, Rect } from '../autoMark';
 // Math's functions as locals: these loops run millions of times, and a global lookup per call is slow under Jest.
 const { PI, abs, ceil, cos, exp, floor, hypot, imul, max, min, round, sin, sqrt } = Math;
 
-export type SceneKind = 'cmj' | 'approach' | 'drop';
+export type SceneKind = 'cmj' | 'approach' | 'drop' | 'repeat';
 
 export type SceneOptions = {
   kind: SceneKind;
@@ -34,6 +34,10 @@ export type SceneOptions = {
   /** Drop jump: ground contact before the rebound, and the box height in mm. */
   contactS?: number;
   boxMm?: number;
+  /** Repeated jumps: after the first flight, each hop's ground contact and then its flight (s). */
+  hops?: { contactS: number; flightS: number }[];
+  /** Someone else in the picture, swaying from side to side by `swayMm` around scene x `x` (mm) the whole clip. */
+  bystander?: { x: number; swayMm: number };
   /** Where the take-off toe is, in scene mm. */
   toeX?: number;
   /** The second foot lands this much later (s); feet rarely land together. */
@@ -60,7 +64,7 @@ export type SceneOptions = {
 const G_MM = 9810;
 
 type Foot = { x: number; z: number; lift: number; dir: number };
-type Pose = { feet: [Foot, Foot]; hip: { x: number; z: number } };
+type Pose = { feet: [Foot, Foot]; hip: { x: number; z: number }; bystander?: number };
 
 /** The frames a careful marker would pick: first frame in the air, first frame back on the floor. */
 export function sceneTruth(o: SceneOptions): { touchdown?: number; takeoff: number; landing: number } {
@@ -71,6 +75,21 @@ export function sceneTruth(o: SceneOptions): { touchdown?: number; takeoff: numb
     takeoff: first(o.takeoffS),
     landing: ceil(landingS * o.fps - 1e-9),
   };
+}
+
+/** Every flight in the clip: take-off moment and flight time (s). One for most kinds, one per hop for repeated jumps. */
+function flights(o: SceneOptions): { t0: number; flightS: number }[] {
+  const out = [{ t0: o.takeoffS, flightS: o.flightS }];
+  for (const h of o.kind === 'repeat' ? (o.hops ?? []) : []) {
+    const last = out[out.length - 1];
+    out.push({ t0: last.t0 + last.flightS + h.contactS, flightS: h.flightS });
+  }
+  return out;
+}
+
+/** The marks a careful marker would pick for every flight in the clip, by the same rules as `sceneTruth`. */
+export function sceneEvents(o: SceneOptions): { takeoff: number; landing: number }[] {
+  return flights(o).map((f) => ({ takeoff: floor(f.t0 * o.fps + 1e-9) + 1, landing: ceil((f.t0 + f.flightS) * o.fps - 1e-9) }));
 }
 
 const smooth = (a: number) => (a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a));
@@ -93,6 +112,41 @@ function pose(o: SceneOptions, t: number): Pose {
   // Heel lift: rolls onto the toes in the last 120 ms before take-off, lands on the forefoot, heel down over 80 ms.
   const liftAt = (t: number, land: number) =>
     t < t0 - 0.12 ? 0 : t <= t0 ? 0.9 * smooth((t - (t0 - 0.12)) / 0.12) : t < land ? lerp(0.9, 0.45, (t - t0) / (land - t0)) : 0.45 * (1 - smooth((t - land) / 0.08));
+
+  if (o.kind === 'repeat') {
+    // A countermovement into the first jump, then rebounds on the forefoot: heels stay up through every contact.
+    const fl = flights(o);
+    const end = fl[fl.length - 1].t0 + fl[fl.length - 1].flightS;
+    const footAt = (lagS: number, dx: number): Foot => {
+      const k = fl.findIndex((f) => t > f.t0 && t < f.t0 + f.flightS + lagS);
+      if (k >= 0) {
+        const f = fl[k];
+        return { x: toe + dx, z: flightZ({ ...o, takeoffS: f.t0, flightS: f.flightS }, t, lagS), lift: lerp(0.9, 0.5, (t - f.t0) / (f.flightS + lagS)), dir: 1 };
+      }
+      if (t <= fl[0].t0) return { x: toe + dx, z: 0, lift: liftAt(t, fl[0].t0 + fl[0].flightS), dir: 1 };
+      if (t >= end + lagS) return { x: toe + dx, z: 0, lift: 0.5 * (1 - smooth((t - end - lagS) / 0.08)), dir: 1 };
+      // On the ground between two flights: from landing on the forefoot to pushing off the toes.
+      const next = fl.find((f) => f.t0 >= t)!;
+      const prev = fl[fl.indexOf(next) - 1];
+      const land = prev.t0 + prev.flightS + lagS;
+      return { x: toe + dx, z: 0, lift: lerp(0.5, 0.9, smooth((t - land) / max(1e-3, next.t0 - land))), dir: 1 };
+    };
+    const near = footAt(0, 0);
+    const far = footAt(lag, -40);
+    const inAir = fl.find((f) => t > f.t0 && t < f.t0 + f.flightS);
+    const hipZ = inAir
+      ? 980 + flightZ({ ...o, takeoffS: inAir.t0, flightS: inAir.flightS }, t)
+      : t <= t0
+        ? t < t0 - 0.6
+          ? 920
+          : t < t0 - 0.25
+            ? lerp(920, 640, smooth((t - (t0 - 0.6)) / 0.35))
+            : lerp(640, 980, smooth((t - (t0 - 0.25)) / 0.25))
+        : t >= end
+          ? lerp(960, 700, smooth((t - end) / 0.25))
+          : 900;
+    return { feet: [near, far], hip: { x: toe - 160, z: hipZ } };
+  }
 
   if (o.kind === 'cmj') {
     const hipZ =
@@ -248,6 +302,11 @@ function shapes(o: SceneOptions, p: Pose): { person: Shape[]; feet: Foot[] } {
   person.push({ grey: 70, hit: segment(p.hip.x, p.hip.z, p.hip.x + 30, p.hip.z + 200, 140) });
   person.push({ grey: 100, hit: segment(p.hip.x + 30, p.hip.z + 150, p.hip.x + 40, p.hip.z + 560, 150) });
   person.push({ grey: 150, hit: segment(p.hip.x + 50, p.hip.z + 730, p.hip.x + 50, p.hip.z + 740, 105) });
+  if (p.bystander != null) {
+    // A broad, dark figure from the floor up, out of the athlete's way.
+    const bx = p.bystander;
+    person.push({ grey: 60, hit: (x, z) => z >= 0 && z <= 1750 && abs(x - bx) <= 260 });
+  }
   return { person, feet: p.feet };
 }
 
@@ -278,7 +337,9 @@ export function renderScene(o: SceneOptions, frame: number, rect: Rect, outW: nu
   const acc = new Float32Array(outW * outH);
   for (let s = 0; s < subs; s++) {
     const t = frame / o.fps + (subs === 1 ? 0 : (exposure * s) / (subs - 1));
-    const { person, feet } = shapes(o, pose(o, t));
+    const p = pose(o, t);
+    if (o.bystander) p.bystander = o.bystander.x + o.bystander.swayMm * sin(2 * PI * 0.8 * t);
+    const { person, feet } = shapes(o, p);
     const farPx = o.farFootPx ?? 0;
     for (let j = 0; j < outH; j++) {
       for (let i = 0; i < outW; i++) {
@@ -360,5 +421,9 @@ export function defaultScene(kind: SceneKind, over: Partial<SceneOptions> = {}):
   };
   if (kind === 'approach') return { ...base, mmPerPx: 6, width: 480, height: 360, floorRow: 300, originX: -1300, takeoffS: 1.1013, flightS: 0.6411, durationS: 2.4, ...over };
   if (kind === 'drop') return { ...base, originX: -900, width: 420, takeoffS: 1.4017, flightS: 0.4613, contactS: 0.2117, boxMm: 300, ...over };
+  if (kind === 'repeat') {
+    const hops = [0.1813, 0.1917, 0.2046, 0.1958, 0.2231].map((contactS, i) => ({ contactS, flightS: [0.4511, 0.4382, 0.4294, 0.4117, 0.3973][i] }));
+    return { ...base, takeoffS: 1.2031, flightS: 0.4623, hops, durationS: 5.2, ...over };
+  }
   return { ...base, ...over };
 }

@@ -6,8 +6,10 @@ import { useCallback, useState } from 'react';
 import { captureGuide } from '@/components/capture/guides';
 import SlowMoImport from '@/components/capture/SlowMoImport';
 import { listTrials } from '@/db/repo';
+import { analysisKindFor } from '@/domain/analysisTrials';
 import { returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
+import { isWeb } from '@/media/runtime';
 
 export default function Capture() {
   // Everything besides the metric and session (`from`, a jump's load, box height) is passed on to marking and the result.
@@ -33,8 +35,10 @@ export default function Capture() {
     });
     if (res.canceled || !res.assets[0]) return;
     const { uri, assetId } = res.assets[0];
-    // The file's own frame rate is read on the marking screen; 0 means the picker didn't report one.
-    router.push({ pathname: '/measure/mark', params: { ...pass, uri, fps: '0', ...(assetId ? { asset: assetId } : {}) } });
+    // The file's own frame rate is read on the next screen; 0 means the picker didn't report one. Jump clips are analysed
+    // automatically where a WebView can read their frames (not on the web, not for loaded jumps logged one at a time).
+    const auto = def != null && analysisKindFor(def) != null && !isWeb && extra.from !== 'fvp';
+    router.push({ pathname: auto ? '/measure/analyse' : '/measure/mark', params: { ...pass, uri, fps: '0', ...(assetId ? { asset: assetId } : {}) } });
   }
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
