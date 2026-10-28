@@ -6,20 +6,21 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
-import { Button, Card, Empty } from '@/components/ui';
-import { deleteTrial } from '@/db/repo';
-import { addVbtSet, latestEstimate, listVbtSets, type VbtSet } from '@/db/vbt';
+import { Button, Card, Chip, Empty } from '@/components/ui';
+import { deleteTrial, newSessionId } from '@/db/repo';
+import { addTested1rm, addVbtSet, latestEstimate, listTested1rm, listVbtSets, type Tested1rm, type VbtSet } from '@/db/vbt';
 import { manualProblem, parseNumber } from '@/domain/entry';
-import { getCategory, getMetric } from '@/domain/metrics';
-import { loadAt, roundLoad, STOP_LOSS, velocityLoss, ZONES, zoneOf } from '@/domain/vbt';
+import { getCategory, getMetric, SQUAT_1RM } from '@/domain/metrics';
+import { toISODate } from '@/domain/dates';
+import { loadAt, ONE_RM_PROBLEMS, parseRepVelocities, roundLoad, setVelocityLoss, STOP_LOSS, ZONES, zoneOf } from '@/domain/vbt';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
 const COLOR = getCategory('vbt').color;
-/** Typical bar travel (cm) for a first video measurement; the athlete's own value is kept after that. */
-const DEFAULT_ROM: Record<string, number> = { vbt_squat: 55, vbt_squat_jump: 45, vbt_clean: 80, vbt_pull: 65 };
+/** An estimate this far from a lifted 1RM says the speeds were measured wrong, not that strength changed. */
+const ESTIMATE_OFF = 0.1;
 
-/** Logs the sets of one VBT exercise: load, reps and mean velocity, typed in or measured from video. */
+/** Logs the sets of one VBT exercise: load, reps and mean velocity, typed in, copied from VBTgo or tracked from video. */
 export default function VbtSession() {
   const { lift, session } = useLocalSearchParams<{ lift: string; session: string }>();
   const def = getMetric(lift);
@@ -29,13 +30,16 @@ export default function VbtSession() {
   const [kg, setKg] = useState('');
   const [reps, setReps] = useState('3');
   const [v, setV] = useState('');
-  const [rom, setRom] = useState(String(DEFAULT_ROM[lift] ?? DEFAULT_ROM[lift.replace(/_(floor|hang|power)$/, '')] ?? 60));
+  const [fromVbtgo, setFromVbtgo] = useState(false);
+  const [tested, setTested] = useState<Tested1rm | null>(null);
+  const [testedKg, setTestedKg] = useState('');
   const [saving, setSaving] = useState(false);
 
   const reload = useCallback(async () => {
     if (!current) return;
     const rows = await listVbtSets(db, current.id, lift);
     setAll(rows);
+    if (lift === 'vbt_squat') setTested((await listTested1rm(db, current.id)).at(-1) ?? null);
     const last = rows.at(-1);
     if (last) setKg((k) => k || String(last.load));
   }, [db, current, lift]);
@@ -49,18 +53,29 @@ export default function VbtSession() {
   if (!def) return <Empty title="找不到这个动作" />;
   const sets = all.filter((s) => s.session_id === session);
   const load = parseNumber(kg);
-  const velocity = parseNumber(v);
-  const repsN = parseNumber(reps);
-  const vProblem = velocity != null ? manualProblem(def, velocity) : null;
+  // One mean velocity, or one per rep as VBTgo lists them; the set is logged at its fastest rep.
+  const repV = parseRepVelocities(v);
+  const velocity = repV ? Math.max(...repV) : null;
+  const repsN = repV && repV.length > 1 ? repV.length : parseNumber(reps);
+  const vProblem = v.trim() && !repV ? '速度填数字，多次之间用空格隔开' : (repV?.map((x) => manualProblem(def, x)).find((p) => p) ?? null);
   const loadOk = load != null && load >= 0 && load <= 400;
   const est = latestEstimate(all, lift);
   const today = est?.sessionId === session ? est : null;
+  const testedValue = parseNumber(testedKg);
+  const testedProblem = testedValue != null ? manualProblem(SQUAT_1RM, testedValue) : null;
+  const off = est?.oneRm != null && tested ? est.oneRm / tested.kg - 1 : null;
 
   async function logManual() {
     if (!current || !loadOk || velocity == null || vProblem) return;
     setSaving(true);
     try {
-      await addVbtSet(db, current.id, session, lift, { load: load!, v: velocity, reps: repsN != null ? Math.round(repsN) : null, source: 'manual' });
+      await addVbtSet(db, current.id, session, lift, {
+        load: load!,
+        v: velocity,
+        reps: repsN != null ? Math.round(repsN) : null,
+        source: fromVbtgo ? 'vbtgo' : 'manual',
+        ...(repV && repV.length > 1 ? { repV } : {}),
+      });
       Haptics.selectionAsync();
       setV('');
       await reload();
@@ -72,9 +87,16 @@ export default function VbtSession() {
   }
 
   function measureVideo() {
-    const romCm = parseNumber(rom);
-    if (!loadOk || romCm == null || romCm <= 0) return Alert.alert('先填重量和杠铃行程', '行程是杠铃从最低点到最高点的距离，用卷尺量一次就行。');
-    router.push({ pathname: '/measure/capture', params: { metric: lift, session, from: 'vbt', load: String(load), reps: String(repsN ?? ''), rom: String(romCm) } });
+    if (!loadOk) return Alert.alert('先填这一组的重量');
+    router.push({ pathname: '/vbt/track', params: { lift, session, load: String(load) } });
+  }
+
+  async function saveTested() {
+    if (!current || testedValue == null || testedProblem) return;
+    await addTested1rm(db, current.id, newSessionId(), testedValue);
+    Haptics.selectionAsync();
+    setTestedKg('');
+    await reload();
   }
 
   function remove(s: VbtSet, n: number) {
@@ -84,7 +106,7 @@ export default function VbtSession() {
     ]);
   }
 
-  // Fastest set at each load so far, the reference for velocity loss.
+  // Fastest set at each load so far, the reference for velocity loss of a set logged with one speed.
   const fastest = (upTo: number, kgAt: number) => Math.max(...sets.slice(0, upTo + 1).filter((s) => s.load === kgAt).map((s) => s.v));
 
   return (
@@ -94,7 +116,7 @@ export default function VbtSession() {
         {sets.length > 0 ? (
           <Card style={{ gap: 4 }}>
             {sets.map((s, i) => {
-              const loss = velocityLoss(fastest(i, s.load), s.v);
+              const loss = setVelocityLoss(s.repV, s.v, fastest(i, s.load));
               const stop = loss >= STOP_LOSS;
               return (
                 <View key={s.id} style={styles.setRow}>
@@ -114,24 +136,47 @@ export default function VbtSession() {
             })}
           </Card>
         ) : (
-          <Text style={text.muted}>从轻重量开始逐组加重，每组记重量和平均速度。两个以上不同重量后会算出今天的载荷-速度曲线。</Text>
+          <Text style={text.muted}>从轻重量开始逐组加重，每组记重量和平均速度。三个以上不同重量、最重一组够慢后，会估算 1RM。</Text>
         )}
 
         <Card style={{ gap: 12 }}>
           <Text style={text.section}>第 {sets.length + 1} 组</Text>
           <View style={styles.fields}>
             <Field label="重量" unit="kg" value={kg} onChange={setKg} />
-            <Field label="次数" unit="次" value={reps} onChange={setReps} integer />
-            <Field label="平均速度" unit="m/s" value={v} onChange={setV} />
+            <Field label="次数" unit="次" value={repV && repV.length > 1 ? String(repV.length) : reps} onChange={setReps} integer />
           </View>
+          <View style={styles.sourceRow}>
+            <Text style={text.caption}>速度来自</Text>
+            <Chip label="手填" selected={!fromVbtgo} onPress={() => setFromVbtgo(false)} color={COLOR} />
+            <Chip label="照抄 VBTgo" selected={fromVbtgo} onPress={() => setFromVbtgo(true)} color={COLOR} />
+          </View>
+          <Field
+            label={fromVbtgo ? '每次的 Mean V（空格隔开）' : '平均速度（多次用空格隔开）'}
+            unit="m/s"
+            value={v}
+            onChange={setV}
+            wide
+          />
           {vProblem ? <Text style={styles.problem}>{vProblem}</Text> : null}
+          {repV && repV.length > 1 && !vProblem ? <Text style={text.caption}>{repV.length} 次，按最快一次 {velocity!.toFixed(2)} m/s 记这一组</Text> : null}
           <Button label="记一组" onPress={logManual} disabled={!loadOk || velocity == null || vProblem != null} busy={saving} />
-          <View style={styles.videoRow}>
-            <Field label="杠铃行程" unit="cm" value={rom} onChange={setRom} />
-            <Button label="录像测速" variant="secondary" onPress={measureVideo} style={{ flex: 1 }} />
-          </View>
-          <Text style={text.caption}>没有测速设备时，用慢动作拍一组里最快的一次，逐帧标出向心开始和结束，按行程 ÷ 时间算平均速度。</Text>
+          <Button label="录像自动测速" variant="secondary" onPress={measureVideo} />
+          <Text style={text.caption}>录像测速：侧面拍一整组，圈出 45 cm 杠铃片，自动跟踪算出每一次的平均速度，不用逐帧标。</Text>
         </Card>
+
+        {lift === 'vbt_squat' && (
+          <Card style={{ gap: 10 }}>
+            <Text style={text.section}>实测 1RM</Text>
+            <Text style={text.caption}>
+              {tested ? `最近一次 ${tested.kg} kg（${toISODate(new Date(tested.at))}）。` : ''}填你真正举起过的最大重量，训练计划和扣篮诊断会优先用它，不用速度估算。
+            </Text>
+            <View style={styles.videoRow}>
+              <Field label="深蹲 1RM" unit="kg" value={testedKg} onChange={setTestedKg} />
+              <Button label="保存" variant="secondary" onPress={saveTested} disabled={testedValue == null || testedProblem != null} style={{ flex: 1 }} />
+            </View>
+            {testedProblem ? <Text style={styles.problem}>{testedProblem}</Text> : null}
+          </Card>
+        )}
 
         {est && (
           <Card style={{ gap: 8 }}>
@@ -139,6 +184,12 @@ export default function VbtSession() {
             {est.oneRm != null && (
               <Text style={styles.oneRm}>
                 估算 1RM {Math.round(est.oneRm)} <Text style={styles.unit}>kg</Text>
+              </Text>
+            )}
+            {est.problem && <Text style={text.caption}>不估 1RM：{ONE_RM_PROBLEMS[est.problem]}。</Text>}
+            {off != null && Math.abs(off) > ESTIMATE_OFF && (
+              <Text style={styles.problem}>
+                比你实测的 {tested!.kg} kg {off > 0 ? '高' : '低'}了 {Math.round(Math.abs(off) * 100)}%：多半是速度测{off > 0 ? '快' : '慢'}了。训练计划仍按实测 1RM 推荐重量。
               </Text>
             )}
             {ZONES.slice(0, 4).map((z) => {
@@ -155,7 +206,7 @@ export default function VbtSession() {
               );
             })}
             <Text style={text.caption}>
-              按 {est.profile.n} 组数据拟合{est.profile.r2 < 0.8 ? '，数据点比较散，结果仅供参考' : ''}。训练计划里的深蹲会按估算 1RM 推荐重量。
+              按 {est.profile.n} 个重量（每个重量取最快一组）拟合。{tested ? '训练计划里的深蹲按实测 1RM 推荐重量。' : est.oneRm != null ? '训练计划里的深蹲会按估算 1RM 推荐重量。' : ''}
             </Text>
           </Card>
         )}
@@ -167,15 +218,16 @@ export default function VbtSession() {
   );
 }
 
-function Field({ label, unit, value, onChange, integer }: { label: string; unit: string; value: string; onChange: (s: string) => void; integer?: boolean }) {
+function Field({ label, unit, value, onChange, integer, wide }: { label: string; unit: string; value: string; onChange: (s: string) => void; integer?: boolean; wide?: boolean }) {
   return (
-    <View style={styles.field}>
+    <View style={wide ? { gap: 4 } : styles.field}>
       <Text style={text.caption}>{label}</Text>
       <View style={styles.fieldRow}>
         <TextInput
           value={value}
           onChangeText={onChange}
-          keyboardType={integer ? 'number-pad' : 'decimal-pad'}
+          // Several speeds need a space between them, which the decimal pad doesn't have.
+          keyboardType={integer ? 'number-pad' : wide ? 'numbers-and-punctuation' : 'decimal-pad'}
           placeholder="—"
           placeholderTextColor={colors.textFaint}
           style={styles.input}
@@ -202,6 +254,7 @@ const styles = StyleSheet.create({
   unit: { color: colors.textMuted, fontSize: 11 },
   problem: { color: colors.warn, fontSize: 13 },
   videoRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  sourceRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   oneRm: { color: COLOR, fontFamily: fonts.numericBold, fontSize: 36 },
   zoneRow: { flexDirection: 'row', justifyContent: 'space-between' },
   zoneLoad: { color: colors.textSoft, fontFamily: fonts.numeric, fontSize: 17 },

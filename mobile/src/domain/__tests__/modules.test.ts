@@ -1,9 +1,9 @@
 import { manualProblem, parseNumber } from '../entry';
-import { intervalFromMarks, meanVelocity, sprintDistance, sprintLimits } from '../interval';
+import { intervalFromMarks, sprintDistance, sprintLimits } from '../interval';
 import { markProfile } from '../marking';
 import { best, changeTone, getCategory, getMetric, METRICS, sprintMetric } from '../metrics';
 import { angleBetween, asymmetry, getMobilityTest, MOBILITY_PAIRS } from '../mobility';
-import { estimate1rm, loadAt, lvProfile, pctOf1rm, roundLoad, velocityLoss, zoneOf } from '../vbt';
+import { checkedOneRm, estimate1rm, fastestPerLoad, loadAt, lvProfile, parseRepVelocities, pctOf1rm, roundLoad, setVelocityLoss, velocityLoss, zoneOf } from '../vbt';
 
 describe('metric registry', () => {
   it('has unique codes and finds custom sprint distances', () => {
@@ -62,10 +62,9 @@ describe('interval timing', () => {
     expect(intervalFromMarks(0, 240 * 30, 240, limits)).toEqual({ ok: false, problem: 'too-long' });
   });
 
-  it('reads distances from sprint codes and velocity from bar travel', () => {
+  it('reads distances from sprint codes', () => {
     expect(sprintDistance('sprint_100')).toBe(100);
     expect(sprintDistance('cmj')).toBeNull();
-    expect(meanVelocity(60, 0.8)).toBeCloseTo(0.75);
   });
 });
 
@@ -91,10 +90,8 @@ describe('marking profiles', () => {
     expect(markProfile(touch, { reachCm: 240 })!.measure([10, 5], 240)).toMatchObject({ ok: false, message: '落地帧要在起跳帧之后' });
   });
 
-  it('needs bar travel to mark a lift', () => {
+  it('never marks a lift by hand: its video is tracked instead', () => {
     expect(markProfile(getMetric('vbt_squat')!)).toBeNull();
-    const r = markProfile(getMetric('vbt_squat')!, { romCm: 55 })!.measure([0, 176], 240); // 0.733 s
-    expect(r).toMatchObject({ ok: true, value: 0.75 });
   });
 });
 
@@ -145,5 +142,47 @@ describe('VBT', () => {
     expect(velocityLoss(0.8, 0.85)).toBe(0);
     expect(pctOf1rm(5, 7.5)).toBeCloseTo(0.8);
     expect(roundLoad(96.4)).toBe(97.5);
+  });
+
+  it('measures velocity loss within a set when its reps are known (Pareja-Blanco et al. 2017)', () => {
+    // Fastest rep 0.80, last 0.60: (0.80 − 0.60) / 0.80 = 25 %, whatever earlier sets did.
+    expect(setVelocityLoss([0.78, 0.8, 0.7, 0.6], 0.8, 0.9)).toBeCloseTo(0.25);
+    // A single speed per set: against the fastest set at the same load, as before.
+    expect(setVelocityLoss(null, 0.62, 0.8)).toBeCloseTo(0.225);
+    expect(setVelocityLoss([0.62], 0.62, 0.8)).toBeCloseTo(0.225);
+  });
+});
+
+describe('1RM from velocity', () => {
+  const line = (loads: number[], v0 = 1.5, slope = 0.01) => loads.map((load) => ({ load, v: v0 - slope * load }));
+
+  // Sources for ONE_RM_RULES (awaiting the athlete's confirmation under CLAUDE.md rule 2): an individual profile needs
+  // several loads spread out, ideally reaching heavy ones (Banyard et al. 2018; García-Ramos et al. 2018); 0.75 m/s
+  // MCV is about 70 % 1RM in the back squat (Sánchez-Medina et al. 2017), so lighter sets alone extrapolate too far.
+  // r² ≥ 0.9 is a plausibility check of our own, not from the literature.
+  it('only extrapolates from three loads with a slow enough heaviest set', () => {
+    expect(checkedOneRm(line([60, 80, 100]), 0.3)).toMatchObject({ oneRm: expect.closeTo(120, 6), problem: null });
+    expect(checkedOneRm(line([60, 100]), 0.3)).toMatchObject({ oneRm: null, problem: 'few-loads' });
+    // 0.9, 0.8, 0.7 m/s at 60–80 kg on a 1.5 m/s line is fine; the same loads on a faster line never get below 0.75.
+    expect(checkedOneRm(line([40, 50, 60], 1.6), 0.3)).toMatchObject({ oneRm: null, problem: 'too-light' });
+    expect(checkedOneRm([{ load: 60, v: 0.9 }, { load: 80, v: 0.5 }, { load: 100, v: 0.6 }], 0.3)).toMatchObject({ oneRm: null, problem: 'scatter' });
+    // No threshold for the lift: a profile, but nothing to complain about.
+    expect(checkedOneRm(line([60, 100]), undefined)).toMatchObject({ oneRm: null, problem: null });
+    expect(checkedOneRm([{ load: 60, v: 0.9 }], 0.3)).toBeNull();
+  });
+
+  it('takes the fastest set at each load', () => {
+    expect(fastestPerLoad([{ load: 100, v: 0.5 }, { load: 100, v: 0.38 }, { load: 0, v: 1.8 }])).toEqual([{ load: 100, v: 0.5 }]);
+    // The fatigued 0.38 m/s set would drag the line down and the 1RM with it.
+    expect(checkedOneRm([...line([60, 80, 100]), { load: 100, v: 0.38 }], 0.3)!.oneRm).toBeCloseTo(120, 6);
+  });
+
+  it('reads one speed per rep as VBT apps list them', () => {
+    expect(parseRepVelocities('0.62 0.60  0.55')).toEqual([0.62, 0.6, 0.55]);
+    expect(parseRepVelocities('0.62,0.60、0.55，0.5/0.48')).toEqual([0.62, 0.6, 0.55, 0.5, 0.48]);
+    expect(parseRepVelocities('0,62')).toEqual([0.62]);
+    expect(parseRepVelocities('0,62 0,58')).toEqual([0.62, 0.58]);
+    expect(parseRepVelocities('0.6 abc')).toBeNull();
+    expect(parseRepVelocities('  ')).toBeNull();
   });
 });

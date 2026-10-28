@@ -34,7 +34,7 @@ export default function Mark() {
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const def = getMetric(params.metric);
-  const profile = def ? markProfile(def, { romCm: Number(params.rom) || undefined, reachCm: current?.standing_reach_cm ?? undefined }) : null;
+  const profile = def ? markProfile(def, { reachCm: current?.standing_reach_cm ?? undefined }) : null;
   const player = useVideoPlayer(params.uri, (p) => {
     p.muted = true;
     p.pause();

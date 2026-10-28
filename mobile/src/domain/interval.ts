@@ -1,4 +1,4 @@
-/** Timing between two marked video frames: sprint start → finish, or the start → end of a lift's concentric phase. */
+/** Timing between two marked video frames: sprint start → finish. */
 
 export type IntervalProblem = 'missing' | 'order' | 'too-short' | 'too-long';
 
@@ -31,15 +31,6 @@ export function sprintDistance(code: string): number | null {
  */
 export function sprintLimits(metres: number): IntervalLimits {
   return { minS: metres / 12, maxS: metres / 2 + 5 };
-}
-
-/** Concentric phases of the tracked lifts, from a fast jump squat to a grinding max squat. */
-export const LIFT_LIMITS: IntervalLimits = { minS: 0.1, maxS: 4 };
-
-/** Mean concentric velocity (m/s) from the bar's range of motion and the time it took. */
-export function meanVelocity(romCm: number, seconds: number): number {
-  if (seconds <= 0) throw new Error('time must be positive');
-  return romCm / 100 / seconds;
 }
 
 /** Rounds to the precision results are stored at, so a saved value matches what was shown. */

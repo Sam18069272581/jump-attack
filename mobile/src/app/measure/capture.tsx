@@ -10,8 +10,8 @@ import { returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 
 export default function Capture() {
-  // Everything besides the metric and session (`from`, a set's or jump's load, bar travel, box height) is passed on to marking and the result.
-  const { metric, session, ...extra } = useLocalSearchParams<{ metric: string; session: string; from?: string; load?: string; reps?: string; rom?: string; box?: string }>();
+  // Everything besides the metric and session (`from`, a jump's load, box height) is passed on to marking and the result.
+  const { metric, session, ...extra } = useLocalSearchParams<{ metric: string; session: string; from?: string; load?: string; box?: string }>();
   const def = getMetric(metric);
   const db = useSQLiteContext();
   const [attempt, setAttempt] = useState(1);

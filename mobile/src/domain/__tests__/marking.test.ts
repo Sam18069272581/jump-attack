@@ -48,10 +48,8 @@ describe('markedTrial', () => {
     expect(t.detail).toEqual({ source: 'video', jump_cm: 30.7, standing_reach_cm: 240, offset_cm: 5.5 });
   });
 
-  it('records the load of a loaded jump and of a VBT set, with the VBT bar travel', () => {
+  // VBT sets are no longer marked by hand (app/vbt/track.tsx tracks the plate), so only the loaded jump is left here.
+  it('records the load of a loaded jump', () => {
     expect(markedTrial(measured(LOADED_SJ.code, [0, 120], 240), [0, 120], 240, { from: 'fvp', load: '40' }).load_kg).toBe(40);
-    // 60 cm in 0.8 s = 0.75 m/s.
-    const set = markedTrial(measured('vbt_squat', [0, 192], 240, { romCm: 60 }), [0, 192], 240, { from: 'vbt', load: '100', reps: '3', rom: '60' });
-    expect(set).toMatchObject({ value: 0.75, load_kg: 100, detail: { source: 'video', rom_cm: 60, reps: 3 } });
   });
 });

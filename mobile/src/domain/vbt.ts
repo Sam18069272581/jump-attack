@@ -23,6 +23,15 @@ export function velocityLoss(fastest: number, v: number): number {
   return fastest > 0 ? Math.max(0, (fastest - v) / fastest) : 0;
 }
 
+/**
+ * Velocity loss of a set: from its fastest rep to its last when the reps are known, which is how a velocity-loss
+ * cut-off is defined (Pareja-Blanco et al. 2017: stopping each set at 20 % loss kept most of the strength gain at
+ * far less fatigue). With one speed for the set, against `fastestAtLoad`, the fastest set at that load so far.
+ */
+export function setVelocityLoss(repV: number[] | null, v: number, fastestAtLoad: number): number {
+  return repV && repV.length > 1 ? velocityLoss(Math.max(...repV), repV[repV.length - 1]) : velocityLoss(fastestAtLoad, v);
+}
+
 /** Mean velocity at a true 1RM; only the back squat has a well-established value. */
 export const MVT: Record<string, number> = { vbt_squat: 0.3 };
 
@@ -57,6 +66,67 @@ export function loadAt(p: LvProfile, v: number): number {
 /** Estimated 1RM: the load whose predicted velocity is the minimum velocity threshold. */
 export function estimate1rm(p: LvProfile, mvt: number): number {
   return loadAt(p, mvt);
+}
+
+/**
+ * When a load-velocity line can be trusted to reach all the way to 1RM. Extrapolating from light sets multiplies
+ * any error in the measured speeds: a squat profile from three warm-ups that are each 0.1 m/s too fast puts 1RM
+ * tens of kilograms too high. So the line needs three different loads, a heaviest set slow enough to be within
+ * reach of 1RM (0.75 m/s is about 70 % for a squat), and points that sit on a line.
+ */
+export const ONE_RM_RULES = { minLoads: 3, heaviestV: 0.75, minR2: 0.9 };
+
+export type OneRmProblem = 'few-loads' | 'too-light' | 'scatter';
+
+export const ONE_RM_PROBLEMS: Record<OneRmProblem, string> = {
+  'few-loads': `至少要 ${ONE_RM_RULES.minLoads} 个不同重量才估 1RM`,
+  'too-light': `最重一组要慢到 ${ONE_RM_RULES.heaviestV} m/s 以下才估 1RM，太轻的重量往外推误差很大`,
+  scatter: '这几组的速度不在一条线上，估不准 1RM：检查是不是有一组测错了',
+};
+
+/** The fastest set at each load: a slower one at the same load is fatigue, not the load. */
+export function fastestPerLoad(points: LvPoint[]): LvPoint[] {
+  const best = new Map<number, number>();
+  for (const p of points) if (p.load > 0) best.set(p.load, Math.max(best.get(p.load) ?? 0, p.v));
+  return [...best].map(([load, v]) => ({ load, v }));
+}
+
+export type OneRmEstimate = { profile: LvProfile; oneRm: number | null; problem: OneRmProblem | null };
+
+/** The load-velocity profile of a session's sets and, if it passes `ONE_RM_RULES`, the 1RM at `mvt`. */
+export function checkedOneRm(points: LvPoint[], mvt: number | undefined): OneRmEstimate | null {
+  const best = fastestPerLoad(points);
+  const profile = lvProfile(best);
+  if (!profile) return null;
+  const problem: OneRmProblem | null =
+    best.length < ONE_RM_RULES.minLoads
+      ? 'few-loads'
+      : Math.min(...best.map((p) => p.v)) > ONE_RM_RULES.heaviestV
+        ? 'too-light'
+        : profile.r2 < ONE_RM_RULES.minR2
+          ? 'scatter'
+          : null;
+  const kg = mvt != null && problem == null ? estimate1rm(profile, mvt) : null;
+  return { profile, oneRm: kg != null && Number.isFinite(kg) && kg > 0 ? kg : null, problem: mvt != null ? problem : null };
+}
+
+/**
+ * Mean velocities typed for a set, one per rep, as VBT apps show them: "0.62 0.60 0.55". Spaces, Chinese commas,
+ * slashes or semicolons separate them; so does a comma when the numbers use decimal points ("0.62,0.60").
+ * A lone "0,62" is a decimal comma. Returns null if any part isn't a number.
+ */
+export function parseRepVelocities(input: string): number[] | null {
+  const s = input.trim();
+  if (!s) return null;
+  const sep = s.includes('.') ? /[\s、，,;；/]+/ : /[\s、，;；/]+/;
+  const out: number[] = [];
+  for (const part of s.split(sep)) {
+    if (!part) continue;
+    const n = Number(part.replace(',', '.'));
+    if (!Number.isFinite(n)) return null;
+    out.push(n);
+  }
+  return out.length ? out : null;
 }
 
 /**

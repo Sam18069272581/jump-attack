@@ -113,6 +113,7 @@ describe('with results', () => {
     await result('approach_touch', 'touch-1', [288, 292], '2026-09-15T10:30:00.000Z');
     // 60 kg @ 1.0 m/s and 100 kg @ 0.6 m/s put the 1RM at 130 kg: 1.63× body mass.
     await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 60, v: 1.0, reps: 3, source: 'manual' });
+    await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 80, v: 0.8, reps: 3, source: 'manual' });
     await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 100, v: 0.6, reps: 2, source: 'manual' });
     await result('sprint_10', 'sp-1', [1.82], '2026-09-01T11:00:00.000Z');
     await result('sprint_10', 'sp-2', [1.78], '2026-09-15T11:00:00.000Z');
