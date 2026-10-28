@@ -6,15 +6,16 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
-import { PainScale } from '@/components/PainScale';
+import { ScoreScale } from '@/components/ScoreScale';
 import { AdjustmentNote } from '@/components/training';
 import { Button, Card, Empty } from '@/components/ui';
 import { listPain, listTestJumps, setPain } from '@/db/pain';
-import { finishWorkout, getWorkout, lastLoads, listSets, logSet, unlogSet, type Workout } from '@/db/training';
+import { finishWorkout, getWorkout, lastLoads, listSets, logSet, setSessionLoad, unlogSet, type Workout } from '@/db/training';
 import { addVbtSet, listVbtSets } from '@/db/vbt';
 import { shortDate, toISODate } from '@/domain/dates';
 import { parseNumber } from '@/domain/entry';
-import { jumpVolumeNote, kneeStatus } from '@/domain/pain';
+import { sessionLoad, workoutMinutes } from '@/domain/load';
+import { jumpVolumeNote, kneeStatus, PAIN_HINT, PAIN_LIMIT } from '@/domain/pain';
 import { formatPrescription, formatRpe, isLoaded, personalNote, planDay, summarizeWorkout, type LoggedSet, type PersonalNumbers, type Prescription } from '@/domain/plan';
 import { allowanceText, checkSet, setTarget, STATE_LABEL, usualWarmupLoad, type DayReading } from '@/domain/target';
 import { LOAD_FROM_VBT } from '@/domain/vbt';
@@ -161,7 +162,14 @@ export default function WorkoutScreen() {
             </View>
             {workout.adjustments.length === 0 && <Text style={text.caption}>{workout.readiness === 'ready' ? '准备度正常，按计划完成。' : '没测 CMJ，按原计划完成。'}</Text>}
             {summary.jumps + testJumps > 0 && <Text style={[text.caption, volume.warn && { color: colors.warn }]}>{volume.text}</Text>}
-            <PainScale label="训练中膝盖最疼几分" value={pain} onPick={recordPain} />
+            <SessionLoad
+              workout={workout}
+              onSave={async (v) => {
+                await setSessionLoad(db, workout.id, v);
+                await reload();
+              }}
+            />
+            <ScoreScale label="训练中膝盖最疼几分" value={pain} onPick={recordPain} hint={PAIN_HINT} warnAbove={PAIN_LIMIT} />
           </Card>
         )}
 
@@ -387,7 +395,36 @@ function Stat({ label, value, unit }: { label: string; value: string; unit?: str
   );
 }
 
+/** How hard the whole session was and how long it took: session RPE × minutes is the training load (domain/load.ts). */
+function SessionLoad({ workout, onSave }: { workout: Workout; onSave: (v: { rpe: number | null; minutes: number | null }) => void }) {
+  const [minutes, setMinutes] = useState(String(workout.durationMin ?? workoutMinutes(workout.startedAt, workout.finishedAt) ?? ''));
+  const rpe = workout.sessionRpe ?? null;
+  const typed = parseNumber(minutes);
+  const load = sessionLoad(workout.durationMin ?? null, rpe);
+  return (
+    <View style={{ gap: 8 }}>
+      <ScoreScale label="整节课多累（RPE）" value={rpe} onPick={(r) => onSave({ rpe: r, minutes: typed })} hint="0 很轻松 · 10 用尽全力" />
+      <View style={styles.minutes}>
+        <Text style={styles.minutesLabel}>训练时长</Text>
+        <TextInput
+          value={minutes}
+          onChangeText={setMinutes}
+          onEndEditing={() => onSave({ rpe, minutes: typed })}
+          keyboardType="number-pad"
+          accessibilityLabel="训练时长（分钟）"
+          style={styles.minutesInput}
+        />
+        <Text style={text.caption}>分钟</Text>
+      </View>
+      {load != null && <Text style={text.caption}>这节负荷 {Math.round(load)}（RPE × 分钟）</Text>}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
+  minutes: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  minutesLabel: { flex: 1, color: colors.text, fontSize: 14, fontWeight: '600' },
+  minutesInput: { width: 72, height: 40, borderRadius: 10, backgroundColor: colors.surfaceRaised, color: colors.text, fontFamily: fonts.numeric, fontSize: 18, textAlign: 'center' },
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, gap: 12 },
   exHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },

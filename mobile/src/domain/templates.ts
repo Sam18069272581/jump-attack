@@ -157,6 +157,16 @@ export function getTemplate(code: string): PlanTemplate | undefined {
   return TEMPLATES.find((t) => t.code === code);
 }
 
+/** An exercise of a template by its code, from any of its sessions, blocks or block extras. */
+export function exerciseIn(templateCode: string, code: string): Prescription | undefined {
+  const t = getTemplate(templateCode);
+  if (!t) return undefined;
+  const blocks = Object.values(t.blocks ?? {});
+  const items = [...t.sessions, ...blocks.flatMap((b) => b.sessions)].flatMap((s) => s.items);
+  const extras = blocks.flatMap((b) => Object.values(b.extras ?? {}).map((e) => e.item));
+  return [...items, ...extras].find((p) => p.code === code);
+}
+
 /** Training days to suggest when the athlete hasn't picked any: spread out, with rest between. */
 export function defaultWeekdays(sessionsPerWeek: number): number[] {
   return sessionsPerWeek >= 3 ? [1, 3, 5] : sessionsPerWeek === 2 ? [2, 5] : [3];
