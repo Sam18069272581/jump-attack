@@ -71,7 +71,7 @@ function scenarios(S, n) {
       noise: 2 + 3 * r(),
       exposureS: pick([1 / 1000, 1 / 480]),
       secondFootLagS: kind === 'approach' ? 0.03 * r() : 0.008 * r(),
-      farFootPx: Math.round(4 * r()),
+      farFootMm: 10 * r(),
       seed: i + 1,
       ...(r() < 0.25 ? { courtLineMm: 20 + 40 * r() } : {}),
       ...(kind === 'drop' ? { contactS: 0.17 + 0.12 * r(), boxMm: pick([300, 400]) } : {}),
@@ -79,6 +79,8 @@ function scenarios(S, n) {
     // At the default size the athlete is about 600 px tall, roughly what the detector's fine pass reads from a real
     // 1080 x 1920 slow-motion file; --scale renders bigger (and slower).
     const base = S.defaultScene(kind === 'single' ? 'cmj' : kind, over);
+    // Lens at ankle height: the far foot's contact sits a few mm higher in the picture than the near one's.
+    base.farFootPx = Math.round(over.farFootMm / base.mmPerPx);
     const big = { width: Math.round(base.width * SCALE), height: Math.round(base.height * SCALE) };
     out.push({ name: `${String(i + 1).padStart(2, '0')}-${kind}`, kind, o: { ...base, ...big, mmPerPx: base.mmPerPx / SCALE, floorRow: Math.round(base.floorRow * SCALE), durationS: base.durationS + (kind === 'drop' ? 0.2 : 0) } });
   }

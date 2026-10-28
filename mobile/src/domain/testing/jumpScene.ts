@@ -313,8 +313,10 @@ function shade(o: SceneOptions, person: Shape[], feet: Foot[], vx: number, vy: n
     if (person[k].hit(x, zz)) return person[k].grey;
   }
   let g = background(o, x, z);
-  // Shadow: a dark strip on the floor right under each shoe, fading as the shoe rises.
-  if (o.shadow && abs(z) < 7) {
+  // Shadow: a dark strip on the floor right under each shoe, fading as the shoe rises. It lies on the floor, so from a
+  // lens at ankle height (≈ 8 cm up, 3 m away) the few centimetres of floor it covers in depth span under 2 mm of the
+  // picture's height around the contact line.
+  if (o.shadow && abs(z) < 2) {
     for (const f of feet) {
       const h = max(0, f.z);
       const toe = f.x;
@@ -322,10 +324,12 @@ function shade(o: SceneOptions, person: Shape[], feet: Foot[], vx: number, vy: n
       if (x > min(toe, heel) - 25 && x < max(toe, heel) + 25) g *= 1 - o.shadow * exp(-h / 25);
     }
   }
-  // Glossy floor: below the contact line it mirrors what is above it.
-  if (o.reflection && z < 0 && z > -200) {
+  // Glossy floor: below each foot's contact line it mirrors what is above it (the far leg's line is `farPx` higher).
+  const farZ = farPx * o.mmPerPx;
+  if (o.reflection && z < farZ && z > -200) {
     for (let k = 0; k < person.length; k++) {
-      if (person[k].hit(x, -z)) {
+      const far = k >= 5 && k < 10;
+      if ((far || z < 0) && person[k].hit(x, far ? farZ - z : -z)) {
         const a = o.reflection * exp(z / 80);
         g = g * (1 - a) + person[k].grey * a;
         break;

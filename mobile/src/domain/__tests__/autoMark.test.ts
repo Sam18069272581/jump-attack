@@ -96,12 +96,29 @@ describe('automatic take-off and landing', () => {
     expectNear(defaultScene('cmj', { shadow: 0.55, reflection: 0.35, flicker: 0.05, noise: 4, exposureS: 1 / 480, seed: 7 }));
   });
 
+  it('sees shins only a few noise levels off the wall behind them, after a long stand', () => {
+    expectNear(defaultScene('cmj', { takeoffS: 1.2019, flightS: 0.6144, shadow: 0.6, reflection: 0.4, flicker: 0.06, noise: 4.9, exposureS: 1 / 480, farFootPx: 1, seed: 4 }));
+  });
+
   it('finds a low single-leg jump', () => {
     expectNear(defaultScene('cmj', { flightS: 0.3017, shadow: 0.4 }));
   });
 
   it('finds the take-off and landing of a run-up jump, not the running steps', () => {
     expectNear(defaultScene('approach', { shadow: 0.4, secondFootLagS: 0.025 }));
+  });
+
+  it('does not take a foot rising over new floor for one standing there', () => {
+    // A run-up carries the take-off foot forward as it rises; for a few frames a column can see its sole at one height.
+    expectNear(defaultScene('approach', { takeoffS: 1.1028, flightS: 0.4559, shadow: 0.6, reflection: 0.25, flicker: 0.03, noise: 4, secondFootLagS: 0.019, farFootPx: 1, seed: 12 }));
+  });
+
+  it('finds the end of a short run-up plant while the sole and its mirror image wobble a pixel or two', () => {
+    expectNear(defaultScene('approach', { takeoffS: 1.1028, flightS: 0.4559, shadow: 0.6, reflection: 0.25, flicker: 0.03, noise: 4.4, secondFootLagS: 0.019, farFootPx: 2, seed: 12 }));
+  });
+
+  it('finds the legs of a run-up under strong mains flicker', () => {
+    expectNear(defaultScene('approach', { takeoffS: 1.1035, flightS: 0.6272, reflection: 0.4, flicker: 0.06, noise: 3, exposureS: 1 / 480, secondFootLagS: 0.016, courtLineMm: 23, seed: 2 }));
   });
 
   it('finds touch-down, take-off and landing of a drop jump from a box', () => {
