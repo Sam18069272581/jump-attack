@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { massNear } from '@/domain/bodyMass';
 import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
 import { ladder } from '@/domain/dropJump';
 import { diagnose, type DunkDiagnosis, type DunkInput } from '@/domain/dunk';
@@ -7,6 +8,7 @@ import { fvProfile, pushOff } from '@/domain/fvp';
 import { APPROACH_TOUCH } from '@/domain/metrics';
 import { pctOf1rm } from '@/domain/vbt';
 
+import { listBodyMass } from './bodyMass';
 import { listDropJumps, listLoadedJumps, profileSessions } from './jumps';
 import { listMetricResults, listSessionResults, type Athlete } from './repo';
 import { latestTouchMethod, latestTouchSpread, touchOffsetFor } from './touch';
@@ -82,6 +84,10 @@ export async function loadDunkInputs(db: SQLiteDatabase, athlete: Athlete): Prom
     return best ? [{ rsi: best.rsi, contactMs: best.contactMs }] : [];
   });
 
+  // Each squat against the weigh-in nearest its day; the profile's body mass where there is none.
+  const weighIns = await listBodyMass(db, athlete.id);
+  const squatMassKg = squat.map((q) => massNear(weighIns, q.at));
+
   const hpo = athlete.leg_length_cm != null && athlete.squat_height_cm != null ? pushOff(athlete.leg_length_cm, athlete.squat_height_cm) : null;
   const mass = athlete.body_mass_kg;
   const fvPct =
@@ -101,6 +107,7 @@ export async function loadDunkInputs(db: SQLiteDatabase, athlete: Athlete): Prom
     sj: sjs.map((r) => r.best),
     approachTouch: touches.map((r) => r.best),
     squat1rm: squat.map((s) => s.kg),
+    squatMassKg,
     dropJumps,
     fvPct,
     touchOffsetCm,

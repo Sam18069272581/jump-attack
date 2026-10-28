@@ -106,6 +106,38 @@ const MIGRATIONS: string[] = [
   -- Mean velocity of a logged set's fastest rep (m/s), when the athlete measured it.
   ALTER TABLE set_log ADD COLUMN mean_velocity REAL;
   `,
+  `
+  -- Real dunk attempts: the rim height and ball used, and whether it went in, hit the rim, or fell short.
+  CREATE TABLE dunk_attempt (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    athlete_id INTEGER NOT NULL REFERENCES athlete(id) ON DELETE CASCADE,
+    at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    rim_cm REAL NOT NULL,
+    ball TEXT NOT NULL CHECK (ball IN ('basketball', 'volleyball')),
+    outcome TEXT NOT NULL CHECK (outcome IN ('made', 'rim', 'short'))
+  );
+  CREATE INDEX dunk_attempt_athlete ON dunk_attempt (athlete_id, at);
+  `,
+  `
+  -- The day the dunk goal is due (YYYY-MM-DD): the plan tapers before it and makes it the dunk test day. Null: none set.
+  ALTER TABLE athlete ADD COLUMN goal_date TEXT;
+  `,
+  `
+  -- Knee pain, 0 (none) to 10: the worst during a day's training ('session') and on waking ('morning'), one of each a day.
+  CREATE TABLE knee_pain (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    athlete_id INTEGER NOT NULL REFERENCES athlete(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('session', 'morning')),
+    score INTEGER NOT NULL CHECK (score BETWEEN 0 AND 10),
+    UNIQUE (athlete_id, date, kind)
+  );
+  `,
+  `
+  -- Session RPE (0–10) and minutes, given after a workout: their product is the session's training load.
+  ALTER TABLE workout ADD COLUMN session_rpe REAL;
+  ALTER TABLE workout ADD COLUMN duration_min REAL;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

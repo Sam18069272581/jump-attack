@@ -77,19 +77,55 @@ export function SessionItems({ session }: { session: SessionTemplate }) {
  * What the readiness rule changed and why. `reason` lists the fatigue signals; workouts saved before reasons
  * were kept only had the CMJ rule, so they fall back to the CMJ drop.
  */
-export function AdjustmentNote({ adjustments, reason, dropPct }: { adjustments: Adjustment[]; reason: string | null; dropPct: number | null }) {
-  if (adjustments.length === 0) return null;
-  const why = reason ?? `CMJ 比近期均值低 ${dropPct != null ? `${(dropPct * 100).toFixed(1)}%` : '较多'}（超过 ${FATIGUE_DROP * 100}%）`;
+export function AdjustmentNote({
+  adjustments,
+  reason,
+  dropPct,
+  kneeReasons = [],
+}: {
+  adjustments: Adjustment[];
+  reason: string | null;
+  dropPct: number | null;
+  /** Why the knee cut the jumps; shown with the knee's own changes. */
+  kneeReasons?: string[];
+}) {
+  const fatigue = adjustments.filter((a) => a.cause !== 'knee');
+  const knee = adjustments.filter((a) => a.cause === 'knee');
+  // A stored reason also lists the knee's; keep those for the knee note.
+  const fatigueReason = reason
+    ?.split('；')
+    .filter((r) => !kneeReasons.includes(r))
+    .join('；');
+  const why = fatigueReason || `CMJ 比近期均值低 ${dropPct != null ? `${(dropPct * 100).toFixed(1)}%` : '较多'}（超过 ${FATIGUE_DROP * 100}%）`;
   return (
-    <View style={styles.note}>
-      <Text style={styles.noteTitle}>已按疲劳信号减量</Text>
-      <Text style={styles.noteReason}>{why}：今天总量减约 30%，取消最大强度练习。</Text>
-      {adjustments.map((a) => (
-        <Text key={a.code} style={styles.noteLine}>
-          · {a.name}：{a.change}
-        </Text>
-      ))}
-    </View>
+    <>
+      {fatigue.length > 0 && (
+        <View style={styles.note}>
+          <Text style={styles.noteTitle}>已按疲劳信号减量</Text>
+          <Text style={styles.noteReason}>{why}：今天总量减约 30%，取消最大强度练习。</Text>
+          {fatigue.map((a) => (
+            <Text key={a.code} style={styles.noteLine}>
+              · {a.name}：{a.change}
+            </Text>
+          ))}
+        </View>
+      )}
+      {knee.length > 0 && (
+        <View style={styles.note}>
+          <Text style={styles.noteTitle}>膝盖疼，已减跳跃</Text>
+          {kneeReasons.map((r) => (
+            <Text key={r} style={styles.noteReason}>
+              {r}
+            </Text>
+          ))}
+          {knee.map((a) => (
+            <Text key={a.code} style={styles.noteLine}>
+              · {a.name}：{a.change}
+            </Text>
+          ))}
+        </View>
+      )}
+    </>
   );
 }
 

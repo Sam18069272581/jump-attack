@@ -70,6 +70,24 @@ describe('the day’s state', () => {
     expect(readDay({ ...base, cmj: cmj(36) }, today, 'cmj').state).toBe('good');
   });
 
+  it('counts a red knee as a poor day, a yellow one not', () => {
+    const base: DayInputs = { cmj: cmj(40), recovery: recovery(7.5), warmups: history };
+    const red = readDay({ ...base, pain: [{ date: addDays(today, -1), kind: 'session', score: 6 }] }, today);
+    expect(red.state).toBe('poor');
+    expect(red.reasons).toContain('训练中膝盖 6 分，超过 5 分：这次跳跃减半，不做跳深');
+    expect(readDay({ ...base, pain: [{ date: addDays(today, -1), kind: 'session', score: 4 }] }, today).state).toBe('good');
+  });
+
+  it('counts a load well above usual only together with another signal', () => {
+    // A month of 100 a day, then a week of 300, up to yesterday.
+    const loads = [...Array(35)].map((_, i) => ({ date: addDays(today, i - 35), load: i < 28 ? 100 : 300 }));
+    const base: DayInputs = { cmj: cmj(40), recovery: recovery(7.5), warmups: history, loads: [{ name: '整体负荷', entries: loads }] };
+    expect(readDay(base, today)).toMatchObject({ state: 'good', reasons: [] });
+    const tired = readDay({ ...base, recovery: recovery(5.5) }, today);
+    expect(tired.state).toBe('poor');
+    expect(tired.reasons).toEqual(['睡眠只有 5.5 小时', expect.stringMatching(/^整体负荷：这周比你习惯的高 \d+%$/)]);
+  });
+
   it('lists the poor days among the given dates', () => {
     const inputs: DayInputs = { cmj: [], recovery: recovery(7.5, 40), warmups: [] };
     expect([...poorDays(inputs, [today, addDays(today, -1), today])]).toEqual([today]);

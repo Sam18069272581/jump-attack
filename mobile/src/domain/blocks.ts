@@ -2,6 +2,7 @@ import { judgeChange, mean } from './assess';
 import { type ISODate } from './dates';
 import { APPROACH_TOUCH } from './metrics';
 import { THRESHOLDS, type BlockType, type DunkDiagnosis, type Missing } from './dunk';
+import { DEFERRED_STRENGTH_REASON, defersStrength } from './goal';
 import { blockPosition, calendarDate, PHASE_NAMES, planPosition, withBlock, type BlockPosition, type PlanBlock, type PlanSettings, type PlanTemplate } from './plan';
 
 /** The block template additions a diagnosis calls for (see BLOCK_TEMPLATES extras in templates.ts). */
@@ -16,11 +17,22 @@ export function blockExtras(d: DunkDiagnosis | null, type: BlockType): string[] 
 
 export const NO_DIAGNOSIS_REASON = '诊断数据还不够，先从力量块开始；测完缺的项目，块末会再看要不要换。';
 
-/** The first block of a new plan: the diagnosed limiter unless the athlete picked another, strength when it can't tell. */
-export function firstBlock(d: DunkDiagnosis | null, start: ISODate, picked?: BlockType): PlanBlock {
-  const type = picked ?? d?.limiter ?? 'strength';
-  const reason = d?.limiter === type ? d.reasons[0] : d?.limiter == null && !picked ? NO_DIAGNOSIS_REASON : '你自己选的训练块。';
-  const extras = blockExtras(d, type);
+/** Transfer in place of a strength block put off by the goal date keeps the squat twice a week. */
+const DEFERRED_EXTRAS = ['heavy_squat'];
+
+function withExtras(extras: string[], deferred: boolean): string[] {
+  return deferred ? [...new Set([...extras, ...DEFERRED_EXTRAS])] : extras;
+}
+
+/**
+ * The first block of a new plan: the diagnosed limiter unless the athlete picked another, strength when it can't
+ * tell; transfer instead of strength when the goal date is less than 6 weeks off.
+ */
+export function firstBlock(d: DunkDiagnosis | null, start: ISODate, picked?: BlockType, goal?: ISODate | null): PlanBlock {
+  const deferred = !picked && defersStrength(d?.limiter ?? 'strength', start, goal);
+  const type = deferred ? 'transfer' : (picked ?? d?.limiter ?? 'strength');
+  const reason = deferred ? DEFERRED_STRENGTH_REASON : d?.limiter === type ? d.reasons[0] : d?.limiter == null && !picked ? NO_DIAGNOSIS_REASON : '你自己选的训练块。';
+  const extras = withExtras(blockExtras(d, type), deferred);
   return { start, type, ...(reason ? { reason } : {}), ...(extras.length ? { extras } : {}) };
 }
 
@@ -34,6 +46,8 @@ export type BlockSuggestion =
       /** Plan-schedule Monday the next block starts on. */
       start: ISODate;
       reasons: string[];
+      /** Transfer in place of strength because the goal date is near. */
+      deferred?: boolean;
     }
   | {
       kind: 'advance';
@@ -75,14 +89,19 @@ export function isRetestWeek(t: PlanTemplate, pos: BlockPosition): boolean {
 
 /**
  * In a block's retest week, a switch to the block the diagnosis now calls for, once two tests in a row agree
- * on it. Nothing while the diagnosis still matches the block, can't tell, or was turned down.
+ * on it. Nothing while the diagnosis still matches the block, can't tell, or was turned down. Strength, called
+ * for or simply running on, gives way to transfer when the next block would start less than 6 weeks before the goal.
  */
 export function switchSuggestion(t: PlanTemplate, plan: PlanSettings, today: ISODate, d: DunkDiagnosis | null): BlockSuggestion | null {
   const pos = blockPosition(plan, today);
-  if (!pos || decided(plan, pos) || !d?.limiter || !d.confirmed || d.limiter === pos.type || !isRetestWeek(t, pos)) return null;
-  const key = `switch:${d.limiter}@${pos.start}`;
+  if (!pos || decided(plan, pos) || !isRetestWeek(t, pos)) return null;
+  const called = d?.limiter && d.confirmed ? d.limiter : null;
+  const deferred = defersStrength(called ?? pos.type, calendarDate(plan, pos.end), plan.goalDate);
+  const type = deferred ? 'transfer' : called;
+  if (!type || type === pos.type) return null;
+  const key = `switch:${type}@${pos.start}`;
   if (plan.blocks?.[pos.index].declined?.includes(key)) return null;
-  return { kind: 'switch', key, from: pos.type, type: d.limiter, start: pos.end, reasons: d.reasons };
+  return { kind: 'switch', key, from: pos.type, type, start: pos.end, reasons: deferred ? [DEFERRED_STRENGTH_REASON] : d!.reasons, ...(deferred ? { deferred } : {}) };
 }
 
 export type TouchResult = { date: ISODate; value: number };
@@ -138,7 +157,7 @@ export function advanceSuggestion(t: PlanTemplate, plan: PlanSettings, today: IS
 export function acceptSuggestion(plan: PlanSettings, s: BlockSuggestion, d: DunkDiagnosis | null, from: ISODate): PlanBlock[] {
   const blocks = plan.blocks ?? [];
   if (s.kind === 'switch') {
-    const extras = blockExtras(d, s.type);
+    const extras = withExtras(blockExtras(d, s.type), s.deferred === true);
     return withBlock(blocks, { start: s.start, type: s.type, reason: s.reasons[0], ...(extras.length ? { extras } : {}) });
   }
   const current = blocks[blockPosition(plan, from)?.index ?? blocks.length - 1];

@@ -9,18 +9,24 @@ import { Icon } from '@/components/Icon';
 import { AdjustmentNote, SessionItems, WeekStrip, type DayStatus } from '@/components/training';
 import { Button, Card } from '@/components/ui';
 import { newSessionId } from '@/db/repo';
+import { listPain } from '@/db/pain';
 import { insertDeload } from '@/db/training';
 import { addDays, daysBetween, shortDate, weekday, WEEKDAY_NAMES, type ISODate } from '@/domain/dates';
 import { isRetestWeek, nextBlockStart, retestCodes } from '@/domain/blocks';
 import { blockPosition, DELOAD_DAYS, missedThisWeek, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
+import { APPROACH_TOUCH } from '@/domain/metrics';
+import { loadNote } from '@/domain/load';
+import { kneeStatus, type PainEntry } from '@/domain/pain';
 import { DELOAD_STREAK } from '@/domain/readiness';
 import { STATUS_TEXT } from '@/domain/recovery';
 import { useAthlete } from '@/state/athlete';
 import { acceptBlockSuggestion, declineBlockSuggestion, loadBlockAdvice, type BlockAdvice } from '@/state/blocks';
+import { loadTrainingLoads } from '@/state/load';
 import { beginWorkout, loadReadiness, loadTraining, sessionFor, todayISO, type DayReadiness, type TrainingData } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
 
-type Loaded = { data: TrainingData | null; readiness: DayReadiness & { streak: number }; advice: BlockAdvice };
+type LoadLine = { text: string; high: boolean };
+type Loaded = { data: TrainingData | null; readiness: DayReadiness & { streak: number }; advice: BlockAdvice; pain: PainEntry[]; loads: LoadLine[] };
 
 export default function Train() {
   const db = useSQLiteContext();
@@ -32,9 +38,15 @@ export default function Train() {
 
   const load = useCallback(async () => {
     if (!current) return;
-    const [data, readiness] = await Promise.all([loadTraining(db, current.id), loadReadiness(db, current.id, todayISO())]);
+    const [data, readiness, pain, loads] = await Promise.all([
+      loadTraining(db, current.id),
+      loadReadiness(db, current.id, todayISO()),
+      listPain(db, current.id),
+      loadTrainingLoads(db, current.id),
+    ]);
     const advice = data ? await loadBlockAdvice(db, current, data, todayISO()) : { diagnosis: null, suggestion: null };
-    setLoaded({ data, readiness, advice });
+    const notes = loads.map((l) => loadNote(l.name, l.entries, todayISO())).filter((n): n is LoadLine => n != null);
+    setLoaded({ data, readiness, advice, pain, loads: notes });
   }, [db, current]);
 
   useFocusEffect(
@@ -51,7 +63,7 @@ export default function Train() {
     );
   }
 
-  const { data, readiness, advice } = loaded;
+  const { data, readiness, advice, pain, loads } = loaded;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -61,6 +73,8 @@ export default function Train() {
             data={data}
             readiness={readiness}
             advice={advice}
+            pain={pain}
+            loads={loads}
             today={today}
             selected={selected}
             onSelect={setSelected}
@@ -95,7 +109,7 @@ export default function Train() {
         ) : (
           <>
             <Text style={text.title}>训练</Text>
-            <ReadinessCard readiness={readiness} />
+            <ReadinessCard readiness={readiness} loads={loads} />
             <Card style={{ gap: 12 }}>
               <Text style={text.section}>还没有训练计划</Text>
               <Text style={text.muted}>选一个模板，按你的训练日生成每周的训练。每次练之前测一次 CMJ，状态差时自动减量。</Text>
@@ -112,6 +126,8 @@ function PlanView({
   data,
   readiness,
   advice,
+  pain,
+  loads,
   today,
   selected,
   onSelect,
@@ -123,6 +139,8 @@ function PlanView({
   data: TrainingData;
   readiness: DayReadiness & { streak: number };
   advice: BlockAdvice;
+  pain: PainEntry[];
+  loads: LoadLine[];
   today: ISODate;
   selected: ISODate;
   onSelect: (d: ISODate) => void;
@@ -164,7 +182,8 @@ function PlanView({
   const planned = planDay(template, plan, selected);
   const workout = byDate.get(selected);
   const isToday = selected === today;
-  const shown = planned ? sessionFor(planned, workout, isToday ? readiness.readiness : null) : null;
+  const knee = kneeStatus(pain, selected);
+  const shown = planned ? sessionFor(planned, workout, isToday ? readiness.readiness : null, knee?.light) : null;
   const next = planned ? null : nextSession(template, plan, addDays(selected, 1));
   // A rest day today can take a session missed earlier this week.
   const missed = isToday && !planned ? missedThisWeek(template, plan, workouts.map((w) => w.date), today) : [];
@@ -198,7 +217,18 @@ function PlanView({
         onShift={(n) => onSelect(addDays(selected, n * 7))}
       />
 
-      {isToday && <ReadinessCard readiness={readiness} />}
+      {isToday && <ReadinessCard readiness={readiness} loads={loads} />}
+
+      {isToday && (knee?.light === 'yellow' || knee?.light === 'stop') && (
+        <Card style={{ gap: 4 }}>
+          <Text style={[text.section, knee.light === 'stop' && { color: colors.warn }]}>{knee.light === 'stop' ? '膝盖：暂停跳跃' : '膝盖：黄灯'}</Text>
+          {knee.reasons.map((r) => (
+            <Text key={r} style={text.muted}>
+              {r}
+            </Text>
+          ))}
+        </Card>
+      )}
 
       {isToday && suggestDeload && (
         <Card style={styles.deload}>
@@ -222,17 +252,27 @@ function PlanView({
                 {planned.session.code} · {planned.session.name}
               </Text>
               <Text style={text.muted}>
-                {planned.session.focus} · {planned.block && !planned.inserted && template.blocks?.[planned.block.type].weeks[planned.block.week].retest ? '减量复测周' : PHASE_NAMES[planned.phase]}
-                {planned.inserted ? '（疲劳后插入）' : ''}
+                {planned.session.focus} ·{' '}
+                {planned.goal === 'test'
+                  ? '目标日'
+                  : planned.goal === 'taper'
+                    ? '赛前减量：量减半，强度不变'
+                    : planned.block && !planned.inserted && template.blocks?.[planned.block.type].weeks[planned.block.week].retest
+                      ? '减量复测周'
+                      : PHASE_NAMES[planned.phase]}
+                {planned.inserted && !planned.goal ? '（疲劳后插入）' : ''}
               </Text>
             </View>
             <AdjustmentNote
               adjustments={shown.adjustments}
               reason={workout ? workout.reason : readiness.signals.join('；') || null}
               dropPct={workout ? workout.cmjDrop : readiness.dropPct}
+              kneeReasons={knee?.reasons}
             />
             <SessionItems session={shown.session} />
-            {daysBetween(selected, today) >= 0 ? (
+            {planned.goal === 'test' ? (
+              <TestDayActions today={isToday} />
+            ) : daysBetween(selected, today) >= 0 ? (
               <Button
                 label={workout?.finishedAt ? '查看训练记录' : workout ? '继续训练' : isToday ? '开始训练' : '补记这次训练'}
                 variant={workout?.finishedAt ? 'secondary' : 'primary'}
@@ -264,7 +304,18 @@ function PlanView({
   );
 }
 
-function ReadinessCard({ readiness }: { readiness: DayReadiness }) {
+/** The goal day is the real test: the touch test, then attempts at the rim. Nothing to tick off as a workout. */
+function TestDayActions({ today }: { today: boolean }) {
+  if (!today) return <Text style={text.caption}>到那天：热身，测助跑摸高，再去篮下试扣。</Text>;
+  return (
+    <View style={{ gap: 10 }}>
+      <Button label="测助跑摸高" onPress={() => router.push({ pathname: '/measure/capture', params: { metric: APPROACH_TOUCH.code, session: newSessionId(), from: 'train' } })} />
+      <Button label="记扣篮尝试" variant="secondary" onPress={() => router.push('/attempts')} />
+    </View>
+  );
+}
+
+function ReadinessCard({ readiness, loads }: { readiness: DayReadiness; loads: LoadLine[] }) {
   const testCmj = () => router.push({ pathname: '/measure/capture', params: { metric: 'cmj', session: newSessionId(), from: 'train' } });
 
   if (readiness.today == null) {
@@ -283,6 +334,7 @@ function ReadinessCard({ readiness }: { readiness: DayReadiness }) {
             </>
           )}
           <RecoveryLine readiness={readiness} />
+          <LoadLines loads={loads} />
         </View>
         <Button label="测 CMJ" onPress={testCmj} style={{ paddingHorizontal: 18 }} />
       </Card>
@@ -304,16 +356,26 @@ function ReadinessCard({ readiness }: { readiness: DayReadiness }) {
         <Text style={[styles.readinessLabel, { color }]}>{label}</Text>
         <Text style={text.muted}>{detail}</Text>
         <RecoveryLine readiness={readiness} />
+        <LoadLines loads={loads} />
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel="再测一次 CMJ" onPress={testCmj} style={{ alignItems: 'flex-end' }}>
         <Text style={styles.cmj}>
           {readiness.today.toFixed(1)}
           <Text style={styles.cmjUnit}> cm</Text>
         </Text>
-        <Text style={text.caption}>今日 CMJ</Text>
+        <Text style={text.caption}>今日 CMJ 均值</Text>
       </Pressable>
     </Card>
   );
+}
+
+/** Training load this week against usual (domain/load.ts); well above usual counts only with another signal. */
+function LoadLines({ loads }: { loads: LoadLine[] }) {
+  return loads.map((l) => (
+    <Text key={l.text} style={[text.caption, l.high && { color: colors.warn }]}>
+      {l.text}
+    </Text>
+  ));
 }
 
 /** Today's recovery read (HRV, resting HR, sleep), which also counts towards readiness. */

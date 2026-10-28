@@ -43,8 +43,9 @@ export default function NewPlan() {
   const today = todayISO();
   const startDate: ISODate = start === 'today' ? today : addDays(mondayOf(today), 7);
   const ready = weekdays.length === needed;
-  const block = template.blocks ? firstBlock(diagnosis, startDate, picked ?? undefined) : null;
-  const settings: PlanSettings = { templateCode: code, startDate, weekdays, ...(block ? { blocks: [block] } : {}) };
+  const goalDate = current?.goal_date ?? null;
+  const block = template.blocks ? firstBlock(diagnosis, startDate, picked ?? undefined, goalDate) : null;
+  const settings: PlanSettings = { templateCode: code, startDate, weekdays, goalDate, ...(block ? { blocks: [block] } : {}) };
 
   function pickTemplate(t: PlanTemplate) {
     setCode(t.code);
