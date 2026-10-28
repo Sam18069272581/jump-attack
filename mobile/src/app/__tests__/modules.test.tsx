@@ -177,6 +177,33 @@ describe('speed', () => {
     expect(t).toContain('−0.02');
   });
 
+  it('opens a past result from the history to fix a typo or delete an attempt', async () => {
+    mockParams = { metric: 'sprint_10' };
+    const history = await render(<MetricHistory />);
+    await press(history.root, '2026-10-19 的记录');
+    expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/measure/result', params: { metric: 'sprint_10', session: 'sp-hand', from: 'history' } });
+
+    mockParams = { metric: 'sprint_10', session: 'sp-hand', from: 'history' };
+    const result = await render(<Result />);
+    expect(texts(result.root)).not.toContain('再测一次');
+    await press(result.root, '改第 1 次');
+    await type(result.root, '第 1 次（s）', '0.6');
+    expect(texts(result.root)).toContain('一般在');
+    expect(pressable(result.root, '保存修改').props.disabled).toBe(true);
+    await type(result.root, '第 1 次（s）', '1,65');
+    await press(result.root, '保存修改');
+    expect((await listTrials(mockDb, 'sp-hand')).map((t) => t.value)).toEqual([1.65]);
+    expect(texts(result.root)).toContain('1.65');
+
+    // A filmed attempt can be deleted but not typed over.
+    mockParams = { metric: 'sprint_10', session: 'sp-v2', from: 'history' };
+    const filmed = await render(<Result />);
+    expect(filmed.root.findAll((n) => n.props.accessibilityLabel === '改第 1 次')).toHaveLength(0);
+    expect(filmed.root.findAll((n) => n.props.accessibilityLabel === '删除第 1 次').length).toBeGreaterThan(0);
+    await press(filmed.root, '返回');
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
   it('rejects an impossible time', async () => {
     mockParams = { metric: 'sprint_10', session: 'sprint-b' };
     const entry = await render(<ManualEntry />);

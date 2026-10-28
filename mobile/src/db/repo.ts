@@ -112,6 +112,11 @@ export async function deleteTrial(db: SQLiteDatabase, id: number): Promise<void>
   await db.runAsync('DELETE FROM test_session WHERE id NOT IN (SELECT DISTINCT session_id FROM trial)');
 }
 
+/** Corrects a typed-in attempt. */
+export async function updateTrialValue(db: SQLiteDatabase, id: number, value: number): Promise<void> {
+  await db.runAsync('UPDATE trial SET value = ? WHERE id = ?', value, id);
+}
+
 /** Folder the app used to copy every marked video into; see media/videos.ts. */
 export const SAVED_VIDEO_DIR = '/videos/';
 

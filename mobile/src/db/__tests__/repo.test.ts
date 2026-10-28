@@ -1,7 +1,7 @@
 import { LATEST_VERSION, migrate } from '../migrations';
 import { getMetric } from '@/domain/metrics';
 
-import { addTrial, clearSavedVideoUris, deleteTrial, ensureSession, listAthletes, listMetricResults, listSessionResults, listSessionValues, listTrials, saveSession, sessionCounts, sessionTimings } from '../repo';
+import { addTrial, clearSavedVideoUris, deleteTrial, ensureSession, listAthletes, listMetricResults, listSessionResults, listSessionValues, listTrials, saveSession, sessionCounts, sessionTimings, updateTrialValue } from '../repo';
 import { openMemoryDb } from '../testing/memoryDb';
 
 async function setup() {
@@ -69,6 +69,19 @@ describe('sessions and trials', () => {
     expect(r.trials).toBe(3);
     expect(await listSessionValues(db, 1, 'rsa')).toEqual({ r1: [7.0, 7.2, 7.4] });
     expect(await listSessionValues(db, 1, 'cmj')).toEqual({});
+  });
+});
+
+describe('correcting a typed-in attempt', () => {
+  it('changes only that attempt’s value', async () => {
+    const db = await setup();
+    await ensureSession(db, 't', 1, 'approach_touch');
+    await addTrial(db, { session_id: 't', value: 298, detail: { source: 'manual' } });
+    await addTrial(db, { session_id: 't', value: 287, detail: { source: 'manual' } });
+    const [first, second] = await listTrials(db, 't');
+    await updateTrialValue(db, first.id, 289);
+    expect((await listTrials(db, 't')).map((t) => t.value)).toEqual([289, 287]);
+    expect((await listTrials(db, 't'))[1]).toEqual(second);
   });
 });
 

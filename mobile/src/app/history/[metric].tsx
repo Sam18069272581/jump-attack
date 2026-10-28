@@ -1,7 +1,7 @@
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { TrendChart } from '@/components/TrendChart';
 import { Empty } from '@/components/ui';
@@ -114,7 +114,14 @@ export default function MetricHistory() {
                 const d = prev ? r.best - prev.best : null;
                 const rowNote = note(r);
                 return (
-                  <View key={r.session_id} style={styles.tableRow}>
+                  <Pressable
+                    key={r.session_id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${fullDate(r.started_at)} 的记录`}
+                    accessibilityHint="查看每一次，改错或删除"
+                    onPress={() => router.push({ pathname: '/measure/result', params: { metric: def.code, session: r.session_id, from: 'history' } })}
+                    style={styles.tableRow}
+                  >
                     <Text style={styles.dateCell}>{fullDate(r.started_at)}</Text>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.valueCell, styles.right]}>
@@ -125,7 +132,7 @@ export default function MetricHistory() {
                     <Text style={[styles.deltaCell, styles.right, { color: d == null ? colors.textMuted : tone(d) }]}>
                       {d == null ? '—' : `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(def.decimals)}`}
                     </Text>
-                  </View>
+                  </Pressable>
                 );
               })}
           </View>
