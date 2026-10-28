@@ -13,6 +13,7 @@ import { listPain, listTestJumps, setPain } from '@/db/pain';
 import { finishWorkout, getWorkout, lastLoads, listSets, logSet, setSessionLoad, unlogSet, type Workout } from '@/db/training';
 import { addVbtSet, listVbtSets } from '@/db/vbt';
 import { shortDate, toISODate } from '@/domain/dates';
+import { demoFor } from '@/domain/demos';
 import { parseNumber } from '@/domain/entry';
 import { sessionLoad, workoutMinutes } from '@/domain/load';
 import { jumpVolumeNote, kneeStatus, PAIN_HINT, PAIN_LIMIT } from '@/domain/pain';
@@ -194,6 +195,11 @@ export default function WorkoutScreen() {
               <Text style={text.section}>{p.name}</Text>
               <Text style={styles.dose}>{formatPrescription(p)}</Text>
             </View>
+            {demoFor(p.code) && (
+              <Pressable accessibilityRole="link" accessibilityLabel={`${p.name}怎么做`} hitSlop={8} onPress={() => router.push({ pathname: '/exercise/[code]', params: { code: p.code } })}>
+                <Text style={styles.demoLink}>怎么做 ›</Text>
+              </Pressable>
+            )}
             {p.cue ? <Text style={text.caption}>{p.cue}</Text> : null}
             {personalNote(p.code, personal) && <Text style={styles.suggest}>{personalNote(p.code, personal)}</Text>}
             {suggested[p.code] && <SuggestionLine p={p} s={suggested[p.code]} />}
@@ -429,6 +435,7 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   exHead: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 },
   dose: { color: colors.accent, fontFamily: fonts.numeric, fontSize: 16 },
+  demoLink: { color: colors.accent, fontSize: 13 },
   suggest: { color: colors.warn, fontSize: 12 },
   dayNote: { borderRadius: radius.row, borderWidth: 1, borderColor: colors.border, padding: 12, gap: 4 },
   dayTitle: { color: colors.text, fontSize: 13, fontWeight: '700' },

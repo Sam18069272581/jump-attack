@@ -82,6 +82,7 @@ export default function RootLayout() {
             <Stack.Screen name="plan/index" options={{ title: '训练计划' }} />
             <Stack.Screen name="plan/new" options={{ title: '选择训练计划' }} />
             <Stack.Screen name="workout/[date]" options={{ title: '' }} />
+            <Stack.Screen name="exercise/[code]" options={{ title: '' }} />
             <Stack.Screen name="backup" options={{ title: '数据备份与同步' }} />
           </Stack>
           <KeyboardDoneBar />
