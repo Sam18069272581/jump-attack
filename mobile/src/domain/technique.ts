@@ -49,7 +49,9 @@ export type TechniqueProblem =
   /** No flight long enough to be a jump. */
   | 'no-jump'
   /** A flight, but no plant before it in the clip. */
-  | 'no-plant';
+  | 'no-plant'
+  /** The two floor lines were tapped too close together to be 3 m apart: both on the same tape. */
+  | 'markers';
 
 export type MetricKey = 'vz' | 'vx' | 'angle' | 'approach' | 'brake' | 'plant' | 'gap' | 'step' | 'knee' | 'trunk';
 
@@ -783,7 +785,10 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
 
   // Rough scale for thresholds (m/px): the markers, or a leg (hip to ankle) of about 0.9 m.
   const legPx = median(picked.flatMap((p) => (p ? [hypot(p[LM.leftHip].x - p[LM.leftAnkle].x, p[LM.leftHip].y - p[LM.leftAnkle].y)] : [])));
-  const markerScale = markers ? markers.distanceM / hypot(markers.b.x - markers.a.x, markers.b.y - markers.a.y) : null;
+  const markerPx = markers ? hypot(markers.b.x - markers.a.x, markers.b.y - markers.a.y) : null;
+  // Lines 3 m apart are over three legs apart in the picture: less than one, and both were tapped on the same tape.
+  if (markerPx != null && markerPx < legPx) return { ok: false, problem: 'markers' };
+  const markerScale = markers && markerPx ? markers.distanceM / markerPx : null;
   const roughScale = markerScale ?? 0.9 / max(1, legPx);
 
   // Up, then the running direction along the floor, and the side that faces the camera.
@@ -976,8 +981,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       // hips' speed in the picture. Each marker's place: a tap is good to `TAP_PX`.
       const jitter = median(s.hip.x.flatMap((x, i) => (Number.isNaN(x) || Number.isNaN(hx[i]) ? [] : [abs(x - hx[i])]))) * 1.4826;
       const sdCross = (jitter * sqrt((2 * 10) / fps)) / max(1, v / markerScale!);
-      const markerPx = hypot(markers.b.x - markers.a.x, markers.b.y - markers.a.y);
-      const rel = sqrt(((sqrt(2) * sdCross) / dt) ** 2 + ((sqrt(2) * TAP_PX) / markerPx) ** 2);
+      const rel = sqrt(((sqrt(2) * sdCross) / dt) ** 2 + ((sqrt(2) * TAP_PX) / markerPx!) ** 2);
       // A run-up at an angle to the picture is foreshortened, by about as much as the body's size changes along it.
       metrics.approach = measured('approach', v, v * hypot(1.96 * rel, sizeChange));
     }
@@ -1017,6 +1021,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   });
   const at = s.frame.indexOf(plantDown);
   if (at >= 0 && !Number.isNaN(lean[at])) metrics.trunk = measured('trunk', lean[at], TRUNK_ERROR_DEG);
+
+  // Scales off by more than a wrong frame rate or a wrong tap could explain: no figure is one to trust.
+  if (flags.includes('scale-broken')) for (const m of Object.values(metrics)) m!.status = 'imprecise';
 
   // A figure resting on a moment that couldn't be timed has no error to state (and JSON would save an endless one as
   // null): it is left out, and the flag says why.

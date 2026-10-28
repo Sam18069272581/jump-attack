@@ -269,6 +269,31 @@ describe('what the clip lacks or gets wrong', () => {
   });
 });
 
+describe('lines tapped wrong, or the wrong frame rate', () => {
+  it('a 240 fps clip read as 120 fps: no figure passes for one to trust', () => {
+    const scene = poseScene();
+    const frames = scene.frames.map((f) => ({ ...f, t: f.frame / 120 }));
+    const result = resultOf(analyseTechnique({ frames, captureFps: 120, markers: scene.markers }));
+    expect(result.flags).toContain('scale-broken');
+    expect(Object.entries(result.metrics).flatMap(([k, m]) => (m!.status === 'ok' ? [k] : []))).toEqual([]);
+  });
+
+  it('the 3 m line tapped a metre short: no figure passes for one to trust', () => {
+    const scene = poseScene();
+    const { a, b } = scene.markers!;
+    const short = { x: a.x + (b.x - a.x) / 3, y: a.y + (b.y - a.y) / 3 };
+    const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { a: short, b, distanceM: 3 } }));
+    expect(result.flags).toContain('scale-broken');
+    expect(Object.entries(result.metrics).flatMap(([k, m]) => (m!.status === 'ok' ? [k] : []))).toEqual([]);
+  });
+
+  it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
+    const scene = poseScene();
+    const b = scene.markers!.b;
+    expect(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { a: { x: b.x + 5, y: b.y }, b, distanceM: 3 } })).toEqual({ ok: false, problem: 'markers' });
+  });
+});
+
 describe('pose-model mistakes it copes with', () => {
   it('left and right swapped for a few frames, in the run-up and in the plant', () => {
     const { scene, r } = analyse({ swaps: [[200, 206], [300, 306]] });
