@@ -139,8 +139,9 @@ it('shows the athlete’s own box height and trap-bar load in the exercise cards
   for (const [boxCm, rsi] of [[30, 1.6], [40, 1.9], [50, 1.7]] as const) {
     await addDropJump(mockDb, 1, 'dj-ladder', { boxCm, rsi, contactMs: 200, heightCm: 38, flightS: 0.56 });
   }
-  // 60 kg @ 1.0 m/s and 100 kg @ 0.6 m/s put the squat 1RM at 130 kg.
+  // 60 kg @ 1.0, 80 kg @ 0.8 and 100 kg @ 0.6 m/s put the squat 1RM at 130 kg (an estimate needs three loads).
   await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 60, v: 1.0, reps: 3, source: 'manual' });
+  await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 80, v: 0.8, reps: 3, source: 'manual' });
   await addVbtSet(mockDb, 1, 'vbt-1', 'vbt_squat', { load: 100, v: 0.6, reps: 2, source: 'manual' });
 
   // Wednesday is session B with depth jumps, Friday session C with trap-bar jumps.

@@ -218,7 +218,7 @@ function SuggestionLine({ p, s }: { p: Prescription; s: LoadSuggestion }) {
       : '';
   return (
     <Text style={styles.suggest}>
-      按 VBT 估算 1RM {Math.round(s.oneRm)} kg，{p.reps} 次 @ RPE {formatRpe(p.rpe ?? 8)} 建议 {s.baseKg} kg{eased}
+      按{s.source === 'tested' ? '实测' : ' VBT 估算'} 1RM {Math.round(s.oneRm)} kg，{p.reps} 次 @ RPE {formatRpe(p.rpe ?? 8)} 建议 {s.baseKg} kg{eased}
       {line}
     </Text>
   );

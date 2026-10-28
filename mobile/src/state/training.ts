@@ -4,7 +4,7 @@ import { listDropJumps } from '@/db/jumps';
 import { listRecoveryDays } from '@/db/recovery';
 import { listSessionResults } from '@/db/repo';
 import { getActivePlan, listWorkouts, startWorkout, type Plan, type Workout } from '@/db/training';
-import { latestEstimate, listVbtSets } from '@/db/vbt';
+import { current1rm, ESTIMATE_MAX_AGE_DAYS, latestOneRm, listVbtSets } from '@/db/vbt';
 import { type Readiness } from '@/domain/assess';
 import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
 import { ladder } from '@/domain/dropJump';
@@ -48,19 +48,17 @@ export async function loadReadiness(db: SQLiteDatabase, athleteId: number, date:
   return { ...dayReadiness(cmj, recovery, date), streak: fatigueStreak(cmj, recovery, date) };
 }
 
-/** A 1RM estimate older than this no longer says much about today's strength. */
-export const ESTIMATE_MAX_AGE_DAYS = 28;
-
 /** The day's condition and the training block it falls in, which together set how much the targets give. */
 export type Day = { state: DayState; block: BlockType | null };
 
 /** `kg` is the working weight after the day's allowance; `baseKg` the one the 1RM alone calls for. */
-export type LoadSuggestion = SetTarget & { oneRm: number; lift: string };
+export type LoadSuggestion = SetTarget & { oneRm: number; lift: string; source: 'tested' | 'velocity' };
 
 /**
- * Working weights for plan exercises from the matching VBT lift's latest 1RM estimate, at the share of 1RM
- * that the prescribed reps and RPE call for, then eased for the day's condition with the bar speed to aim
- * for. Keyed by exercise code.
+ * Working weights for plan exercises at the share of 1RM that the prescribed reps and RPE call for, then eased
+ * for the day's condition with the bar speed to aim for, keyed by exercise code. The 1RM is one the athlete
+ * actually lifted when there is a recent one (squat only), otherwise the matching VBT lift's latest estimate
+ * that passed its checks; the bar speed comes from that estimate's load-velocity profile.
  */
 export async function loadSuggestions(
   db: SQLiteDatabase,
@@ -73,24 +71,24 @@ export async function loadSuggestions(
   for (const p of items) {
     const lift = LOAD_FROM_VBT[p.code];
     if (!lift) continue;
-    const est = latestEstimate(await listVbtSets(db, athleteId, lift), lift);
-    if (!est?.oneRm || daysBetween(toISODate(new Date(est.startedAt)), date) > ESTIMATE_MAX_AGE_DAYS) continue;
-    const base = roundLoad(est.oneRm * pctOf1rm(p.reps, p.rpe ?? 8));
-    out[p.code] = { ...setTarget(base, est.profile, day.state, day.block), oneRm: est.oneRm, lift };
+    const pick = await current1rm(db, athleteId, lift, date);
+    if (!pick) continue;
+    const est = latestOneRm(await listVbtSets(db, athleteId, lift), lift);
+    const profile = est && daysBetween(toISODate(new Date(est.startedAt)), date) <= ESTIMATE_MAX_AGE_DAYS ? est.profile : null;
+    const base = roundLoad(pick.kg * pctOf1rm(p.reps, p.rpe ?? 8));
+    out[p.code] = { ...setTarget(base, profile, day.state, day.block), oneRm: pick.kg, lift, source: pick.source };
   }
   return out;
 }
 
 /**
  * The tested numbers exercise cues point at (domain/plan.ts personalNote): the best box of the latest drop-jump
- * ladder, and the squat 1RM estimate while it is recent enough to load from.
+ * ladder, and the squat 1RM to load from (see `current1rm`).
  */
 export async function loadPersonalNumbers(db: SQLiteDatabase, athleteId: number, date: ISODate): Promise<PersonalNumbers> {
-  const [drops, squats] = await Promise.all([listDropJumps(db, athleteId), listVbtSets(db, athleteId, 'vbt_squat')]);
+  const [drops, squat] = await Promise.all([listDropJumps(db, athleteId), current1rm(db, athleteId, 'vbt_squat', date)]);
   const lastLadder = drops.filter((j) => j.session_id === drops.at(-1)?.session_id);
-  const est = latestEstimate(squats, 'vbt_squat');
-  const fresh = est?.oneRm != null && daysBetween(toISODate(new Date(est.startedAt)), date) <= ESTIMATE_MAX_AGE_DAYS;
-  return { bestBoxCm: ladder(lastLadder).best?.boxCm ?? null, squat1rmKg: fresh ? est!.oneRm! : null };
+  return { bestBoxCm: ladder(lastLadder).best?.boxCm ?? null, squat1rmKg: squat?.kg ?? null };
 }
 
 /** VBT lifts whose sets double as the strength-day warm-up. */

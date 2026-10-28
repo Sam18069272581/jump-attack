@@ -56,10 +56,11 @@ export default function MetricHistory() {
   );
 
   if (!def) return <Empty title="找不到这个指标" />;
+  // A load only for sets lifted with one: a tested 1RM is itself the load.
   const timed = results.map((r) => ({ ...r, timing: timings[r.session_id] ?? 'video' }));
   const previous = previousSameTiming(timed);
   const mixed = new Set(timed.map((r) => r.timing)).size > 1;
-  const baseNote = (r: SessionResult) => resultNote(def, r.best, attempts[r.session_id]) ?? (loads[r.session_id] != null ? `@ ${loads[r.session_id]} kg` : null);
+  const baseNote = (r: SessionResult) => resultNote(def, r.best, attempts[r.session_id]) ?? (loads[r.session_id] ? `@ ${loads[r.session_id]} kg` : null);
   const note = (r: (typeof timed)[number]) =>
     [baseNote(r), mixed ? TIMING_NOTE[r.timing] : null, onPoorDay(r, poor) ? '状态差，不计入趋势' : null].filter(Boolean).join(' · ') || null;
 

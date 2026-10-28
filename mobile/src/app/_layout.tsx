@@ -69,6 +69,7 @@ export default function RootLayout() {
             <Stack.Screen name="recovery/health" options={{ title: '从苹果健康导入' }} />
             <Stack.Screen name="vbt/index" options={{ title: 'VBT 训练' }} />
             <Stack.Screen name="vbt/[lift]" options={{ title: '' }} />
+            <Stack.Screen name="vbt/track" options={{ title: '录像测速' }} />
             <Stack.Screen name="measure/capture" options={{ headerShown: false }} />
             <Stack.Screen name="measure/analyse" options={{ title: '自动分析' }} />
             <Stack.Screen name="measure/replay" options={{ title: '回放' }} />

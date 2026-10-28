@@ -3,7 +3,7 @@ import { listRecoveryDays, saveRecoveryDay } from '../recovery';
 import { addTrial, ensureSession, latestResults, listTrials, sessionCounts } from '../repo';
 import { openMemoryDb } from '../testing/memoryDb';
 import { getActivePlan, insertDeload, startPlan } from '../training';
-import { addVbtSet, latestEstimate, listVbtSets } from '../vbt';
+import { addVbtSet, latestEstimate, latestOneRm, listVbtSets } from '../vbt';
 
 async function setup() {
   const db = openMemoryDb();
@@ -65,6 +65,17 @@ describe('VBT sets', () => {
     expect(est.sessionId).toBe('today'); // 'later' has a single load
     expect(est.oneRm).toBeCloseTo(120); // v = 1.5 − 0.01 × load reaches 0.3 m/s at 120 kg
     expect(latestEstimate(sets, 'vbt_clean_hang')?.oneRm ?? null).toBeNull();
+  });
+
+  it('keep the last 1RM that passed its checks when a later session fails them', async () => {
+    const db = await setup();
+    // Line through 60, 80 and 100 kg at 1.0, 0.8 and 0.6 m/s reaches 0.3 m/s at 130 kg.
+    for (const [load, v] of [[60, 1.0], [80, 0.8], [100, 0.6]]) await addVbtSet(db, 1, 'full', 'vbt_squat', { load, v, reps: 3, source: 'manual' });
+    // A speed day with two light loads: too few to estimate from.
+    for (const [load, v] of [[60, 1.2], [80, 1.0]]) await addVbtSet(db, 1, 'speed', 'vbt_squat', { load, v, reps: 3, source: 'manual' });
+    const sets = await listVbtSets(db, 1, 'vbt_squat');
+    expect(latestEstimate(sets, 'vbt_squat')).toMatchObject({ sessionId: 'speed', oneRm: null, problem: 'few-loads' });
+    expect(latestOneRm(sets, 'vbt_squat')).toMatchObject({ sessionId: 'full', oneRm: expect.closeTo(130, 6) });
   });
 });
 
