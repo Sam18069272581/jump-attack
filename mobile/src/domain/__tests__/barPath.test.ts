@@ -151,6 +151,7 @@ describe('bar path analysis', () => {
     a.reps.forEach((r) => expect(r.flags).toEqual([]));
   });
 
+  // MPV: the concentric phase up to where the bar decelerates faster than gravity (Sánchez-Medina et al. 2010).
   it('gives the propulsive velocity of a fast rep that brakes harder than gravity', () => {
     // 55 cm in 0.4 s with a half-sine profile decelerates at up to 17 m/s² into lockout.
     const T = 0.4;
@@ -219,6 +220,8 @@ describe('bar path analysis', () => {
     expect(a.rate).toBeCloseTo(240, 0);
   });
 
+  // MIN_CONFIDENCE 0.5 (template match score) is an engineering choice, checked on the synthetic videos in
+  // tools/vbt-validation rather than taken from the literature.
   it('ignores the walk-out, re-rack wiggles and frames it was unsure of', () => {
     const phases: Phase[] = [{ dur: 0.5, to: 4 }, { dur: 0.5, to: 0 }, ...squats(1.0).slice(1), { dur: 0.6, to: 5 }];
     const samples = film(phases).map((s, i) => (i % 25 === 0 ? { ...s, y: s.y - 300, c: 0.2 } : s));
@@ -287,6 +290,8 @@ describe('rep flags', () => {
 });
 
 describe('path helpers', () => {
+  // 6 Hz, 4th-order zero-lag Butterworth, as usual for bar and marker kinematics (Winter, Biomechanics and Motor
+  // Control of Human Movement, 2009).
   it('low-passes without lag or bending a steady rise at the ends', () => {
     const xs = Array.from({ length: 61 }, (_, i) => 50 * (i / 60));
     const out = lowPass(xs, 60, 6);

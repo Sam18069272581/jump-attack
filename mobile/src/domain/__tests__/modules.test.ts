@@ -147,6 +147,10 @@ describe('VBT', () => {
 describe('1RM from velocity', () => {
   const line = (loads: number[], v0 = 1.5, slope = 0.01) => loads.map((load) => ({ load, v: v0 - slope * load }));
 
+  // Sources for ONE_RM_RULES (awaiting the athlete's confirmation under CLAUDE.md rule 2): an individual profile needs
+  // several loads spread out, ideally reaching heavy ones (Banyard et al. 2018; García-Ramos et al. 2018); 0.75 m/s
+  // MCV is about 70 % 1RM in the back squat (Sánchez-Medina et al. 2017), so lighter sets alone extrapolate too far.
+  // r² ≥ 0.9 is a plausibility check of our own, not from the literature.
   it('only extrapolates from three loads with a slow enough heaviest set', () => {
     expect(checkedOneRm(line([60, 80, 100]), 0.3)).toMatchObject({ oneRm: expect.closeTo(120, 6), problem: null });
     expect(checkedOneRm(line([60, 100]), 0.3)).toMatchObject({ oneRm: null, problem: 'few-loads' });
