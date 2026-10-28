@@ -46,7 +46,7 @@ describe('exportBackup', () => {
     const db = await used();
     await db.execAsync('CREATE TABLE future_thing (id INTEGER PRIMARY KEY, athlete_id INTEGER REFERENCES athlete(id)); INSERT INTO future_thing VALUES (1, 1);');
     const b = await exportBackup(db);
-    expect(Object.keys(b.tables).sort()).toEqual(['athlete', 'future_thing', 'plan', 'set_log', 'test_session', 'trial', 'workout']);
+    expect(Object.keys(b.tables).sort()).toEqual(['athlete', 'dunk_attempt', 'future_thing', 'plan', 'set_log', 'test_session', 'trial', 'workout']);
 
     const fresh = await setup();
     await fresh.execAsync('CREATE TABLE future_thing (id INTEGER PRIMARY KEY, athlete_id INTEGER REFERENCES athlete(id));');

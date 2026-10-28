@@ -106,6 +106,18 @@ const MIGRATIONS: string[] = [
   -- Mean velocity of a logged set's fastest rep (m/s), when the athlete measured it.
   ALTER TABLE set_log ADD COLUMN mean_velocity REAL;
   `,
+  `
+  -- Real dunk attempts: the rim height and ball used, and whether it went in, hit the rim, or fell short.
+  CREATE TABLE dunk_attempt (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    athlete_id INTEGER NOT NULL REFERENCES athlete(id) ON DELETE CASCADE,
+    at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    rim_cm REAL NOT NULL,
+    ball TEXT NOT NULL CHECK (ball IN ('basketball', 'volleyball')),
+    outcome TEXT NOT NULL CHECK (outcome IN ('made', 'rim', 'short'))
+  );
+  CREATE INDEX dunk_attempt_athlete ON dunk_attempt (athlete_id, at);
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {
