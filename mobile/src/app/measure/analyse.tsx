@@ -19,6 +19,7 @@ import { analyseCoarse, analyseFine, coarseRequest, type CoarseOptions, type Det
 import { analysisKindFor, analysisTrials } from '@/domain/analysisTrials';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
 import { analyseJumps, FLAG_TEXT, type JumpEvents, type JumpResult } from '@/domain/jumpAnalysis';
+import { nextClip, queuedCount } from '@/domain/importQueue';
 import { returnsToLogger } from '@/domain/marking';
 import { best as bestOf, getMetric, type MetricDef } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
@@ -47,7 +48,7 @@ type Phase = { name: 'setup' } | { name: 'running'; done: number; total: number;
  * frame can be nudged a frame at a time before saving.
  */
 export default function Analyse() {
-  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; box?: string; asset?: string }>();
+  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; box?: string; asset?: string; queue?: string }>();
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const def = getMetric(params.metric);
@@ -175,6 +176,9 @@ export default function Analyse() {
       await saveAnalysedTrials(db, current.id, params.session, def.code, trials);
       // A drop-jump ladder logs every box height on its own screen, two screens up.
       if (returnsToLogger(params.from)) return router.dismiss(2);
+      // More clips picked with this one: on to the next, and to the result after the last.
+      const next = nextClip(params);
+      if (next) return router.replace(next);
       router.replace({ pathname: '/measure/result', params: { metric: def.code, session: params.session, ...(params.from ? { from: params.from } : {}) } });
     } catch (e) {
       Alert.alert('保存失败', String(e));
@@ -184,7 +188,12 @@ export default function Analyse() {
 
   function markByHand() {
     // In this screen's place, so the marking screen's way back (to the logger, or on to the result) is the same as from the import.
-    router.replace({ pathname: '/measure/mark', params: { metric: params.metric, session: params.session, uri: params.uri, fps: params.fps, ...(params.from ? { from: params.from } : {}), ...(params.box ? { box: params.box } : {}), ...(params.asset ? { asset: params.asset } : {}) } });
+    router.replace({ pathname: '/measure/mark', params: { metric: params.metric, session: params.session, uri: params.uri, fps: params.fps, ...(params.from ? { from: params.from } : {}), ...(params.box ? { box: params.box } : {}), ...(params.asset ? { asset: params.asset } : {}), ...(params.queue ? { queue: params.queue } : {}) } });
+  }
+
+  function skip() {
+    const next = nextClip(params);
+    if (next) router.replace(next);
   }
 
   function replay() {
@@ -206,6 +215,7 @@ export default function Analyse() {
   }
 
   if (!def || !kind) return <Empty title="这个项目不能自动分析" />;
+  const queued = queuedCount(params.queue);
   const running = phase.name === 'running';
   const s = analysis?.summary;
 
@@ -305,6 +315,7 @@ export default function Analyse() {
       </ScrollView>
 
       <View style={styles.footer}>
+        {queued > 0 && <Text style={styles.queued}>还有 {queued} 段视频，保存后接着分析下一段</Text>}
         {phase.name === 'setup' && <Button label={clip ? '开始分析' : '正在读取视频…'} onPress={analyse} disabled={!clip || total === 0} />}
         {phase.name === 'done' && (
           <>
@@ -316,6 +327,7 @@ export default function Analyse() {
         {phase.name !== 'running' && def.capture.some((c) => c === 'flight' || c === 'contact') && (
           <Button label="手动逐帧标" variant="ghost" onPress={markByHand} />
         )}
+        {queued > 0 && phase.name !== 'running' && <Button label="跳过这段，看下一段" variant="ghost" onPress={skip} />}
       </View>
     </SafeAreaView>
   );
@@ -523,4 +535,5 @@ const styles = StyleSheet.create({
   nudgeText: { color: colors.text, fontFamily: fonts.numeric, fontSize: 18 },
   verdict: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
   footer: { paddingHorizontal: 16, paddingTop: 8, gap: 6 },
+  queued: { color: colors.textMuted, fontSize: 12, textAlign: 'center' },
 });

@@ -178,3 +178,27 @@ it('saves a drop jump with its box height and goes straight back to the box ladd
   // Each drop jump needs its own box height, so the clip can't be reused for the next one here.
   expect(texts(r.root)).not.toContain('接着标这段视频的下一跳');
 });
+
+describe('several clips picked at once', () => {
+  const queue = JSON.stringify({ screen: 'analyse', clips: [{ uri: 'file:///next.mov' }] });
+
+  it('goes on to the next clip instead of the result', async () => {
+    mockParams = { metric: 'cmj', session: 'cmj-q', uri: 'file:///first.mov', fps: '0', from: 'testday', queue };
+    const r = await render();
+    expect(texts(r.root)).toContain('还有 1 段视频');
+    await step(r.root, 120);
+    await press(byLabel(r.root, '把当前帧标为起跳帧'));
+    await step(r.root, 132);
+    await press(byLabel(r.root, '把当前帧标为落地帧'));
+    await press(pressable(r.root, '保存这一次'));
+    expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/measure/analyse', params: { metric: 'cmj', session: 'cmj-q', from: 'testday', uri: 'file:///next.mov', fps: '0' } });
+  });
+
+  it('can skip a clip', async () => {
+    mockParams = { metric: 'cmj', session: 'cmj-q2', uri: 'file:///first.mov', fps: '0', queue };
+    const r = await render();
+    await press(pressable(r.root, '跳过这段，看下一段'));
+    expect(await listTrials(mockDb, 'cmj-q2')).toHaveLength(0);
+    expect(mockRouter.replace).toHaveBeenCalledWith(expect.objectContaining({ params: expect.objectContaining({ uri: 'file:///next.mov' }) }));
+  });
+});

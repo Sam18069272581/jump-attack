@@ -46,6 +46,7 @@ export function RetestCard({ codes, diagnosis, nextStart }: { codes: string[]; d
           <Button key={code} label={`测 ${getMetric(code)?.name ?? code}`} variant="secondary" onPress={() => openTest(code)} style={styles.testButton} />
         ))}
       </View>
+      <Button label="测试日向导：按顺序测完三项跳跃" variant="secondary" onPress={() => router.push('/test-day')} />
       {diagnosis && diagnosis.missing.length > 0 && <Text style={text.caption}>诊断还缺：{diagnosis.missing.map((m) => MISSING_TEXT[m]).join('；')}</Text>}
       <Button label="看扣篮诊断" variant="ghost" onPress={() => router.push('/dunk')} />
     </Card>

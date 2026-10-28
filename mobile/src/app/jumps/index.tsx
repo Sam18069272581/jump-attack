@@ -51,6 +51,7 @@ export default function JumpTests() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Text style={styles.heading}>扣篮</Text>
+      <Row icon="plan" color={colors.accent} name="测试日 · 按顺序测完三项" hint="CMJ → 跳深 → 助跑摸高，视频可以一次多选" onPress={() => router.push('/test-day')} />
       <Row code={APPROACH_TOUCH.short} color={APPROACH_TOUCH.color} name={APPROACH_TOUCH.name} hint="录像或手填摸到的高度" tag={todo.has(APPROACH_TOUCH.code)} onPress={() => capture(APPROACH_TOUCH.code)} />
       <Row icon="jump" color={colors.accent} name="扣篮诊断" hint={gapLine(diagnosis)} onPress={() => router.push('/dunk')} />
 
@@ -79,7 +80,7 @@ export default function JumpTests() {
   );
 }
 
-function Row({ code, icon, color, name, hint, tag, onPress }: { code?: string; icon?: 'jump'; color: string; name: string; hint?: string; tag?: boolean; onPress: () => void }) {
+function Row({ code, icon, color, name, hint, tag, onPress }: { code?: string; icon?: 'jump' | 'plan'; color: string; name: string; hint?: string; tag?: boolean; onPress: () => void }) {
   return (
     <Pressable accessibilityRole="button" style={({ pressed }) => [styles.row, hint != null && styles.tallRow, pressed && { opacity: 0.75 }]} onPress={onPress}>
       {icon ? (

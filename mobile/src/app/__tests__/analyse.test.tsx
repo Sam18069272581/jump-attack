@@ -198,3 +198,31 @@ it('says why nothing was found and what to change', async () => {
   expect(mockRouter.push).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/measure/mark' }));
   expect(mockRouter.replace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/measure/mark' }));
 });
+
+describe('several clips picked at once', () => {
+  const queue = JSON.stringify({ screen: 'analyse', clips: [{ uri: 'file:///picked/IMG_0004.MOV', asset: 'A4' }] });
+
+  it('moves on to the next clip of the same test after saving', async () => {
+    await open(defaultScene('cmj', { shadow: 0.4 }), { metric: 'cmj', session: 'cmj-q', from: 'testday', asset: 'A3', queue });
+    expect(texts(r.root)).toContain('还有 1 段视频');
+    await press(r.root, '开始分析');
+    await answerGrabs();
+    await press(r.root, '保存 1 跳');
+    expect(await listTrials(mockDb, 'cmj-q')).toHaveLength(1);
+    expect(mockRouter.replace).toHaveBeenCalledWith({
+      pathname: '/measure/analyse',
+      params: { metric: 'cmj', session: 'cmj-q', from: 'testday', uri: 'file:///picked/IMG_0004.MOV', fps: '0', asset: 'A4' },
+    });
+  });
+
+  it('skips a clip with nothing to save, and hands the rest on when marking by hand', async () => {
+    await open(defaultScene('cmj', { takeoffS: 9, durationS: 2 }), { metric: 'cmj', session: 'cmj-q2', queue });
+    await press(r.root, '开始分析');
+    await answerGrabs();
+    await press(r.root, '跳过这段，看下一段');
+    expect(mockRouter.replace).toHaveBeenLastCalledWith(expect.objectContaining({ pathname: '/measure/analyse', params: expect.objectContaining({ uri: 'file:///picked/IMG_0004.MOV' }) }));
+
+    await press(r.root, '手动逐帧标');
+    expect(mockRouter.replace).toHaveBeenLastCalledWith({ pathname: '/measure/mark', params: expect.objectContaining({ uri: 'file:///picked/IMG_0003.MOV', queue }) });
+  });
+});

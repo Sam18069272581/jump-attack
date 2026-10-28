@@ -14,6 +14,7 @@ import { addTrial, ensureSession } from '@/db/repo';
 import { recalibrateTouches, touchOffsetFor } from '@/db/touch';
 import { parseNumber } from '@/domain/entry';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
+import { nextClip, queuedCount } from '@/domain/importQueue';
 import { markedTrial, markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { calibrationProblem } from '@/domain/touch';
@@ -30,7 +31,7 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
 }
 
 export default function Mark() {
-  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; reps?: string; rom?: string; box?: string; asset?: string }>();
+  const params = useLocalSearchParams<{ metric: string; session: string; uri: string; fps: string; from?: string; load?: string; reps?: string; rom?: string; box?: string; asset?: string; queue?: string }>();
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const def = getMetric(params.metric);
@@ -114,8 +115,13 @@ export default function Mark() {
 
   // A logger needs new settings (load, box) for every attempt, so only plain tests mark several jumps in one clip.
   const logger = returnsToLogger(params.from);
+  // More clips picked with this one go next; the result comes after the last.
+  const nextRoute = nextClip(params);
   const goResult = () =>
-    router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
+    nextRoute
+      ? router.replace(nextRoute)
+      : router.replace({ pathname: '/measure/result', params: { metric: params.metric, session: params.session, ...(params.from ? { from: params.from } : {}) } });
+  const queued = queuedCount(params.queue);
 
   /** Saves the marked attempt; `next` stays on this clip to mark the next jump from where this one landed. */
   async function save(next = false) {
@@ -256,13 +262,15 @@ export default function Mark() {
         )}
       </ScrollView>
       <View style={styles.footer}>
+        {queued > 0 && <Text style={styles.savedNote}>还有 {queued} 段视频，保存后接着看下一段</Text>}
         {saved > 0 && <Text style={styles.savedNote}>这段视频已存 {saved} 次，可以接着往后标下一跳</Text>}
         {saved > 0 && !result.ok ? (
-          <Button label="看结果" onPress={goResult} />
+          <Button label={nextRoute ? '看下一段' : '看结果'} onPress={goResult} />
         ) : (
           <Button label="保存这一次" onPress={() => save()} disabled={!result.ok || touchProblem != null} busy={saving} />
         )}
         {!logger && result.ok && <Button label="保存，接着标这段视频的下一跳" variant="ghost" onPress={() => save(true)} disabled={saving || touchProblem != null} />}
+        {nextRoute && saved === 0 && <Button label="跳过这段，看下一段" variant="ghost" onPress={() => router.replace(nextRoute)} disabled={saving} />}
       </View>
     </SafeAreaView>
   );
