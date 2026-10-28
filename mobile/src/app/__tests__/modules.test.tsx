@@ -130,6 +130,23 @@ describe('speed', () => {
     expect(mockRouter.dismissTo).toHaveBeenCalledWith('/speed');
   });
 
+  it('celebrates a time that beats every earlier session, and only then', async () => {
+    // sprint-a above holds the best so far, 4.36 s.
+    mockParams = { metric: 'sprint_30', session: 'sprint-c' };
+    const entry = await render(<ManualEntry />);
+    await type(entry.root, '30 m 冲刺（s）', '4.30');
+    await press(entry.root, '保存这一次');
+    const record = await render(<Result />);
+    expect(texts(record.root)).toContain('新纪录');
+    expect(texts(record.root)).toContain('快了 0.06 s');
+
+    mockParams = { metric: 'sprint_30', session: 'sprint-d' };
+    const slower = await render(<ManualEntry />);
+    await type(slower.root, '30 m 冲刺（s）', '4.40');
+    await press(slower.root, '保存这一次');
+    expect(texts((await render(<Result />)).root)).not.toContain('新纪录');
+  });
+
   it('rejects an impossible time', async () => {
     mockParams = { metric: 'sprint_10', session: 'sprint-b' };
     const entry = await render(<ManualEntry />);
