@@ -1,4 +1,5 @@
 import { mean } from './assess';
+import { daysBetween, toISODate, type ISODate } from './dates';
 import type { DayReadiness } from './readiness';
 
 /** Regulation rim height, cm. */
@@ -56,6 +57,9 @@ export type DunkInput = {
   dropJumps: { rsi: number; contactMs: number }[];
   /** FV% of each force-velocity profile. */
   fvPct: number[];
+  /** The day the diagnosis is for, and when each result was last tested (ISO date or timestamp), for the stale check. */
+  asOf?: ISODate;
+  latestAt?: Partial<Record<Testable, string>>;
 };
 
 export type DunkMetricKey = 'squat_ratio' | 'rsi' | 'contact' | 'eur' | 'fv' | 'approach_gain';
@@ -79,6 +83,17 @@ export type DunkMetric = {
 
 /** Something to measure or fill in before the diagnosis is complete, in the order to do it. */
 export type Missing = 'body_mass' | 'standing_reach' | 'squat' | 'drop_jump' | 'approach' | 'cmj';
+
+/** Results that come from a test, as opposed to the profile in 我的. */
+export type Testable = Extract<Missing, 'squat' | 'drop_jump' | 'approach' | 'cmj'>;
+
+/**
+ * A block is 4 weeks with a retest at the end, so a result older than this has missed a retest and may no longer
+ * describe the athlete.
+ */
+export const STALE_DAYS = 42;
+
+const TESTABLE_NAME: Record<Testable, string> = { squat: '深蹲 1RM', drop_jump: '跳深 RSI', approach: '助跑摸高', cmj: 'CMJ' };
 
 export const MISSING_TEXT: Record<Missing, string> = {
   body_mass: '在「我的」填体重',
@@ -114,6 +129,8 @@ export type DunkDiagnosis = {
   metrics: DunkMetric[];
   reasons: string[];
   missing: Missing[];
+  /** Results the diagnosis leans on that are older than {@link STALE_DAYS}. */
+  stale: Testable[];
 };
 
 export function dunkLine(rimCm?: number | null, clearanceCm?: number | null): number {
@@ -216,6 +233,21 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
   if (technique && gain != null) reasons.push(`助跑摸高只比原地高 ${fixed(gain, 1)} cm（精英篮球运动员平均高约 ${T.approachGainCm.good} cm）：练最后两步和摆臂。`);
   if (limiter != null && !confirmed) reasons.push('这个结论只有一次测试支持，再测一次结论一致才建议换训练块。');
 
+  // Only results that decide something now: the drop jump doesn't while strength is the limiter, the CMJ doesn't once
+  // there is an approach touch.
+  const leanedOn: Testable[] = ['squat', ...(limiter !== 'strength' ? (['drop_jump'] as const) : []), source === 'standing' ? 'cmj' : 'approach'];
+  const ageOf = (k: Testable) => {
+    const at = input.latestAt?.[k];
+    if (!at || !input.asOf) return null;
+    return daysBetween(at.length === 10 ? at : toISODate(new Date(at)), input.asOf);
+  };
+  const stale = leanedOn.filter((k) => (ageOf(k) ?? 0) > STALE_DAYS);
+  for (const k of stale) {
+    // A space only between Latin and Chinese: 「跳深 RSI 是」, 「助跑摸高是」.
+    const name = TESTABLE_NAME[k] + (/[A-Za-z0-9]$/.test(TESTABLE_NAME[k]) ? ' ' : '');
+    reasons.push(`${name}是 ${Math.floor(ageOf(k)! / 7)} 周前测的，建议复测，结论才跟得上现在的你。`);
+  }
+
   const missing: Missing[] = [];
   if (input.bodyMassKg == null) missing.push('body_mass');
   if (input.standingReachCm == null) missing.push('standing_reach');
@@ -234,6 +266,7 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
     metrics,
     reasons,
     missing,
+    stale,
   };
 }
 

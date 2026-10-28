@@ -165,3 +165,34 @@ describe('day state', () => {
     expect(worstState()).toBe('unknown');
   });
 });
+
+describe('stale results', () => {
+  // A block is 4 weeks with a retest at the end, so a result over 6 weeks old has missed a retest.
+  const asOf = '2026-10-28';
+  const input: DunkInput = {
+    ...base,
+    cmj: [45],
+    squat1rm: [130, 130],
+    dropJumps: [{ rsi: 1.8, contactMs: 200 }, { rsi: 1.8, contactMs: 200 }],
+    approachTouch: [290],
+    asOf,
+  };
+
+  it('flags the deciding results and the touch older than 6 weeks, and asks for a retest', () => {
+    const d = diagnose({ ...input, latestAt: { squat: '2026-10-20', drop_jump: '2026-09-02', approach: '2026-09-16' } });
+    // 56 days and 42 days: only the drop jump is past 42.
+    expect(d.stale).toEqual(['drop_jump']);
+    expect(d.reasons.at(-1)).toBe('跳深 RSI 是 8 周前测的，建议复测，结论才跟得上现在的你。');
+  });
+
+  it('ignores results that don’t decide anything now', () => {
+    // Strength-limited: the drop jump doesn't count. The touch comes from the approach, so the CMJ doesn't either.
+    const d = diagnose({ ...input, squat1rm: [100, 100], latestAt: { squat: '2026-10-20', drop_jump: '2026-01-01', cmj: '2026-01-01', approach: '2026-10-20' } });
+    expect(d.limiter).toBe('strength');
+    expect(d.stale).toEqual([]);
+  });
+
+  it('has nothing to compare without dates', () => {
+    expect(diagnose(input).stale).toEqual([]);
+  });
+});
