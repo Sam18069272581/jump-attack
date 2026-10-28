@@ -109,6 +109,27 @@ it('opens every module from the home screen', async () => {
   expect(texts(r.root)).not.toContain('即将上线');
 });
 
+describe('jumps', () => {
+  it('takes a typed CMJ height from another app and marks it as typed in', async () => {
+    mockParams = { metric: 'cmj', session: 'cmj-typed' };
+    const entry = await render(<ManualEntry />);
+    expect(texts(entry.root)).toContain('My Jump');
+    await type(entry.root, 'CMJ 反向跳（cm）', '41,2');
+    await press(entry.root, '保存这一次');
+
+    const result = await render(<Result />);
+    expect(texts(result.root)).toContain('41.2');
+    expect(texts(result.root)).toContain('含手动输入的成绩');
+  });
+
+  it('rejects a jump height no one can reach', async () => {
+    mockParams = { metric: 'sj', session: 'sj-typed' };
+    const entry = await render(<ManualEntry />);
+    await type(entry.root, 'SJ 蹲跳（cm）', '150');
+    expect(pressable(entry.root, '保存这一次').props.disabled).toBe(true);
+  });
+});
+
 describe('speed', () => {
   it('starts a sprint test, takes a typed time and keeps the fastest attempt', async () => {
     const list = await render(<SpeedTests />);

@@ -14,6 +14,10 @@ describe('metric registry', () => {
     expect(getMetric('nope')).toBeUndefined();
   });
 
+  it('lets CMJ and SJ be typed in, so a daily readiness test needs no video', () => {
+    for (const code of ['cmj', 'sj']) expect(getMetric(code)!.capture).toEqual(['flight', 'manual']);
+  });
+
   it('picks the best value in the metric’s direction', () => {
     expect(best(getMetric('cmj')!, [40, 42, 41])).toBe(42);
     expect(best(sprintMetric(10), [1.9, 1.85, 1.95])).toBe(1.85);
