@@ -24,8 +24,8 @@ export type BackupParse = { ok: true; backup: Backup } | { ok: false; problem: s
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const isValue = (v: unknown) => v === null || typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v));
 
-/** Reads a backup file's text, or a backup downloaded from the cloud. `latestVersion` is the schema this app migrates to. */
-export function parseBackup(text: string, latestVersion: number): BackupParse {
+/** The tables of a file in `format`, checked row by row, or what is wrong with it. */
+function readTables(text: string, format: string, latestVersion: number): { ok: true; schema_version: number; exported_at: string; tables: Backup['tables'] } | { ok: false; problem: string; format?: unknown } {
   const notOurs = { ok: false, problem: '这不是 Jump Attack 的备份文件。' } as const;
   let data: unknown;
   try {
@@ -33,7 +33,9 @@ export function parseBackup(text: string, latestVersion: number): BackupParse {
   } catch {
     return notOurs;
   }
-  if (!isObject(data) || data.format !== BACKUP_FORMAT || !Number.isInteger(data.schema_version) || !isObject(data.tables)) return notOurs;
+  if (!isObject(data)) return notOurs;
+  if (data.format !== format) return { ...notOurs, format: data.format };
+  if (!Number.isInteger(data.schema_version) || !isObject(data.tables)) return notOurs;
   // A newer app's columns are unknown here and would be silently dropped.
   if ((data.schema_version as number) > latestVersion) return { ok: false, problem: '这份备份来自更新版本的 App，先更新 App 再恢复。' };
 
@@ -41,23 +43,53 @@ export function parseBackup(text: string, latestVersion: number): BackupParse {
   for (const [name, rows] of Object.entries(tables)) {
     if (!Array.isArray(rows) || !rows.every((r) => isObject(r) && Object.values(r).every(isValue))) return { ok: false, problem: `备份文件里的 ${name} 有损坏的记录。` };
   }
-  if (!Array.isArray(tables.athlete) || tables.athlete.length === 0) return { ok: false, problem: '备份里没有测试对象。' };
-
-  return {
-    ok: true,
-    backup: {
-      format: BACKUP_FORMAT,
-      schema_version: data.schema_version as number,
-      exported_at: typeof data.exported_at === 'string' ? data.exported_at : '',
-      tables: tables as Backup['tables'],
-    },
-  };
+  return { ok: true, schema_version: data.schema_version as number, exported_at: typeof data.exported_at === 'string' ? data.exported_at : '', tables: tables as Backup['tables'] };
 }
 
-const count = (b: Backup, table: string) => b.tables[table]?.length ?? 0;
+/** Reads a backup file's text, or a backup downloaded from the cloud. `latestVersion` is the schema this app migrates to. */
+export function parseBackup(text: string, latestVersion: number): BackupParse {
+  const read = readTables(text, BACKUP_FORMAT, latestVersion);
+  if (!read.ok) {
+    // Restoring one athlete's file would replace everyone else on the phone with that one athlete.
+    return read.format === ATHLETE_FORMAT ? { ok: false, problem: '这是单个运动员的数据文件，请在「我的 → 测试对象」里用「导入运动员」。' } : { ok: false, problem: read.problem };
+  }
+  if (!Array.isArray(read.tables.athlete) || read.tables.athlete.length === 0) return { ok: false, problem: '备份里没有测试对象。' };
+  return { ok: true, backup: { format: BACKUP_FORMAT, schema_version: read.schema_version, exported_at: read.exported_at, tables: read.tables } };
+}
+
+/**
+ * One athlete and everything recorded for them, in the same shape as a backup, for handing a teammate their own data
+ * or bringing it to another phone. Imported next to the people already there, never in place of them.
+ */
+export const ATHLETE_FORMAT = 'jump-attack-athlete';
+
+export type AthleteFile = Omit<Backup, 'format'> & { format: typeof ATHLETE_FORMAT };
+
+export function parseAthleteFile(text: string, latestVersion: number): { ok: true; file: AthleteFile } | { ok: false; problem: string } {
+  const read = readTables(text, ATHLETE_FORMAT, latestVersion);
+  if (!read.ok) return { ok: false, problem: read.format === BACKUP_FORMAT ? '这是整台手机的备份文件，请用「从备份文件恢复」。' : read.problem };
+  if (read.tables.athlete?.length !== 1) return { ok: false, problem: '文件里应该正好有一个运动员。' };
+  return { ok: true, file: { format: ATHLETE_FORMAT, schema_version: read.schema_version, exported_at: read.exported_at, tables: read.tables } };
+}
+
+export function athleteFileName(name: string, now: Date): string {
+  return `jump-attack-${name.replace(/[\\/:*?"<>|]/g, '_')}-${toISODate(now)}.json`;
+}
+
+/**
+ * Session ids that name the row they belong to (db/bodyMass.ts and db/recovery.ts: day-<athlete>-…; the warm-up bar
+ * speed in workout/[date].tsx: warmup-<workout>-…), moved to the ids those rows get on import. Others stay as they are.
+ */
+export function retargetId(id: string, athletes: Map<number, number>, workouts: Map<number, number>): string {
+  const m = /^(day|warmup)-(\d+)-(.*)$/.exec(id);
+  const to = m && (m[1] === 'day' ? athletes : workouts).get(Number(m[2]));
+  return to != null ? `${m![1]}-${to}-${m![3]}` : id;
+}
+
+const count = (b: Pick<Backup, 'tables'>, table: string) => b.tables[table]?.length ?? 0;
 
 /** What a backup holds, in the terms the app uses, for the confirmation before replacing data. */
-export function describeBackup(b: Backup): string {
+export function describeBackup(b: Pick<Backup, 'tables'>): string {
   return `${count(b, 'athlete')} 个测试对象、${count(b, 'test_session')} 次测试、${count(b, 'workout')} 次训练`;
 }
 

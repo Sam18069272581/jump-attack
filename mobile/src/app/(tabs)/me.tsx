@@ -6,13 +6,17 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ui';
+import { exportAthlete, findSameAthlete, importAthlete } from '@/db/athleteData';
 import { listBodyMass, recordBodyMass } from '@/db/bodyMass';
+import { LATEST_VERSION } from '@/db/migrations';
 import { clearSavedVideoUris, createAthlete, updateAthlete, type Athlete } from '@/db/repo';
+import { describeBackup, parseAthleteFile } from '@/domain/backup';
 import { CLEARANCE_CM, dunkLine, RIM_CM } from '@/domain/dunk';
 import { toISODate } from '@/domain/dates';
 import { pushOff } from '@/domain/fvp';
 import { parseGoalDate } from '@/domain/goal';
 import { deleteSavedVideos, savedVideos } from '@/media/videos';
+import { pickBackupText, shareAthleteFile } from '@/sync/files';
 import { useAthlete } from '@/state/athlete';
 import { colors, radius, text } from '@/theme';
 
@@ -22,17 +26,7 @@ function toNumber(s: string): number | null {
 }
 
 export default function Me() {
-  const db = useSQLiteContext();
-  const { athletes, current, select, reload } = useAthlete();
-
-  function add() {
-    Alert.prompt?.('添加测试对象', '输入名字', async (value) => {
-      if (!value?.trim()) return;
-      const id = await createAthlete(db, value.trim());
-      await reload();
-      select(id);
-    });
-  }
+  const { current, reload } = useAthlete();
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -40,20 +34,7 @@ export default function Me() {
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <Text style={text.title}>我的</Text>
 
-          <View style={{ gap: 10 }}>
-            <Text style={text.section}>测试对象</Text>
-            {athletes.map((a) => {
-              const selected = a.id === current?.id;
-              return (
-                <Pressable key={a.id} accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => select(a.id)} style={[styles.athlete, selected && styles.athleteSelected]}>
-                  <Icon name="user" size={18} color={selected ? colors.accent : colors.textMuted} />
-                  <Text style={[styles.athleteName, selected && { color: colors.accent }]}>{a.name}</Text>
-                  {selected && <Icon name="check" size={18} color={colors.accent} />}
-                </Pressable>
-              );
-            })}
-            {Platform.OS !== 'android' && <Button label="添加测试对象" variant="secondary" onPress={add} />}
-          </View>
+          <Athletes />
 
           {/* Keyed so the form starts fresh when switching athlete. */}
           {current && <ProfileForm key={current.id} athlete={current} onSaved={reload} />}
@@ -75,6 +56,105 @@ export default function Me() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+/** Everyone who uses this phone: pick whose data the app shows, add people, and move one person's data in or out. */
+function Athletes() {
+  const db = useSQLiteContext();
+  const { athletes, current, select, reload } = useAthlete();
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState<'export' | 'import' | null>(null);
+
+  async function add() {
+    if (!name.trim()) return;
+    const id = await createAthlete(db, name.trim());
+    setName('');
+    await reload();
+    select(id);
+  }
+
+  async function exportFile() {
+    if (!current) return;
+    setBusy('export');
+    try {
+      await shareAthleteFile(await exportAthlete(db, current.id));
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function importFile() {
+    const picked = await pickBackupText();
+    if (picked == null) return;
+    const parsed = parseAthleteFile(picked, LATEST_VERSION);
+    if (!parsed.ok) {
+      Alert.alert('没有导入', parsed.problem);
+      return;
+    }
+    const file = parsed.file;
+    const run = async (replace?: number) => {
+      setBusy('import');
+      const r = await importAthlete(db, file, { replace });
+      setBusy(null);
+      if (!r.ok) {
+        Alert.alert('没有导入', r.problem);
+        return;
+      }
+      await reload();
+      select(r.athleteId);
+    };
+    const same = await findSameAthlete(db, file);
+    if (!same) {
+      // Added next to everyone else, so nothing on the phone changes.
+      await run();
+      return;
+    }
+    Alert.alert(`更新${same.name}的数据？`, `文件里：${describeBackup(file)}\n\n${same.name}在这台手机上的记录会换成文件里的，不能撤销；其他人的数据不受影响。`, [
+      { text: '取消', style: 'cancel' },
+      { text: '更新', style: 'destructive', onPress: () => void run(same.id) },
+    ]);
+  }
+
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={text.section}>测试对象</Text>
+      {athletes.map((a) => {
+        const selected = a.id === current?.id;
+        return (
+          <Pressable key={a.id} accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => select(a.id)} style={[styles.athlete, selected && styles.athleteSelected]}>
+            <Icon name="user" size={18} color={selected ? colors.accent : colors.textMuted} />
+            <Text style={[styles.athleteName, selected && { color: colors.accent }]}>{a.name}</Text>
+            {selected && <Icon name="check" size={18} color={colors.accent} />}
+          </Pressable>
+        );
+      })}
+      <View style={styles.addRow}>
+        <TextInput
+          accessibilityLabel="新运动员的名字"
+          value={name}
+          onChangeText={setName}
+          onSubmitEditing={add}
+          placeholder="添加一个人：输入名字"
+          placeholderTextColor={colors.textFaint}
+          returnKeyType="done"
+          style={[styles.input, { flex: 1 }]}
+        />
+        <Button label="添加" variant="secondary" onPress={add} disabled={!name.trim()} style={{ paddingHorizontal: 18 }} />
+      </View>
+      {athletes.length > 1 && (
+        <Pressable accessibilityRole="button" onPress={() => router.push('/team')} style={styles.athlete}>
+          <Icon name="trend" size={18} color={colors.textMuted} />
+          <Text style={styles.athleteName}>团队总览</Text>
+          <Icon name="chevronRight" size={18} color={colors.textMuted} />
+        </Pressable>
+      )}
+      <View style={styles.addRow}>
+        {current && <Button label={`导出 ${current.name} 的数据`} variant="ghost" onPress={exportFile} busy={busy === 'export'} style={{ flex: 1 }} />}
+        <Button label="导入运动员" variant="ghost" onPress={importFile} busy={busy === 'import'} style={{ flex: 1 }} />
+      </View>
+      <Text style={styles.footnote}>一台手机可以记好几个人，测之前先点选是谁。导出的文件只含这个人的数据，可以发给本人导入到他自己的手机；云端同步备份的是这台手机上的所有人。</Text>
+    </View>
   );
 }
 
@@ -200,6 +280,7 @@ const styles = StyleSheet.create({
   athlete: { height: 56, borderRadius: radius.row, backgroundColor: colors.surface, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'transparent' },
   athleteSelected: { borderColor: colors.accent },
   athleteName: { flex: 1, color: colors.text, fontSize: 15 },
+  addRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
   field: { gap: 6 },
   fieldLabel: { color: colors.textMuted, fontSize: 12 },
   input: { height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, fontSize: 15 },
