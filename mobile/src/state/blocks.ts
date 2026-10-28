@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { loadDiagnosis } from '@/db/dunk';
-import { listSessionResults, type Athlete } from '@/db/repo';
+import { listMetricResults, listSessionResults, type Athlete } from '@/db/repo';
 import { getWorkout, setBlocks } from '@/db/training';
 import { acceptSuggestion, advanceSuggestion, declineSuggestion, switchSuggestion, type BlockSuggestion, type TouchResult } from '@/domain/blocks';
 import { addDays, toISODate, type ISODate } from '@/domain/dates';
@@ -16,7 +16,7 @@ import type { TrainingData } from './training';
  */
 export async function touchHistory(db: SQLiteDatabase, athlete: Athlete): Promise<TouchResult[]> {
   const day = (r: { started_at: string }) => toISODate(new Date(r.started_at));
-  const approach = await listSessionResults(db, athlete.id, APPROACH_TOUCH.code);
+  const approach = await listMetricResults(db, athlete.id, APPROACH_TOUCH);
   if (approach.length) return approach.map((r) => ({ date: day(r), value: r.best }));
   const reach = athlete.standing_reach_cm;
   if (reach == null) return [];

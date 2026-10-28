@@ -8,8 +8,8 @@ import { APPROACH_TOUCH } from '@/domain/metrics';
 import { pctOf1rm } from '@/domain/vbt';
 
 import { listDropJumps, listLoadedJumps, profileSessions } from './jumps';
-import { listSessionResults, type Athlete } from './repo';
-import { latestTouchMethod, touchOffsetFor } from './touch';
+import { listMetricResults, listSessionResults, type Athlete } from './repo';
+import { latestTouchMethod, latestTouchSpread, touchOffsetFor } from './touch';
 import { current1rm, listTested1rm, listVbtSets, sessionEstimates, TESTED_MAX_AGE_DAYS, type Current1rm } from './vbt';
 
 const SQUAT_LIFT = 'vbt_squat';
@@ -63,15 +63,16 @@ function dropUndefined<T extends object>(o: T): Partial<T> {
 
 /** Every result the dunk diagnosis reads, oldest first. */
 export async function loadDunkInputs(db: SQLiteDatabase, athlete: Athlete): Promise<DunkInput> {
-  const [cmjs, sjs, touches, squat, drops, loaded, touchOffsetCm, approachMethod] = await Promise.all([
+  const [cmjs, sjs, touches, squat, drops, loaded, touchOffsetCm, approachMethod, approachSpread] = await Promise.all([
     listSessionResults(db, athlete.id, 'cmj'),
     listSessionResults(db, athlete.id, 'sj'),
-    listSessionResults(db, athlete.id, APPROACH_TOUCH.code),
+    listMetricResults(db, athlete.id, APPROACH_TOUCH),
     squat1rmHistory(db, athlete.id),
     listDropJumps(db, athlete.id),
     listLoadedJumps(db, athlete.id),
     touchOffsetFor(db, athlete.id),
     latestTouchMethod(db, athlete.id),
+    latestTouchSpread(db, athlete.id),
   ]);
 
   const ladders = new Map<string, typeof drops>();
@@ -104,6 +105,7 @@ export async function loadDunkInputs(db: SQLiteDatabase, athlete: Athlete): Prom
     fvPct,
     touchOffsetCm,
     approachMethod,
+    approachSpread,
     asOf: toISODate(new Date()),
     latestAt: dropUndefined({ squat: squat.at(-1)?.at, drop_jump: drops.at(-1)?.started_at, approach: touches.at(-1)?.started_at, cmj: cmjs.at(-1)?.started_at }),
   };

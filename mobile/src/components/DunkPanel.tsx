@@ -6,6 +6,7 @@ import { Icon } from '@/components/Icon';
 import { Card } from '@/components/ui';
 import { openDunkTest } from '@/components/dunkTests';
 import { BLOCKS, MISSING_TEXT, RIM_CM, reachRuler, type DunkDiagnosis, type DunkMetric, type Missing } from '@/domain/dunk';
+import { gapHeading, touchNote } from '@/domain/dunkSummary';
 import { colors, fonts, radius, text } from '@/theme';
 
 function statusLabel(m: DunkMetric): string {
@@ -71,7 +72,7 @@ export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagn
       ) : (
         <>
           <View style={styles.gapRow}>
-            <Text style={styles.gapLabel}>{d.gapCm > 0 ? '还差' : '够到扣篮线了'}</Text>
+            <Text style={styles.gapLabel}>{gapHeading(d).label}</Text>
             <Text style={styles.gap}>{d.gapCm > 0 ? d.gapCm.toFixed(1) : `+${(-d.gapCm).toFixed(1)}`}</Text>
             <Text style={styles.gapUnit}>cm</Text>
           </View>
@@ -98,10 +99,8 @@ export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagn
               </View>
             </View>
           )}
-          <Text style={text.muted}>
-            {d.touch.source === 'approach' ? `助跑摸高 ${d.touch.approach!.toFixed(1)} cm（最近一次）` : `原地估算 ${d.touch.standing!.toFixed(1)} cm（站立摸高 + CMJ），测一次助跑摸高更准`}
-          </Text>
-          {d.gapCm <= 0 && <Text style={text.muted}>下一步是比赛里稳定扣：累了也能摸到这个高度。</Text>}
+          <Text style={text.muted}>{touchNote(d)}</Text>
+          {gapHeading(d).hint && <Text style={text.muted}>{gapHeading(d).hint}</Text>}
         </>
       )}
       {!d.missing.includes('approach') && (

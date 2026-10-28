@@ -60,7 +60,9 @@ export default function MetricHistory() {
   const timed = results.map((r) => ({ ...r, timing: timings[r.session_id] ?? 'video' }));
   const previous = previousSameTiming(timed);
   const mixed = new Set(timed.map((r) => r.timing)).size > 1;
-  const baseNote = (r: SessionResult) => resultNote(def, r.best, attempts[r.session_id]) ?? (loads[r.session_id] ? `@ ${loads[r.session_id]} kg` : null);
+  // A test of several jumps reports the mean of the best three; older single-jump records stay, marked as such.
+  const topNote = (r: SessionResult) => (def.aggregate !== 'top3' ? null : r.trials === 1 ? '单次' : `最好 ${Math.min(3, r.trials)} 跳均值`);
+  const baseNote = (r: SessionResult) => resultNote(def, r.best, attempts[r.session_id]) ?? topNote(r) ?? (loads[r.session_id] ? `@ ${loads[r.session_id]} kg` : null);
   const note = (r: (typeof timed)[number]) =>
     [baseNote(r), mixed ? TIMING_NOTE[r.timing] : null, onPoorDay(r, poor) ? '状态差，不计入趋势' : null].filter(Boolean).join(' · ') || null;
 

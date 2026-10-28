@@ -6,6 +6,7 @@ import { openDunkTest } from '@/components/dunkTests';
 import { Icon } from '@/components/Icon';
 import { CountUp, useReduceMotion } from '@/components/motion';
 import { RIM_CM, reachRuler, type DunkDiagnosis } from '@/domain/dunk';
+import { gapHeading, touchSpread } from '@/domain/dunkSummary';
 import { reachVanes, type Vane } from '@/domain/vanes';
 import { colors, fonts, text } from '@/theme';
 
@@ -136,7 +137,7 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
 
         {known ? (
           <>
-            <Text style={[text.muted, styles.gapLabel]}>{d.gapCm! > 0 ? '离扣篮线还差' : '已过扣篮线'}</Text>
+            <Text style={[text.muted, styles.gapLabel]}>{gapHeading(d).label}</Text>
             <View style={styles.gapRow}>
               <Text style={styles.gap}>{d.gapCm! > 0 ? d.gapCm!.toFixed(1) : `+${(-d.gapCm!).toFixed(1)}`}</Text>
               <Text style={styles.gapUnit}>cm</Text>
@@ -152,7 +153,8 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
               <CountUp value={touch!} from={standingReach ?? Math.round(touch! - 60)} format={cm} style={styles.touch} />
               <Text style={text.muted}>cm</Text>
             </View>
-            {d.gapCm! <= 0 && <Text style={styles.hint}>下一步是比赛里稳定扣：累了也能摸到这个高度。</Text>}
+            {touchSpread(d) && <Text style={text.caption}>{touchSpread(d)}</Text>}
+            {gapHeading(d).hint && <Text style={styles.hint}>{gapHeading(d).hint}</Text>}
           </>
         ) : (
           <>
