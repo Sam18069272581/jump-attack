@@ -3,7 +3,7 @@ import { intervalFromMarks, sprintDistance, sprintLimits } from '../interval';
 import { markProfile } from '../marking';
 import { best, changeTone, getMetric, METRICS, sprintMetric } from '../metrics';
 import { angleBetween, asymmetry, getMobilityTest, MOBILITY_PAIRS } from '../mobility';
-import { checkedOneRm, estimate1rm, fastestPerLoad, loadAt, lvProfile, parseRepVelocities, pctOf1rm, roundLoad, velocityLoss, zoneOf } from '../vbt';
+import { checkedOneRm, estimate1rm, fastestPerLoad, loadAt, lvProfile, parseRepVelocities, pctOf1rm, roundLoad, setVelocityLoss, velocityLoss, zoneOf } from '../vbt';
 
 describe('metric registry', () => {
   it('has unique codes and finds custom sprint distances', () => {
@@ -133,6 +133,14 @@ describe('VBT', () => {
     expect(velocityLoss(0.8, 0.85)).toBe(0);
     expect(pctOf1rm(5, 7.5)).toBeCloseTo(0.8);
     expect(roundLoad(96.4)).toBe(97.5);
+  });
+
+  it('measures velocity loss within a set when its reps are known (Pareja-Blanco et al. 2017)', () => {
+    // Fastest rep 0.80, last 0.60: (0.80 − 0.60) / 0.80 = 25 %, whatever earlier sets did.
+    expect(setVelocityLoss([0.78, 0.8, 0.7, 0.6], 0.8, 0.9)).toBeCloseTo(0.25);
+    // A single speed per set: against the fastest set at the same load, as before.
+    expect(setVelocityLoss(null, 0.62, 0.8)).toBeCloseTo(0.225);
+    expect(setVelocityLoss([0.62], 0.62, 0.8)).toBeCloseTo(0.225);
   });
 });
 

@@ -45,7 +45,8 @@ export default function MetricHistory() {
   );
 
   if (!def) return <Empty title="找不到这个指标" />;
-  const note = (r: SessionResult) => resultNote(def, r.best, attempts[r.session_id]) ?? (loads[r.session_id] != null ? `@ ${loads[r.session_id]} kg` : null);
+  // A load only for sets lifted with one: a tested 1RM is itself the load.
+  const note = (r: SessionResult) => resultNote(def, r.best, attempts[r.session_id]) ?? (loads[r.session_id] ? `@ ${loads[r.session_id]} kg` : null);
 
   const latest = results.at(-1);
   const sinceFirst = results.length > 1 ? latest!.best - results[0].best : null;

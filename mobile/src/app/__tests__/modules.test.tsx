@@ -16,6 +16,7 @@ import ManualEntry from '../measure/entry';
 import Result from '../measure/result';
 import MobilityEntry from '../mobility/[test]';
 import Mobility from '../mobility/index';
+import MetricHistory from '../history/[metric]';
 import HealthImportGuide from '../recovery/health';
 import Recovery from '../recovery/index';
 import SpeedTests from '../speed/index';
@@ -228,6 +229,17 @@ describe('VBT', () => {
     expect(sets.map((s) => [s.load, s.v, s.reps])).toEqual([[60, 0.9, 3], [80, 0.7, 3], [100, 0.5, 3], [100, 0.38, 3]]);
   });
 
+  it('warns when the reps of one set slow down by 20 % or more', async () => {
+    mockParams = { lift: 'vbt_squat', session: 'vbt-loss' };
+    const r = await render(<VbtSession />);
+    await press(r.root, '照抄 VBTgo');
+    await type(r.root, '重量（kg）', '120');
+    // The only set at 120 kg, but its last rep is 25 % slower than its fastest.
+    await type(r.root, '每次的 Mean V（空格隔开）（m/s）', '0.8 0.7 0.6');
+    await press(r.root, '记一组');
+    expect(texts(r.root)).toContain('速度损失 25%，建议停组');
+  });
+
   it('suggests the squat weight in today’s workout from that 1RM', async () => {
     await addVbtSet(mockDb, 1, 'vbt-b', 'vbt_squat', { load: 60, v: 0.9, reps: 3, source: 'manual' });
     await addVbtSet(mockDb, 1, 'vbt-b', 'vbt_squat', { load: 80, v: 0.7, reps: 3, source: 'manual' });
@@ -247,6 +259,13 @@ describe('VBT', () => {
     await press(v.root, '保存');
     // The latest profile still says 120 kg.
     expect(texts(v.root)).toContain('比你实测的 150 kg 低了 20%：多半是速度测慢了。训练计划仍按实测 1RM 推荐重量。');
+    // On the local date it was saved.
+    expect(texts(v.root)).toContain(`最近一次 150 kg（${today}）`);
+    // Its history shows the 1RM alone, not a load it was lifted at.
+    mockParams = { metric: 'squat_1rm' };
+    const h = await render(<MetricHistory />);
+    expect(texts(h.root)).toContain('150');
+    expect(texts(h.root)).not.toContain('@ 0 kg');
 
     mockParams = { date: today };
     const r = await render(<WorkoutScreen />);

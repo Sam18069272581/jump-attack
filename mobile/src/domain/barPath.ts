@@ -1,10 +1,17 @@
 /**
  * Bar velocity from a tracked plate. The tracker reports where the centre of a standard 45 cm plate is in each
- * video frame; the plate's size in the picture is the scale. From that path this finds every concentric phase
- * (bar rising from its lowest point to standing still at the top) and its mean velocity: displacement ÷ time,
- * with the phase starting and ending where the bar's velocity crosses zero, not at a speed threshold, which
- * would cut off the slow start and finish and overstate the speed.
+ * video frame, stamped with the frame's real media time; the plate's size in the picture is the scale. From that
+ * path this finds every concentric phase (bar leaving the bottom until it stands still at the top again) and its
+ * mean velocity (MCV), mean propulsive velocity (MPV) and peak velocity.
+ *
+ * The heights are put on an even time grid and low-passed with a zero-lag Butterworth filter, which gives the
+ * velocity and acceleration and finds the reps. Filtering rounds off the moments the bar leaves the bottom and
+ * comes to rest at the top, though, and mean velocity is travel ÷ time, so a few frames there are worth several
+ * per cent. The two ends are therefore fitted on the unfiltered points instead: around a turnaround the bar's
+ * height goes as a power of the time since (or until) it, h = h₀ + k·|t − t₀|ⁿ, whatever the lift.
  */
+
+import { velocityLoss } from './vbt';
 
 /** Diameter of a standard (IWF/IPF) bumper or competition plate, cm. */
 export const PLATE_CM = 45;
@@ -12,16 +19,28 @@ export const PLATE_CM = 45;
 /** One tracked video frame: media time (s), plate centre in video pixels (y grows downwards), match quality 0–1. */
 export type TrackSample = { t: number; x: number; y: number; c: number };
 
+/**
+ * Why a rep's numbers shouldn't be trusted. `partial`: clearly shorter than the set's other reps. `truncated`: not
+ * seen from rest to rest (cut off by the start or end of the clip or by a tracking gap). `unsure`: too many frames
+ * inside it missing or matched poorly. `drift`: the plate moved sideways too far for a real bar path, so likely a
+ * mis-track or a moving camera.
+ */
+export type RepFlag = 'partial' | 'truncated' | 'unsure' | 'drift';
+
 export type Rep = {
   /** Real time of the concentric start and end, s. */
   start: number;
   end: number;
   /** Mean concentric velocity, m/s. */
   mv: number;
+  /** Mean propulsive velocity: over the concentric phase up to where the bar starts braking harder than gravity, m/s. */
+  mpv: number;
   /** Peak velocity, m/s. */
   pv: number;
   /** Vertical bar travel, cm. */
   romCm: number;
+  /** Empty for a rep the numbers can be trusted for. */
+  flags: RepFlag[];
 };
 
 /** A smoothed point of the bar path in real time: height above the first frame (cm, up is positive) and velocity (m/s). */
@@ -30,7 +49,7 @@ export type PathPoint = { t: number; h: number; v: number };
 export type BarAnalysis = {
   path: PathPoint[];
   reps: Rep[];
-  /** Frames per real second the path was sampled at. */
+  /** Frames per real second the video was sampled at. */
   rate: number;
   /** Share of frames the tracker was unsure of (match below `MIN_CONFIDENCE`). */
   unsure: number;
@@ -38,73 +57,48 @@ export type BarAnalysis = {
 
 /** Match quality below which a frame is dropped as a likely mis-track. */
 export const MIN_CONFIDENCE = 0.5;
-/** Half-width of the smoothing window, s. Wide enough to quiet pixel jitter, narrow enough to keep the turnarounds. */
-const SMOOTH_S = 0.04;
-/** Tracking jitter (cm, robust standard deviation) the default window is sized for. */
-const JITTER_CM = 0.1;
+/** Low-pass cutoff, Hz: bar movement in lifting stays well under it, pixel jitter mostly lies above. */
+const CUTOFF_HZ = 6;
+/** The cutoff is lowered to this share of the frame rate for slow video, where 6 Hz would be close to Nyquist. */
+const MAX_CUTOFF_SHARE = 0.2;
+/**
+ * A run of missing or unsure frames longer than this many frame intervals, and than `GAP_S`, splits the path. A
+ * phone that drops to half its frame rate in dim light and skips a frame on top leaves 67 ms gaps in a 60 fps video,
+ * which interpolate fine: mean velocity is travel ÷ time, and both ends are timed on the frames around them.
+ */
+const GAP_FRAMES = 3.5;
+const GAP_S = 0.1;
+/** Standard gravity, m/s². The bar braking harder than this is no longer being pushed. */
+const G = 9.81;
 /** A reversal of the bar has to move at least this far (cm) to count, so jitter at the top isn't a new rep. */
 const REVERSAL_CM = 3;
 /** A concentric phase shorter than this (cm) is a walk-out or re-rack, not a rep. */
 const MIN_ROM_CM = 10;
 /** And shorter than this share of the set's longest rise. */
 const MIN_ROM_SHARE = 0.6;
-/** How long (s) the bar must stay put for a velocity zero-crossing to count as the end (or start) of a rep… */
-const SETTLE_S = 0.1;
-/** …moving no more than this (cm), or three times the tracking jitter if that's larger. */
-const SETTLE_CM = 0.3;
-/** The ends of a rep are refined from the points within this share of the rise from the bottom or top… */
-const ENDS_SHARE = 0.25;
-/** …and may move by at most this much (s) from where the smoothed velocity put them. */
-const MAX_SHIFT_S = 0.25;
-/** How long after a rep (s) the bar's resting height at the top is read over. */
-const PLATEAU_S = 0.2;
-/** Velocity (m/s) treated as standing still at the ends of a rep. */
-const STILL = 0;
+/** A dip in a rise smaller than this share of the climb before it is the bar sinking at a sticking point, not a new rep. */
+const SINK_SHARE = 0.25;
+/** The ends of a rep are fitted on the points within this share of the rise from the bottom or top… */
+const ENDS_SHARE = 0.2;
+/** …and within this long (s) on either side of the turnaround… */
+const ENDS_S = 0.4;
+/** …and may move by at most this much (s) from where the filtered velocity put them. */
+const MAX_SHIFT_S = 0.15;
+/** Speed (m/s) below which the bar is all but still: where it crosses it is a steadier guess at the turn than 0. */
+const STILL = 0.03;
+/** Exponents tried for the shape of each end: 2 is constant acceleration, higher is force still building up. */
+const END_POWERS = [1.5, 2, 2.5, 3];
+/** A rep shorter than this share of the set's typical (median) rep is flagged as partial. */
+const PARTIAL_SHARE = 0.8;
+/** A rep with fewer than this share of the frames the video has in it tracked confidently is flagged as unsure. */
+const MIN_TRACKED_SHARE = 0.8;
+/** Sideways travel (cm) during a rep beyond which it's flagged as drift, or this share of its rise if that's larger. */
+const DRIFT_CM = 12;
+const DRIFT_SHARE = 0.3;
 
 /** Pixels per cm from the plate's diameter in pixels. */
 export function pxPerCm(plateDiameterPx: number): number {
   return plateDiameterPx / PLATE_CM;
-}
-
-/**
- * Height and velocity at each sample from a local quadratic fit over ±`SMOOTH_S` (tricube weights). Works on
- * uneven timestamps, so dropped frames don't skew the velocity.
- */
-export function smoothPath(points: { t: number; h: number }[], half = SMOOTH_S): PathPoint[] {
-  return points.map((p, i) => {
-    let lo = i;
-    let hi = i;
-    while (lo > 0 && p.t - points[lo - 1].t <= half) lo--;
-    while (hi < points.length - 1 && points[hi + 1].t - p.t <= half) hi++;
-    // Keep at least two neighbours a side where there are any, so a sparse stretch still gets a slope.
-    lo = Math.max(0, Math.min(lo, i - 2));
-    hi = Math.min(points.length - 1, Math.max(hi, i + 2));
-    const span = Math.max(half, p.t - points[lo].t, points[hi].t - p.t) * 1.0001;
-    // Weighted least squares for h ≈ a + b·d + c·d², d = t − p.t.
-    let s0 = 0, s1 = 0, s2 = 0, s3 = 0, s4 = 0, y0 = 0, y1 = 0, y2 = 0;
-    for (let j = lo; j <= hi; j++) {
-      const d = points[j].t - p.t;
-      const w = (1 - Math.abs(d / span) ** 3) ** 3;
-      const h = points[j].h;
-      s0 += w;
-      s1 += w * d;
-      s2 += w * d * d;
-      s3 += w * d * d * d;
-      s4 += w * d * d * d * d;
-      y0 += w * h;
-      y1 += w * h * d;
-      y2 += w * h * d * d;
-    }
-    const n = hi - lo + 1;
-    if (n < 3) return { t: p.t, h: p.h, v: 0 };
-    // Solve the 3×3 normal equations by Cramer's rule.
-    const det = s0 * (s2 * s4 - s3 * s3) - s1 * (s1 * s4 - s3 * s2) + s2 * (s1 * s3 - s2 * s2);
-    if (Math.abs(det) < 1e-18) return { t: p.t, h: p.h, v: 0 };
-    const a = (y0 * (s2 * s4 - s3 * s3) - s1 * (y1 * s4 - s3 * y2) + s2 * (y1 * s3 - s2 * y2)) / det;
-    const b = (s0 * (y1 * s4 - y2 * s3) - y0 * (s1 * s4 - s3 * s2) + s2 * (s1 * y2 - y1 * s2)) / det;
-    // h is in cm, so the slope is cm/s.
-    return { t: p.t, h: a, v: b / 100 };
-  });
 }
 
 function median(xs: number[]): number {
@@ -112,6 +106,41 @@ function median(xs: number[]): number {
   const s = [...xs].sort((a, b) => a - b);
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/**
+ * Zero-lag 4th-order Butterworth low-pass of evenly spaced values: a 2nd-order section run forwards, then
+ * backwards. The ends are padded with the signal reflected about its end point, which keeps its level and slope.
+ */
+export function lowPass(xs: number[], rate: number, cutoff: number): number[] {
+  const n = xs.length;
+  if (n < 3) return [...xs];
+  // Two passes cut deeper than one; widen the section so that the pair is still 3 dB down at `cutoff` (Winter).
+  const k = Math.tan((Math.PI * cutoff) / 0.802 / rate);
+  const norm = 1 / (1 + Math.SQRT2 * k + k * k);
+  const b0 = k * k * norm;
+  const a1 = 2 * (k * k - 1) * norm;
+  const a2 = (1 - Math.SQRT2 * k + k * k) * norm;
+  const pad = Math.min(n - 1, Math.ceil((1.5 * rate) / cutoff));
+  const ext: number[] = [];
+  for (let i = pad; i > 0; i--) ext.push(2 * xs[0] - xs[i]);
+  ext.push(...xs);
+  for (let i = n - 2; i >= n - 1 - pad; i--) ext.push(2 * xs[n - 1] - xs[i]);
+  // Start each pass settled on its first value, so it doesn't ring in from zero.
+  const pass = (ys: number[]) => {
+    const out = new Array<number>(ys.length);
+    let x1 = ys[0], x2 = ys[0], y1 = ys[0], y2 = ys[0];
+    for (let i = 0; i < ys.length; i++) {
+      const y = b0 * (ys[i] + 2 * x1 + x2) - a1 * y1 - a2 * y2;
+      x2 = x1;
+      x1 = ys[i];
+      y2 = y1;
+      y1 = y;
+      out[i] = y;
+    }
+    return out;
+  };
+  return pass(pass(ext).reverse()).reverse().slice(pad, pad + n);
 }
 
 /** Alternating lowest and highest points of the path, ignoring wiggles smaller than `REVERSAL_CM`. */
@@ -151,73 +180,207 @@ export function turningPoints(path: PathPoint[], reversal = REVERSAL_CM): { i: n
   return out;
 }
 
-/** Linear interpolation of the time where velocity crosses `level` between samples `a` and `b`. */
-function crossing(path: PathPoint[], a: number, b: number, level: number): { t: number; h: number } {
-  const p = path[a];
-  const q = path[b];
-  const f = q.v === p.v ? 0 : Math.min(1, Math.max(0, (level - p.v) / (q.v - p.v)));
+/** A tracked frame in real time: height and sideways position (cm) and which unbroken stretch of tracking it's in. */
+type Raw = { t: number; h: number; x: number; seg: number };
+/** A point of the filtered path, on the even time grid. */
+type Point = PathPoint & { a: number; x: number; seg: number };
+
+/** Linear interpolation of where `key` crosses `level` between points `i` and `i + 1`. */
+function crossing(path: Point[], i: number, key: 'v' | 'a', level: number): { t: number; h: number } {
+  const p = path[i];
+  const q = path[i + 1];
+  const f = q[key] === p[key] ? 0 : Math.min(1, Math.max(0, (level - p[key]) / (q[key] - p[key])));
   return { t: p.t + f * (q.t - p.t), h: p.h + f * (q.h - p.h) };
 }
 
-/** Where a least-squares line through (t, s) crosses s = 0, or null without three points or a slope. */
-function zeroOfLine(pts: { t: number; s: number }[]): number | null {
-  if (pts.length < 3) return null;
-  const mt = pts.reduce((a, p) => a + p.t, 0) / pts.length;
-  const ms = pts.reduce((a, p) => a + p.s, 0) / pts.length;
-  const sxx = pts.reduce((a, p) => a + (p.t - mt) ** 2, 0);
-  const sxy = pts.reduce((a, p) => a + (p.t - mt) * (p.s - ms), 0);
-  if (sxx === 0 || sxy === 0) return null;
-  return mt - ms / (sxy / sxx);
+/** The filtered path on an even grid at `rate`, each unbroken stretch of frames filtered on its own. */
+function filterPath(raw: Raw[], rate: number): Point[] {
+  const cutoff = Math.min(CUTOFF_HZ, MAX_CUTOFF_SHARE * rate);
+  const dt = 1 / rate;
+  const out: Point[] = [];
+  for (let from = 0; from < raw.length; ) {
+    let to = from;
+    while (to + 1 < raw.length && raw[to + 1].seg === raw[from].seg) to++;
+    const seg = raw.slice(from, to + 1);
+    from = to + 1;
+    if (seg.length < 4) continue;
+    // Resample linearly onto the grid, so a frame shown late or twice doesn't skew the filter.
+    const ts: number[] = [];
+    const hs: number[] = [];
+    const xs: number[] = [];
+    for (let k = 0, j = 0; seg[0].t + k * dt <= seg[seg.length - 1].t + 1e-9; k++) {
+      const t = seg[0].t + k * dt;
+      while (j + 2 < seg.length && seg[j + 1].t <= t) j++;
+      const p = seg[j];
+      const q = seg[j + 1];
+      const f = Math.min(1, Math.max(0, (t - p.t) / (q.t - p.t)));
+      ts.push(t);
+      hs.push(p.h + f * (q.h - p.h));
+      xs.push(p.x + f * (q.x - p.x));
+    }
+    if (ts.length < 4) continue;
+    const h = lowPass(hs, rate, cutoff);
+    const x = lowPass(xs, rate, cutoff);
+    const last = h.length - 1;
+    for (let i = 0; i <= last; i++) {
+      const a = Math.max(1, Math.min(last - 1, i));
+      // h is in cm: velocity and acceleration in m/s and m/s².
+      const v = (h[Math.min(last, i + 1)] - h[Math.max(0, i - 1)]) / ((Math.min(last, i + 1) - Math.max(0, i - 1)) * dt) / 100;
+      const acc = (h[a + 1] - 2 * h[a] + h[a - 1]) / (dt * dt) / 100;
+      out.push({ t: ts[i], h: h[i], v, a: acc, x: x[i], seg: seg[0].seg });
+    }
+  }
+  return out;
 }
 
 /**
- * The concentric phase between a low and the next high: from the last moment the bar was still near the
- * bottom to the first moment it is still near the top, both found where velocity crosses `STILL`.
+ * When, between `from` and `to`, the bar turned around, fitted on the tracked frames in [lo, hi] as
+ * h = h₀ + kL·(t₀ − t)ⁿ before t₀ and h₀ + kR·(t − t₀)ⁿ after it. `dir` is 1 for the bottom (the bar rises after t₀
+ * and was level or falling before it) and −1 for the top. Null without enough frames on both sides.
  */
-function measureRep(raw: { t: number; h: number }[], path: PathPoint[], low: number, high: number, tol: number): Rep | null {
-  let peak = low;
-  for (let i = low; i <= high; i++) if (path[i].v > path[peak].v) peak = i;
+function fitTurn(raw: Raw[], from: number, to: number, lo: number, hi: number, dir: 1 | -1): { t: number; h: number } | null {
+  const pts = raw.filter((p) => p.t >= lo && p.t <= hi);
+  // Seconds are scaled to tenths so the powers stay well conditioned.
+  const sse = (t0: number, n: number) => {
+    let before = 0;
+    let after = 0;
+    let s0 = 0, sl = 0, sr = 0, sll = 0, srr = 0, sh = 0, slh = 0, srh = 0, shh = 0;
+    for (const p of pts) {
+      const l = p.t < t0 ? ((t0 - p.t) * 10) ** n : 0;
+      const r = p.t > t0 ? ((p.t - t0) * 10) ** n : 0;
+      if (p.t < t0) before++;
+      if (p.t > t0) after++;
+      s0++;
+      sl += l;
+      sr += r;
+      sll += l * l;
+      srr += r * r;
+      sh += p.h;
+      slh += l * p.h;
+      srh += r * p.h;
+      shh += p.h * p.h;
+    }
+    if (before < 2 || after < 2) return null;
+    // Least squares for (h₀, kL, kR); the two power terms never overlap, so the normal equations stay small.
+    const solve = (useL: boolean) => {
+      const dl = useL ? sll - (sl * sl) / s0 : 1;
+      const dr = srr - (sr * sr) / s0;
+      const cross = useL ? -(sl * sr) / s0 : 0;
+      const yl = useL ? slh - (sl * sh) / s0 : 0;
+      const yr = srh - (sr * sh) / s0;
+      const det = dl * dr - cross * cross;
+      if (Math.abs(det) < 1e-12) return null;
+      const kl = (yl * dr - yr * cross) / det;
+      const kr = (yr * dl - yl * cross) / det;
+      const h0 = (sh - kl * sl - kr * sr) / s0;
+      const err = shh - 2 * (h0 * sh + kl * slh + kr * srh) + h0 * h0 * s0 + kl * kl * sll + kr * kr * srr + 2 * (h0 * kl * sl + h0 * kr * sr);
+      return { h0, kl, kr, err };
+    };
+    let fit = solve(true);
+    // The side before the turn may only be level or coming the other way; otherwise fit it as level.
+    if (fit && dir * fit.kl < 0) fit = solve(false);
+    if (!fit || dir * fit.kr <= 0) return null;
+    return fit;
+  };
+  // Near a turnaround the bar moves less than the jitter for a while, so several turn times fit about as well.
+  // Average them, weighted by how likely each one makes the frames given the jitter, rather than trusting the
+  // single best one, which jumps about with the noise.
+  const fits: { t: number; h: number; err: number }[] = [];
+  for (const n of END_POWERS) {
+    for (let t0 = from; t0 <= to; t0 += 0.001) {
+      const f = sse(t0, n);
+      if (f) fits.push({ t: t0, h: f.h0, err: f.err });
+    }
+  }
+  if (fits.length === 0) return null;
+  const least = Math.min(...fits.map((f) => f.err));
+  const variance = Math.max(least / Math.max(1, pts.length - 4), 1e-6);
+  let w = 0;
+  let t = 0;
+  let h = 0;
+  for (const f of fits) {
+    const wi = Math.exp(-(f.err - least) / (2 * variance));
+    w += wi;
+    t += wi * f.t;
+    h += wi * f.h;
+  }
+  return { t: t / w, h: h / w };
+}
+
+/**
+ * The concentric phase between a low and the next high: from where the bar last had no upward velocity near the
+ * bottom to where it first has none again near the top, both refined by `fitTurn`. Null if it can't be timed.
+ */
+function measureRep(raw: Raw[], frames: number[], path: Point[], low: number, high: number): Rep | null {
   const bottom = path[low].h;
   const rise = path[high].h - bottom;
-  // Really still, not a jitter dip: the bar gets no further than `tol` past this point over the next (dir 1) or
-  // previous (dir −1) `SETTLE_S`.
-  const settled = (i: number, dir: 1 | -1) => {
-    for (let j = i + dir; j >= 0 && j < path.length && Math.abs(path[j].t - path[i].t) <= SETTLE_S; j += dir) {
-      if (dir * (path[j].h - path[i].h) > tol) return false;
-    }
-    return true;
-  };
-  // Start: walk back from the peak to where it was still, within the bottom tenth of the rise.
-  let s = peak;
-  while (s > low && !(path[s - 1].v <= STILL && path[s - 1].h <= bottom + 0.1 * rise && settled(s - 1, -1))) s--;
-  // End: walk on from the peak to where it is still again, within the top tenth.
-  let e = peak;
-  while (e < high && !(path[e + 1].v <= STILL && path[e + 1].h >= bottom + 0.9 * rise && settled(e + 1, 1))) e++;
-  let start = s > low ? crossing(path, s - 1, s, STILL) : { t: path[low].t, h: path[low].h };
-  let end = e < high ? crossing(path, e, e + 1, STILL) : { t: path[high].t, h: path[high].h };
+  let a = low;
+  while (a < high && path[a].h < bottom + 0.1 * rise) a++;
+  let b = a;
+  while (b < high && path[b].h < bottom + 0.9 * rise) b++;
+  // Walk out from the bottom and top tenths to where the filtered velocity is zero, staying in one tracked stretch.
+  // Running into the edge of the stretch instead means the bar was never seen standing still there.
+  const inA = (i: number) => i >= 0 && path[i].seg === path[a].seg;
+  const inB = (i: number) => i < path.length && path[i].seg === path[b].seg;
+  let s = a;
+  while (inA(s - 1) && path[s - 1].v > 0) s--;
+  let e = b;
+  while (inB(e + 1) && path[e].v > 0) e++;
+  // Seen from rest to rest: one unbroken stretch, with frames before the start and after the end.
+  const truncated = path[a].seg !== path[b].seg || !inA(s - 2) || path[e].v > 0 || !inB(e + 1);
+  let start = inA(s - 1) ? crossing(path, s - 1, 'v', 0) : { t: path[s].t, h: path[s].h };
+  let end = path[e].v <= 0 && e > b ? crossing(path, e - 1, 'v', 0) : { t: path[e].t, h: path[e].h };
+  const seg = path[a].seg;
 
-  // Smoothing rounds off the corners where the bar leaves the bottom and arrives at the top, which shifts both
-  // crossings, more so the fewer frames per second there are. Near each end the bar moves under roughly constant
-  // acceleration, h = level ± k·(t − t₀)², so √|h − level| is a straight line in t that reaches zero at t₀. Fit
-  // that line to the unsmoothed points just inside each end, clear of the jitter, and take where it hits zero.
-  const tPeak = path[peak].t;
-  const near = (lo: number, hi: number, f: (h: number) => number) =>
-    raw.flatMap((p) => {
-      if (p.t < lo || p.t > hi) return [];
-      const d = f(p.h);
-      return d >= tol && d <= ENDS_SHARE * rise ? [{ t: p.t, s: Math.sqrt(d) }] : [];
-    });
-  const plateau = raw.filter((p) => p.t >= end.t && p.t <= end.t + PLATEAU_S).map((p) => p.h);
-  const top = plateau.length >= 3 ? median(plateau) : path[high].h;
-  const tEnd = zeroOfLine(near(tPeak, end.t, (h) => top - h));
-  if (tEnd != null && tEnd > tPeak && Math.abs(tEnd - end.t) <= MAX_SHIFT_S) end = { t: tEnd, h: top };
-  const tStart = zeroOfLine(near(start.t, tPeak, (h) => h - bottom));
-  if (tStart != null && tStart < tPeak && Math.abs(tStart - start.t) <= MAX_SHIFT_S) start = { t: tStart, h: bottom };
+  if (!truncated) {
+    // Where the filtered velocity crosses zero wanders with the jitter while the bar is nearly still, and can
+    // land well off the real turn; where it crosses a slow speed doesn't. The turn is looked for around both.
+    let sv = a;
+    while (sv > s && path[sv - 1].v > STILL) sv--;
+    let ev = b;
+    while (ev < e && path[ev].v > STILL) ev++;
+    const slowStart = sv > s ? crossing(path, sv - 1, 'v', STILL).t : start.t;
+    const slowEnd = ev < e && ev > b ? crossing(path, ev - 1, 'v', STILL).t : end.t;
+    // The frames each end is fitted on: those within ENDS_SHARE of the rise from it and ENDS_S of either guess.
+    const band = ENDS_SHARE * rise;
+    const edge = (from: number, step: 1 | -1, past: (h: number) => boolean) => {
+      let i = from;
+      while (i + step >= 0 && i + step < path.length && path[i + step].seg === seg && !past(path[i + step].h) && Math.abs(path[i + step].t - path[from].t) <= ENDS_S) i += step;
+      return path[i].t;
+    };
+    const segRaw = raw.filter((p) => p.seg === seg);
+    const fs = fitTurn(segRaw, Math.min(start.t, slowStart) - MAX_SHIFT_S, slowStart + MAX_SHIFT_S, edge(s, -1, (h) => h > start.h + band), edge(sv, 1, (h) => h > start.h + band), 1);
+    const fe = fitTurn(segRaw, slowEnd - MAX_SHIFT_S, Math.max(end.t, slowEnd) + MAX_SHIFT_S, edge(ev, -1, (h) => h < end.h - band), edge(e, 1, (h) => h < end.h - band), -1);
+    if (fs && fs.t < path[b].t) start = fs;
+    if (fe && fe.t > path[a].t) end = fe;
+  }
 
-  const dt = end.t - start.t;
+  const time = end.t - start.t;
   const romCm = end.h - start.h;
-  if (dt <= 0 || romCm <= 0) return null;
-  return { start: start.t, end: end.t, mv: romCm / 100 / dt, pv: path[peak].v, romCm };
+  if (time <= 0 || romCm <= 0) return null;
+  const mv = romCm / 100 / time;
+  let peak = s;
+  for (let i = s; i <= e; i++) if (path[i].v > path[peak].v) peak = i;
+  // Propulsive phase: until the bar first brakes harder than gravity after its fastest point.
+  let mpv = mv;
+  for (let i = peak; i < e; i++) {
+    if (path[i + 1].a < -G) {
+      const p = crossing(path, i, 'a', -G);
+      if (p.t > start.t && p.t < end.t) mpv = (p.h - start.h) / 100 / (p.t - start.t);
+      break;
+    }
+  }
+
+  const flags: RepFlag[] = [];
+  if (truncated) flags.push('truncated');
+  // Frames the camera never recorded are not the tracker's doing; a long run of them already split the path.
+  const tracked = raw.filter((p) => p.t >= start.t && p.t <= end.t).length;
+  const shown = frames.filter((t) => t >= start.t && t <= end.t).length;
+  // Allow a frame for where the ends fall between frames.
+  if (tracked < MIN_TRACKED_SHARE * shown - 1) flags.push('unsure');
+  const xs = path.slice(s, e + 1).map((p) => p.x);
+  if (Math.max(...xs) - Math.min(...xs) > Math.max(DRIFT_CM, DRIFT_SHARE * romCm)) flags.push('drift');
+  return { start: start.t, end: end.t, mv, mpv, pv: path[peak].v, romCm, flags };
 }
 
 /**
@@ -226,29 +389,53 @@ function measureRep(raw: { t: number; h: number }[], path: PathPoint[], low: num
  */
 export function analyseBarPath(samples: TrackSample[], plateDiameterPx: number, timeScale = 1): BarAnalysis {
   const scale = pxPerCm(plateDiameterPx);
-  const good = samples.filter((s) => s.c >= MIN_CONFIDENCE);
-  const unsure = samples.length ? 1 - good.length / samples.length : 0;
-  if (good.length < 5 || scale <= 0) return { path: [], reps: [], rate: 0, unsure };
-  const y0 = good[0].y;
-  const raw = good.map((s) => ({ t: s.t * timeScale, h: (y0 - s.y) / scale }));
-  // Shakier tracking gets a wider window, up to 2.5×, so jitter at the top doesn't end a rep early.
-  const first = smoothPath(raw);
-  const jitter = median(raw.map((p, i) => Math.abs(p.h - first[i].h))) * 1.4826;
-  const path = jitter > JITTER_CM ? smoothPath(raw, SMOOTH_S * Math.min(2.5, jitter / JITTER_CM)) : first;
-  const span = raw[raw.length - 1].t - raw[0].t;
-  const rate = span > 0 ? (raw.length - 1) / span : 0;
+  // Real time, oldest first, one sample per frame.
+  const frames = [...samples].sort((p, q) => p.t - q.t).filter((s, i, all) => i === 0 || s.t > all[i - 1].t);
+  const unsure = frames.length ? frames.filter((s) => s.c < MIN_CONFIDENCE).length / frames.length : 0;
+  // The frame rate from every frame, not just the confident ones: a dropped frame isn't a slower camera.
+  const step = median(frames.slice(1).map((s, i) => (s.t - frames[i].t) * timeScale));
+  const rate = step > 0 ? 1 / step : 0;
+  const good = frames.filter((s) => s.c >= MIN_CONFIDENCE);
+  if (good.length < 5 || scale <= 0 || rate <= 0) return { path: [], reps: [], rate, unsure };
+
+  const { x: x0, y: y0 } = good[0];
+  const raw: Raw[] = [];
+  for (const s of good) {
+    const t = s.t * timeScale;
+    const prev = raw[raw.length - 1];
+    const seg = !prev ? 0 : t - prev.t > Math.max(GAP_FRAMES * step, GAP_S) ? prev.seg + 1 : prev.seg;
+    raw.push({ t, h: (y0 - s.y) / scale, x: (s.x - x0) / scale, seg });
+  }
+  const grid = filterPath(raw, rate);
+  const path = grid.map(({ t, h, v }) => ({ t, h, v }));
 
   const turns = turningPoints(path);
-  const rises: { low: number; high: number; rise: number }[] = [];
+  let rises: { low: number; high: number }[] = [];
   for (let k = 0; k + 1 < turns.length; k++) {
-    if (turns[k].kind !== 'low' || turns[k + 1].kind !== 'high') continue;
-    const low = turns[k].i;
-    const high = turns[k + 1].i;
-    rises.push({ low, high, rise: path[high].h - path[low].h });
+    if (turns[k].kind === 'low' && turns[k + 1].kind === 'high') rises.push({ low: turns[k].i, high: turns[k + 1].i });
   }
-  const longest = Math.max(0, ...rises.map((r) => r.rise));
+  // A bar that sinks a little at a sticking point and then grinds on to lockout is still one rep.
+  const height = (i: number) => grid[i].h;
+  rises = rises.reduce<typeof rises>((out, r) => {
+    const prev = out[out.length - 1];
+    const climb = prev ? height(prev.high) - height(prev.low) : 0;
+    if (prev && height(prev.high) - height(r.low) < SINK_SHARE * climb && height(r.low) > height(prev.low) && height(r.high) > height(prev.high)) {
+      prev.high = r.high;
+      return out;
+    }
+    return [...out, { ...r }];
+  }, []);
+  const longest = Math.max(0, ...rises.map((r) => height(r.high) - height(r.low)));
   const minRise = Math.max(MIN_ROM_CM, MIN_ROM_SHARE * longest);
-  const reps = rises.filter((r) => r.rise >= minRise).flatMap((r) => measureRep(raw, path, r.low, r.high, Math.max(SETTLE_CM, 3 * jitter)) ?? []);
+  const shown = frames.map((s) => s.t * timeScale);
+  const reps = rises.filter((r) => height(r.high) - height(r.low) >= minRise).flatMap((r) => measureRep(raw, shown, grid, r.low, r.high) ?? []);
+
+  // Partial: clearly shorter than the set's typical rep, judged on the reps that were seen whole.
+  const whole = reps.filter((r) => !r.flags.includes('truncated')).map((r) => r.romCm);
+  if (whole.length >= 2) {
+    const typical = median(whole);
+    for (const r of reps) if (r.romCm < PARTIAL_SHARE * typical) r.flags.push('partial');
+  }
   return { path, reps, rate, unsure };
 }
 
@@ -262,10 +449,61 @@ export function summariseReps(mvs: number[]): SetSummary | null {
   return { best, first: mvs[0], last, loss: best > 0 ? Math.max(0, (best - last) / best) : 0, count: mvs.length };
 }
 
+/** Why a flagged rep was left out, as the athlete reads it under the rep. */
+export const REP_FLAG_REASONS: Record<RepFlag, string> = {
+  truncated: '没拍全：视频在这一次中间开始或结束，或者中途跟丢了杠铃片',
+  partial: '行程明显比这组其他几次短，可能没蹲到底或没站直',
+  unsure: '这一次有不少画面没认准杠铃片',
+  drift: '杠铃片左右移动太多，可能跟错了东西或手机动了',
+};
+
+/** A rep counts towards the logged set unless something about it was flagged; the athlete can still put it back. */
+export function countsByDefault(r: Rep): boolean {
+  return r.flags.length === 0;
+}
+
+export type TrackedSet = {
+  kept: Rep[];
+  summary: SetSummary;
+  /** The fastest kept rep: its velocity is the one logged. */
+  best: Rep;
+  /** Highest peak velocity of the kept reps, m/s. */
+  peakV: number;
+  /** Each rep's velocity loss against the fastest kept rep, in the order given; 0 for a rep left out. */
+  loss: number[];
+};
+
+/** What gets logged for a tracked set from the reps the athlete kept (`included[i]` for `reps[i]`). Null if none. */
+export function trackedSet(reps: Rep[], included: boolean[]): TrackedSet | null {
+  const kept = reps.filter((_, i) => included[i]);
+  const summary = summariseReps(kept.map((r) => r.mv));
+  if (!summary) return null;
+  const best = kept.reduce((a, b) => (b.mv > a.mv ? b : a));
+  return {
+    kept,
+    summary,
+    best,
+    peakV: Math.max(...kept.map((r) => r.pv)),
+    loss: reps.map((r, i) => (included[i] ? velocityLoss(summary.best, r.mv) : 0)),
+  };
+}
+
+/** Highest file frame rate that can be an iPhone slow-motion export (those are saved at 30 fps). */
+const SLOW_MO_FILE_FPS = 30;
+
+/**
+ * Real seconds per media second. Only a file of at most 30 fps can be slow motion (`captureFps` as chosen by the
+ * athlete); for anything else, or a file whose rate is unknown, media time is real time, whatever was chosen.
+ */
+export function trackTimeScale(fileFps: number | null, captureFps: number | null): number {
+  if (!fileFps || fileFps > SLOW_MO_FILE_FPS || !captureFps || captureFps <= fileFps) return 1;
+  return fileFps / captureFps;
+}
+
 /** Problems with a tracked set worth telling the athlete before they trust the numbers. */
 export function trackWarnings(a: BarAnalysis): string[] {
   const out: string[] = [];
-  if (a.reps.length === 0) out.push('没有找到完整的一次向心：确认杠铃片整个行程都在画面里，圈套准杠铃片后重新分析。');
+  if (a.reps.every((r) => r.flags.length > 0)) out.push('没有找到完整的一次向心：确认杠铃片整个行程都在画面里，圈套准杠铃片后重新分析。');
   if (a.unsure > 0.15) out.push(`有 ${Math.round(a.unsure * 100)}% 的画面没认准杠铃片，结果可能不准：光线暗、杠铃片被挡住或手机晃动都会这样。`);
   if (a.rate > 0 && a.rate < 50) out.push(`视频只有约 ${Math.round(a.rate)} fps，速度误差会变大。相机设置里把录制视频改成 60 fps 再拍。`);
   return out;

@@ -5,7 +5,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useVideoPlayer } from 'expo-video';
 import { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
@@ -13,9 +13,8 @@ import { BarPathChart } from '@/components/BarPathChart';
 import { LIFT_SETUP } from '@/components/capture/guides';
 import { Button, Card, Chip, Empty } from '@/components/ui';
 import { addVbtSet } from '@/db/vbt';
-import { analyseBarPath, summariseReps, trackWarnings, type BarAnalysis, type TrackSample } from '@/domain/barPath';
+import { analyseBarPath, countsByDefault, REP_FLAG_REASONS, trackedSet, trackTimeScale, trackWarnings, type BarAnalysis, type TrackSample } from '@/domain/barPath';
 import { roundTo } from '@/domain/interval';
-import { markingRates } from '@/domain/jump';
 import { getCategory, getMetric } from '@/domain/metrics';
 import { STOP_LOSS, zoneOf } from '@/domain/vbt';
 import { barTrackerHtml } from '@/media/barTrackerHtml';
@@ -29,7 +28,7 @@ type Web = WebView<Record<never, never>>;
 /** Slow-motion capture rates offered when the file itself is a normal-speed export. */
 const SLOW_MO = [120, 240];
 
-type Tracked = { samples: TrackSample[]; diameter: number; lost: boolean };
+type Tracked = { samples: TrackSample[]; diameter: number; lost: boolean; analysis: BarAnalysis };
 type Message =
   | { type: 'ready'; duration: number; width: number; height: number }
   | { type: 'progress'; done: number }
@@ -46,6 +45,7 @@ export default function TrackSet() {
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const web = useRef<Web>(null);
+  const { height: screenH } = useWindowDimensions();
 
   const [uri, setUri] = useState<string | null>(null);
   const [detectedFps, setDetectedFps] = useState<number | null>(null);
@@ -54,6 +54,7 @@ export default function TrackSet() {
   const [progress, setProgress] = useState<number | null>(null);
   const [tracked, setTracked] = useState<Tracked | null>(null);
   const [slowMo, setSlowMo] = useState<number | null>(null);
+  /** Whether each rep of the analysis counts; reset whenever the reps are found again. */
   const [included, setIncluded] = useState<boolean[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -86,12 +87,22 @@ export default function TrackSet() {
 
   if (!def) return <Empty title="找不到这个动作" />;
 
-  const { file: fileFps, capture: fps } = markingRates({ detected: detectedFps || null, chosen: slowMo, reported: 0 });
-  const timeScale = detectedFps ? fileFps / fps : 1;
-  const analysis: BarAnalysis | null = tracked ? analyseBarPath(tracked.samples, tracked.diameter, timeScale) : null;
-  const kept = analysis ? analysis.reps.filter((_, i) => included[i] ?? true) : [];
-  const summary = summariseReps(kept.map((r) => r.mv));
+  const analysis = tracked?.analysis ?? null;
+  const set = analysis ? trackedSet(analysis.reps, included) : null;
+  const summary = set?.summary ?? null;
   const warnings = analysis ? [...(tracked?.lost ? ['中途跟丢了杠铃片，后面的次数没有算进去。'] : []), ...trackWarnings(analysis)] : [];
+
+  /** Finds the reps again (on new tracking, or a new slow-motion rate) and starts from the default choice of reps. */
+  function analyse(t: Omit<Tracked, 'analysis'>, chosen: number | null) {
+    const a = analyseBarPath(t.samples, t.diameter, trackTimeScale(detectedFps, chosen));
+    setTracked({ ...t, analysis: a });
+    setIncluded(a.reps.map(countsByDefault));
+  }
+
+  function chooseSlowMo(f: number | null) {
+    setSlowMo(f);
+    if (tracked) analyse(tracked, f);
+  }
 
   async function pick() {
     const res = await ImagePicker.launchImageLibraryAsync({
@@ -101,7 +112,10 @@ export default function TrackSet() {
     if (res.canceled || !res.assets[0]) return;
     setStage(null);
     setReady(false);
+    setProgress(null);
     setTracked(null);
+    setIncluded([]);
+    setSlowMo(null);
     setDetectedFps(null);
     setUri(res.assets[0].uri);
   }
@@ -121,8 +135,7 @@ export default function TrackSet() {
     } else if (m.type === 'done') {
       setProgress(null);
       const samples = m.samples.map(([t, x, y, c]) => ({ t, x, y, c }));
-      setTracked({ samples, diameter: m.diameter, lost: m.lost });
-      setIncluded([]);
+      analyse({ samples, diameter: m.diameter, lost: m.lost }, slowMo);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   }
@@ -130,23 +143,30 @@ export default function TrackSet() {
   function start() {
     setTracked(null);
     setProgress(0);
-    web.current?.injectJavaScript('window.startTrack(); true;');
+    web.current?.injectJavaScript(`window.startTrack(${detectedFps ?? 0}); true;`);
+  }
+
+  /** The page died (iOS reclaims a WebView's memory) or failed to load: start it over. */
+  function restartPage() {
+    setProgress(null);
+    setReady(false);
+    web.current?.reload();
   }
 
   async function save() {
-    if (!current || !summary || !analysis) return;
+    if (!current || !set) return;
     setSaving(true);
     try {
       const videoUri = uri ? await persistVideo(uri, session).catch(() => undefined) : undefined;
-      const best = kept.reduce((a, b) => (b.mv > a.mv ? b : a));
       await addVbtSet(db, current.id, session, lift, {
         load: Number(load) || 0,
-        v: roundTo(summary.best, 2),
-        reps: kept.length,
+        v: roundTo(set.summary.best, 2),
+        reps: set.kept.length,
         source: 'video',
-        romCm: roundTo(best.romCm, 1),
-        repV: kept.map((r) => roundTo(r.mv, 3)),
-        peakV: roundTo(Math.max(...kept.map((r) => r.pv)), 2),
+        romCm: roundTo(set.best.romCm, 1),
+        repV: set.kept.map((r) => roundTo(r.mv, 3)),
+        repMpv: set.kept.map((r) => roundTo(r.mpv, 3)),
+        peakV: roundTo(set.peakV, 2),
         videoUri,
       });
       router.back();
@@ -185,11 +205,12 @@ export default function TrackSet() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <Stack.Screen options={{ title }} />
-      <ScrollView contentContainerStyle={styles.content}>
+      {/* Still while the circle is dragged onto the plate, or the drag scrolls the screen instead. */}
+      <ScrollView contentContainerStyle={styles.content} scrollEnabled={analysis != null} alwaysBounceVertical={false}>
         <Text style={text.muted}>
           {analysis ? '可以点某一次把它去掉（比如起杠、放杠被误算）。' : '拖动圆圈套住外侧那片 45 cm 杠铃片，双指缩放，松手后会自动贴合杠铃片边缘。下面的进度条拖到这一组开始前。'}
         </Text>
-        <View style={styles.web}>
+        <View style={[styles.web, { height: Math.min(460, Math.round(screenH * 0.55)) }]}>
           {stage ? (
             <WebView<Record<never, never>>
               ref={web}
@@ -204,6 +225,8 @@ export default function TrackSet() {
               scrollEnabled={false}
               bounces={false}
               onMessage={onMessage}
+              onContentProcessDidTerminate={restartPage}
+              onError={restartPage}
               style={{ backgroundColor: colors.bg }}
             />
           ) : (
@@ -215,9 +238,9 @@ export default function TrackSet() {
           <View style={styles.fpsRow}>
             <Text style={text.caption}>视频 {detectedFps} fps，用慢动作拍的选拍摄帧率</Text>
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              <Chip label="普通" selected={slowMo == null} onPress={() => setSlowMo(null)} color={COLOR} />
+              <Chip label="普通" selected={slowMo == null} onPress={() => chooseSlowMo(null)} color={COLOR} />
               {SLOW_MO.map((f) => (
-                <Chip key={f} label={String(f)} selected={slowMo === f} onPress={() => setSlowMo(f)} color={COLOR} />
+                <Chip key={f} label={String(f)} selected={slowMo === f} onPress={() => chooseSlowMo(f)} color={COLOR} />
               ))}
             </View>
           </View>
@@ -227,18 +250,18 @@ export default function TrackSet() {
 
         {analysis && (
           <Card style={{ gap: 10 }}>
-            <BarPathChart path={analysis.path} reps={analysis.reps} included={analysis.reps.map((_, i) => included[i] ?? true)} color={COLOR} />
+            <BarPathChart path={analysis.path} reps={analysis.reps} included={analysis.reps.map((_, i) => included[i] ?? false)} color={COLOR} />
             {analysis.reps.map((r, i) => {
-              const on = included[i] ?? true;
-              const n = analysis.reps.slice(0, i + 1).filter((_, j) => included[j] ?? true).length;
-              const loss = summary && on ? (summary.best - r.mv) / summary.best : 0;
+              const on = included[i] ?? false;
+              const n = analysis.reps.slice(0, i + 1).filter((_, j) => included[j]).length;
+              const loss = set?.loss[i] ?? 0;
               return (
                 <Pressable
                   key={i}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: on }}
                   accessibilityLabel={`第 ${i + 1} 次，${r.mv.toFixed(2)} 米每秒`}
-                  onPress={() => setIncluded((inc) => analysis.reps.map((_, j) => (j === i ? !on : (inc[j] ?? true))))}
+                  onPress={() => setIncluded((inc) => analysis.reps.map((_, j) => (j === i ? !on : (inc[j] ?? false))))}
                   style={[styles.rep, !on && { opacity: 0.4 }]}
                 >
                   <Text style={styles.repNo}>{on ? n : '–'}</Text>
@@ -247,8 +270,13 @@ export default function TrackSet() {
                       {r.mv.toFixed(2)} <Text style={styles.unit}>m/s</Text>
                     </Text>
                     <Text style={text.caption}>
-                      峰值 {r.pv.toFixed(2)} m/s · 行程 {Math.round(r.romCm)} cm · {Math.round((r.end - r.start) * 1000)} ms
+                      MPV {r.mpv.toFixed(2)} · 峰值 {r.pv.toFixed(2)} m/s · 行程 {Math.round(r.romCm)} cm · {Math.round((r.end - r.start) * 1000)} ms
                     </Text>
+                    {r.flags.map((f) => (
+                      <Text key={f} style={[text.caption, { color: colors.warn }]}>
+                        {REP_FLAG_REASONS[f]}
+                      </Text>
+                    ))}
                   </View>
                   <Text style={[text.caption, loss >= STOP_LOSS && { color: colors.warn }]}>{on ? (loss >= STOP_LOSS ? `慢了 ${Math.round(loss * 100)}%` : zoneOf(r.mv).name) : '已去掉'}</Text>
                 </Pressable>
@@ -276,7 +304,7 @@ export default function TrackSet() {
         ) : (
           <>
             <Button label={busy ? '分析中…' : '开始分析'} onPress={start} disabled={!ready || busy} busy={busy} />
-            <Button label="换一个视频" variant="ghost" onPress={pick} disabled={busy} />
+            <Button label="换一个视频" variant="ghost" onPress={pick} />
           </>
         )}
       </View>

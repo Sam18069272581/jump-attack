@@ -3,9 +3,9 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { listRecoveryDays } from '@/db/recovery';
 import { listSessionResults } from '@/db/repo';
 import { getActivePlan, listWorkouts, startWorkout, type Plan, type Workout } from '@/db/training';
-import { latestEstimate, listTested1rm, listVbtSets, TESTED_MAX_AGE_DAYS } from '@/db/vbt';
+import { current1rm } from '@/db/vbt';
 import { type Readiness } from '@/domain/assess';
-import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
+import { toISODate, type ISODate } from '@/domain/dates';
 import { adjustForReadiness, planDay, type Adjustment, type PlannedSession, type PlanTemplate, type Prescription, type SessionTemplate } from '@/domain/plan';
 import { dayReadiness, fatigueStreak, type DayReadiness } from '@/domain/readiness';
 import { getTemplate } from '@/domain/templates';
@@ -34,9 +34,6 @@ export async function loadReadiness(db: SQLiteDatabase, athleteId: number, date:
   return { ...dayReadiness(cmj, recovery, date), streak: fatigueStreak(cmj, recovery, date) };
 }
 
-/** A 1RM estimate older than this no longer says much about today's strength. */
-export const ESTIMATE_MAX_AGE_DAYS = 28;
-
 export type LoadSuggestion = { kg: number; oneRm: number; lift: string; source: 'tested' | 'velocity' };
 
 /**
@@ -46,20 +43,12 @@ export type LoadSuggestion = { kg: number; oneRm: number; lift: string; source: 
  */
 export async function loadSuggestions(db: SQLiteDatabase, athleteId: number, items: Prescription[], date: ISODate): Promise<Record<string, LoadSuggestion>> {
   const out: Record<string, LoadSuggestion> = {};
-  const age = (at: string) => daysBetween(toISODate(new Date(at)), date);
   for (const p of items) {
     const lift = LOAD_FROM_VBT[p.code];
     if (!lift) continue;
-    const tested = lift === 'vbt_squat' ? (await listTested1rm(db, athleteId)).at(-1) : undefined;
-    const est = latestEstimate(await listVbtSets(db, athleteId, lift), lift);
-    const pick =
-      tested && age(tested.at) <= TESTED_MAX_AGE_DAYS
-        ? { oneRm: tested.kg, source: 'tested' as const }
-        : est?.oneRm && age(est.startedAt) <= ESTIMATE_MAX_AGE_DAYS
-          ? { oneRm: est.oneRm, source: 'velocity' as const }
-          : null;
+    const pick = await current1rm(db, athleteId, lift, date);
     if (!pick) continue;
-    out[p.code] = { kg: roundLoad(pick.oneRm * pctOf1rm(p.reps, p.rpe ?? 8)), lift, ...pick };
+    out[p.code] = { kg: roundLoad(pick.kg * pctOf1rm(p.reps, p.rpe ?? 8)), lift, oneRm: pick.kg, source: pick.source };
   }
   return out;
 }

@@ -23,6 +23,15 @@ export function velocityLoss(fastest: number, v: number): number {
   return fastest > 0 ? Math.max(0, (fastest - v) / fastest) : 0;
 }
 
+/**
+ * Velocity loss of a set: from its fastest rep to its last when the reps are known, which is how a velocity-loss
+ * cut-off is defined (Pareja-Blanco et al. 2017: stopping each set at 20 % loss kept most of the strength gain at
+ * far less fatigue). With one speed for the set, against `fastestAtLoad`, the fastest set at that load so far.
+ */
+export function setVelocityLoss(repV: number[] | null, v: number, fastestAtLoad: number): number {
+  return repV && repV.length > 1 ? velocityLoss(Math.max(...repV), repV[repV.length - 1]) : velocityLoss(fastestAtLoad, v);
+}
+
 /** Mean velocity at a true 1RM; only the back squat has a well-established value. */
 export const MVT: Record<string, number> = { vbt_squat: 0.3 };
 

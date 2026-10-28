@@ -1,5 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
 import { ladder } from '@/domain/dropJump';
 import { diagnose, type DunkDiagnosis, type DunkInput } from '@/domain/dunk';
 import { fvProfile, pushOff } from '@/domain/fvp';
@@ -8,7 +9,7 @@ import { pctOf1rm } from '@/domain/vbt';
 
 import { listDropJumps, listLoadedJumps, profileSessions } from './jumps';
 import { listSessionResults, type Athlete } from './repo';
-import { listTested1rm, listVbtSets, sessionEstimates } from './vbt';
+import { current1rm, listTested1rm, listVbtSets, sessionEstimates, TESTED_MAX_AGE_DAYS, type Current1rm } from './vbt';
 
 const SQUAT_LIFT = 'vbt_squat';
 /** The plan exercise whose logged sets (load, reps, RPE) also give a squat 1RM. */
@@ -16,15 +17,23 @@ const SQUAT_EXERCISE = 'back_squat';
 /** Reps to failure (reps + reps in reserve) past which Epley no longer gives a fair 1RM. */
 const MAX_REPS_FOR_1RM = 10;
 
+/** The back-squat 1RM to train from on `date`; see `current1rm`. */
+export function currentSquat1rm(db: SQLiteDatabase, athleteId: number, date: ISODate): Promise<Current1rm | null> {
+  return current1rm(db, athleteId, SQUAT_LIFT, date);
+}
+
 /**
- * Back-squat 1RMs, oldest first: every one actually lifted, one per VBT session whose load-velocity profile passed
- * its checks, and one per workout from its heaviest logged set, so athletes who don't track bar speed still get a
- * strength ratio.
+ * Back-squat 1RMs on local dates, oldest first: every one actually lifted, one per VBT session whose load-velocity
+ * profile passed its checks, and one per workout from its heaviest logged set, so athletes who don't track bar speed
+ * still get a strength ratio. A lifted 1RM stands for `TESTED_MAX_AGE_DAYS`: estimates from that time are left out,
+ * so the latest entry is the lifted one, as it is for the training plan.
  */
 export async function squat1rmHistory(db: SQLiteDatabase, athleteId: number): Promise<{ at: string; kg: number }[]> {
-  const out: { at: string; kg: number }[] = await listTested1rm(db, athleteId);
+  const local = (at: string) => toISODate(new Date(at));
+  const tested = (await listTested1rm(db, athleteId)).map((t) => ({ at: local(t.at), kg: t.kg }));
+  const out: { at: string; kg: number }[] = [];
   for (const e of sessionEstimates(await listVbtSets(db, athleteId, SQUAT_LIFT), SQUAT_LIFT)) {
-    if (e.oneRm != null) out.push({ at: e.startedAt, kg: e.oneRm });
+    if (e.oneRm != null) out.push({ at: local(e.startedAt), kg: e.oneRm });
   }
 
   const logged = await db.getAllAsync<{ date: string; load_kg: number; reps: number; rpe: number }>(
@@ -42,7 +51,9 @@ export async function squat1rmHistory(db: SQLiteDatabase, athleteId: number): Pr
   }
   for (const [at, kg] of byDate) out.push({ at, kg });
 
-  return out.sort((a, b) => a.at.localeCompare(b.at));
+  const standing = (at: string) => tested.some((t) => t.at <= at && daysBetween(t.at, at) <= TESTED_MAX_AGE_DAYS);
+  // Estimates first on a day with a lifted 1RM, so the lifted one comes last.
+  return [...out.filter((e) => !standing(e.at)), ...tested].sort((a, b) => a.at.localeCompare(b.at) || Number(tested.includes(a)) - Number(tested.includes(b)));
 }
 
 /** Every result the dunk diagnosis reads, oldest first. */

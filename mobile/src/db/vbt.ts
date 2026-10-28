@@ -1,12 +1,13 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
+import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
 import { SQUAT_1RM } from '@/domain/metrics';
 import { checkedOneRm, MVT, type LvProfile, type OneRmProblem } from '@/domain/vbt';
 
 import { addTrial, ensureSession, listSessionResults } from './repo';
 
 /** One logged VBT set: a trial whose value is the mean velocity. */
-export type VbtSet = { id: number; session_id: string; started_at: string; load: number; v: number; reps: number | null };
+export type VbtSet = { id: number; session_id: string; started_at: string; load: number; v: number; reps: number | null; repV: number[] | null };
 
 export async function listVbtSets(db: SQLiteDatabase, athleteId: number, code: string): Promise<VbtSet[]> {
   const rows = await db.getAllAsync<{ id: number; session_id: string; started_at: string; load_kg: number | null; value: number; detail: string | null }>(
@@ -17,14 +18,18 @@ export async function listVbtSets(db: SQLiteDatabase, athleteId: number, code: s
     athleteId,
     code,
   );
-  return rows.map((r) => ({
-    id: r.id,
-    session_id: r.session_id,
-    started_at: r.started_at,
-    load: r.load_kg ?? 0,
-    v: r.value,
-    reps: (r.detail ? (JSON.parse(r.detail).reps as number | undefined) : undefined) ?? null,
-  }));
+  return rows.map((r) => {
+    const detail = r.detail ? (JSON.parse(r.detail) as { reps?: number; rep_v?: number[] }) : {};
+    return {
+      id: r.id,
+      session_id: r.session_id,
+      started_at: r.started_at,
+      load: r.load_kg ?? 0,
+      v: r.value,
+      reps: detail.reps ?? null,
+      repV: detail.rep_v ?? null,
+    };
+  });
 }
 
 export async function addVbtSet(
@@ -41,6 +46,8 @@ export async function addVbtSet(
     romCm?: number;
     /** Mean velocity of every rep, in order, when known. */
     repV?: number[];
+    /** Mean propulsive velocity of every rep, in order, when known. */
+    repMpv?: number[];
     peakV?: number;
     videoUri?: string;
   },
@@ -56,6 +63,7 @@ export async function addVbtSet(
       ...(set.reps != null ? { reps: set.reps } : {}),
       ...(set.romCm != null ? { rom_cm: set.romCm } : {}),
       ...(set.repV ? { rep_v: set.repV } : {}),
+      ...(set.repMpv ? { rep_mpv: set.repMpv } : {}),
       ...(set.peakV != null ? { peak_v: set.peakV } : {}),
     },
   });
@@ -86,6 +94,11 @@ export function latestEstimate(sets: VbtSet[], code: string): LiftEstimate | nul
   return sessionEstimates(sets, code).at(-1) ?? null;
 }
 
+/** The most recent 1RM estimate that passed its checks, which may be from an earlier session than `latestEstimate`. */
+export function latestOneRm(sets: VbtSet[], code: string): LiftEstimate | null {
+  return sessionEstimates(sets, code).filter((e) => e.oneRm != null).at(-1) ?? null;
+}
+
 export type Tested1rm = { kg: number; at: string };
 
 /** Back-squat 1RMs the athlete actually lifted, oldest first. */
@@ -100,6 +113,23 @@ export async function addTested1rm(db: SQLiteDatabase, athleteId: number, sessio
 
 /** A lifted 1RM older than this no longer stands in for today's strength. */
 export const TESTED_MAX_AGE_DAYS = 120;
+/** Nor does a velocity estimate older than this. */
+export const ESTIMATE_MAX_AGE_DAYS = 28;
+
+export type Current1rm = { kg: number; source: 'tested' | 'velocity'; at: ISODate };
+
+/**
+ * The 1RM of a VBT lift to train from on `date`: one actually lifted (squat only) within `TESTED_MAX_AGE_DAYS`,
+ * otherwise the latest velocity estimate that passed its checks within `ESTIMATE_MAX_AGE_DAYS`, otherwise none.
+ */
+export async function current1rm(db: SQLiteDatabase, athleteId: number, lift: string, date: ISODate): Promise<Current1rm | null> {
+  const local = (at: string) => toISODate(new Date(at));
+  const tested = lift === 'vbt_squat' ? (await listTested1rm(db, athleteId)).at(-1) : undefined;
+  if (tested && daysBetween(local(tested.at), date) <= TESTED_MAX_AGE_DAYS) return { kg: tested.kg, source: 'tested', at: local(tested.at) };
+  const est = latestOneRm(await listVbtSets(db, athleteId, lift), lift);
+  if (est?.oneRm != null && daysBetween(local(est.startedAt), date) <= ESTIMATE_MAX_AGE_DAYS) return { kg: est.oneRm, source: 'velocity', at: local(est.startedAt) };
+  return null;
+}
 
 /** Load of each session's fastest set, keyed by session. */
 export function fastestSetLoads(sets: VbtSet[]): Record<string, number> {

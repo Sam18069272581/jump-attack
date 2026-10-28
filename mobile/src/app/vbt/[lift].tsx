@@ -11,7 +11,8 @@ import { deleteTrial, newSessionId } from '@/db/repo';
 import { addTested1rm, addVbtSet, latestEstimate, listTested1rm, listVbtSets, type Tested1rm, type VbtSet } from '@/db/vbt';
 import { manualProblem, parseNumber } from '@/domain/entry';
 import { getCategory, getMetric, SQUAT_1RM } from '@/domain/metrics';
-import { loadAt, ONE_RM_PROBLEMS, parseRepVelocities, roundLoad, STOP_LOSS, velocityLoss, ZONES, zoneOf } from '@/domain/vbt';
+import { toISODate } from '@/domain/dates';
+import { loadAt, ONE_RM_PROBLEMS, parseRepVelocities, roundLoad, setVelocityLoss, STOP_LOSS, ZONES, zoneOf } from '@/domain/vbt';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
@@ -105,7 +106,7 @@ export default function VbtSession() {
     ]);
   }
 
-  // Fastest set at each load so far, the reference for velocity loss.
+  // Fastest set at each load so far, the reference for velocity loss of a set logged with one speed.
   const fastest = (upTo: number, kgAt: number) => Math.max(...sets.slice(0, upTo + 1).filter((s) => s.load === kgAt).map((s) => s.v));
 
   return (
@@ -115,7 +116,7 @@ export default function VbtSession() {
         {sets.length > 0 ? (
           <Card style={{ gap: 4 }}>
             {sets.map((s, i) => {
-              const loss = velocityLoss(fastest(i, s.load), s.v);
+              const loss = setVelocityLoss(s.repV, s.v, fastest(i, s.load));
               const stop = loss >= STOP_LOSS;
               return (
                 <View key={s.id} style={styles.setRow}>
@@ -167,7 +168,7 @@ export default function VbtSession() {
           <Card style={{ gap: 10 }}>
             <Text style={text.section}>实测 1RM</Text>
             <Text style={text.caption}>
-              {tested ? `最近一次 ${tested.kg} kg（${tested.at.slice(0, 10)}）。` : ''}填你真正举起过的最大重量，训练计划和扣篮诊断会优先用它，不用速度估算。
+              {tested ? `最近一次 ${tested.kg} kg（${toISODate(new Date(tested.at))}）。` : ''}填你真正举起过的最大重量，训练计划和扣篮诊断会优先用它，不用速度估算。
             </Text>
             <View style={styles.videoRow}>
               <Field label="深蹲 1RM" unit="kg" value={testedKg} onChange={setTestedKg} />
