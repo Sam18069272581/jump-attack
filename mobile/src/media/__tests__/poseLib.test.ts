@@ -4,6 +4,8 @@ import { classicBundle, clearPoseRuns, downloadPoseLib, MEDIAPIPE_VERSION, POSE_
 // server that answers each download with the bytes `mockServed` says (the release's own size unless a test cuts it).
 const mockServed = new Map<string, number>();
 const mockDownloads: string[] = [];
+/** A write to a file ending so fails part-way, as iOS's in-place write does when the phone is full. */
+const mockCut: { name: string | null } = { name: null };
 jest.mock('expo-file-system', () => {
   const files = new Map<string, string>();
   const sizes = new Map<string, number>();
@@ -30,6 +32,11 @@ jest.mock('expo-file-system', () => {
     // As in SDK 58: the write is done on another thread, and the promise settles once it is.
     async write(content: string) {
       await new Promise((r) => setTimeout(r, 1));
+      if (mockCut.name && this.uri.endsWith(mockCut.name)) {
+        files.set(this.uri, content.slice(0, Math.floor(content.length / 3)));
+        sizes.delete(this.uri);
+        throw new Error(`The file “${this.name}” couldn’t be saved because there isn’t enough space.`);
+      }
       files.set(this.uri, content);
       sizes.delete(this.uri);
     }
@@ -90,6 +97,7 @@ const { __files: files } = jest.requireMock('expo-file-system') as { __files: Ma
 beforeEach(() => {
   files.clear();
   mockDownloads.length = 0;
+  mockCut.name = null;
   for (const f of POSE_FILES) mockServed.set(f.url, f.bytes);
 });
 
@@ -150,6 +158,16 @@ describe('downloadPoseLib', () => {
     mockDownloads.length = 0;
     await downloadPoseLib();
     expect(mockDownloads).toEqual([POSE_FILES[3].url]);
+  });
+
+  it('leaves no cut classic script behind when writing it fails, so the download is offered again', async () => {
+    mockCut.name = '/vision.js';
+    await expect(downloadPoseLib()).rejects.toThrow('enough space');
+    expect(files.has(`file:///app/Documents/pose/lib/${MEDIAPIPE_VERSION}/vision.js`)).toBe(false);
+    expect(poseLibReady()).toBe(false);
+    mockCut.name = null;
+    await downloadPoseLib();
+    expect(poseLibReady()).toBe(true);
   });
 });
 

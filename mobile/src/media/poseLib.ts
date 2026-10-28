@@ -89,7 +89,14 @@ export async function downloadPoseLib(onProgress?: (share: number) => void, sign
     }
     done += f.bytes;
   }
-  await new File(dir, CLASSIC_BUNDLE).write(classicBundle(await new File(dir, 'vision_bundle.mjs').text()));
+  // Written in place: one that fails part-way (the phone full) would leave a cut script that passes for whole.
+  const vision = new File(dir, CLASSIC_BUNDLE);
+  try {
+    await vision.write(classicBundle(await new File(dir, 'vision_bundle.mjs').text()));
+  } catch (e) {
+    if (vision.exists) vision.delete();
+    throw e;
+  }
   onProgress?.(1);
 }
 
