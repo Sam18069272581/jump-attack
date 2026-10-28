@@ -27,6 +27,8 @@ jest.mock('expo', () => {
     useEventListener: (_player: unknown, event: string, cb: (e: unknown) => void) =>
       React.useEffect(() => {
         if (event === 'sourceLoad') cb({ duration: 2, availableVideoTracks: [{ frameRate: 240 }] });
+        // Once, like a real load event.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
       }, []),
   };
 });
