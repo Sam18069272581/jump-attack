@@ -1,4 +1,4 @@
-import { flightTimeFromFrames, frameCount, frameToSeconds, heightFromFlightTime, markingRates, measureFromMarks, rsi } from '../jump';
+import { fileFpsFromFrameTimes, flightTimeFromFrames, frameCount, frameToSeconds, heightFromFlightTime, markingRates, measureFromMarks, rsi } from '../jump';
 
 describe('heightFromFlightTime', () => {
   it('uses h = g·t²/8', () => {
@@ -85,5 +85,30 @@ describe('markingRates', () => {
     expect(markingRates({ detected: null, chosen: 120, reported: 240 })).toEqual({ file: 120, capture: 120 });
     expect(markingRates({ detected: null, chosen: null, reported: 120 })).toEqual({ file: 120, capture: 120 });
     expect(markingRates({ detected: null, chosen: null, reported: 0 })).toEqual({ file: 240, capture: 240 });
+  });
+});
+
+describe('fileFpsFromFrameTimes', () => {
+  // Presentation times of consecutive decoded frames, as a browser reports them while the clip plays.
+  const times = (fps: number, n: number, skip: number[] = []) => Array.from({ length: n }, (_, i) => i / fps).filter((_, i) => !skip.includes(i));
+
+  it('reads the frame rate from the gap between frames', () => {
+    expect(fileFpsFromFrameTimes(times(30, 12))).toBe(30);
+    expect(fileFpsFromFrameTimes(times(240, 12))).toBe(240);
+  });
+
+  it('ignores frames the browser skipped', () => {
+    // Frames 3, 4 and 8 never reached the screen; the remaining gaps are still 1/240 s.
+    expect(fileFpsFromFrameTimes(times(240, 14, [3, 4, 8]))).toBe(240);
+  });
+
+  it('snaps NTSC rates to the nominal one', () => {
+    expect(fileFpsFromFrameTimes(times(29.97, 12))).toBe(30);
+    expect(fileFpsFromFrameTimes(times(59.94, 12))).toBe(60);
+  });
+
+  it('needs a handful of frames', () => {
+    expect(fileFpsFromFrameTimes([0, 1 / 30, 2 / 30])).toBeNull();
+    expect(fileFpsFromFrameTimes([0, 0, 0, 0, 0, 0])).toBeNull();
   });
 });

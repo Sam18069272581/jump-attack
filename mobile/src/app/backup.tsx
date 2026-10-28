@@ -8,7 +8,7 @@ import { exportBackup, restoreBackup } from '@/db/backup';
 import { LATEST_VERSION } from '@/db/migrations';
 import { describeBackup, parseBackup } from '@/domain/backup';
 import { pickBackupText, shareBackupFile } from '@/sync/files';
-import { askWhichToKeep, useSync } from '@/state/sync';
+import { useSync } from '@/state/sync';
 import { colors, text } from '@/theme';
 
 /** Cloud sign-in and sync, and backup files as the fallback. */
@@ -101,7 +101,16 @@ function CloudCard() {
       <Card style={{ gap: 10 }}>
         <Text style={text.body}>已登录 {sync.email}</Text>
         <Text style={text.caption}>{sync.status ?? '打开 App 和切到后台时会自动同步。'}</Text>
-        {sync.conflict && <Button label="选择保留哪一份" onPress={() => sync.conflict && askWhichToKeep(sync.conflict, (c) => void sync.syncNow(c))} />}
+        {sync.conflict && (
+          <View style={styles.conflict}>
+            <Text style={text.section}>手机和云端的数据不一样，选一份保留</Text>
+            <Text style={text.caption}>{`手机上：${sync.conflict.phone}\n云端：${sync.conflict.cloud}\n另一份会被替换。云端以前每天的备份都还在。`}</Text>
+            <View style={styles.row}>
+              <Button label="用云端的" onPress={() => sync.syncNow('cloud')} busy={sync.busy} style={{ flex: 1 }} />
+              <Button label="用手机上的" variant="secondary" onPress={() => sync.syncNow('phone')} busy={sync.busy} style={{ flex: 1 }} />
+            </View>
+          </View>
+        )}
         <Button label="立即同步" variant="secondary" onPress={() => sync.syncNow()} busy={sync.busy} />
         <Button label="退出登录" variant="ghost" onPress={sync.signOut} />
         <Text style={text.caption}>退出登录不会删除手机上的数据，也不会删除云端的备份。</Text>
@@ -137,4 +146,5 @@ const styles = StyleSheet.create({
   input: { height: 48, borderRadius: 12, backgroundColor: colors.surfaceRaised, color: colors.text, paddingHorizontal: 14, fontSize: 15 },
   problem: { color: colors.warn, fontSize: 13 },
   row: { flexDirection: 'row', gap: 10 },
+  conflict: { gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.warn },
 });

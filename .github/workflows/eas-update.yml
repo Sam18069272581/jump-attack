@@ -1,0 +1,62 @@
+# Publishes main to EAS Update, so Expo Go opens the latest version without a computer running `npm start`.
+# One-time setup (see mobile/README.md): an Expo project id in mobile/app.json and an EXPO_TOKEN repository secret.
+# Until both exist this workflow skips instead of failing.
+name: EAS Update
+
+on:
+  push:
+    branches: [main]
+    paths: ['mobile/**', '.github/workflows/eas-update.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eas-update
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v4
+      - id: ready
+        run: |
+          project_id=$(node -p "require('./app.json').expo.extra?.eas?.projectId ?? ''")
+          if [ -z "$EXPO_TOKEN" ] || [ -z "$project_id" ]; then
+            echo "::notice::EAS Update skipped: needs the EXPO_TOKEN secret and extra.eas.projectId in app.json (see mobile/README.md)."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.ready.outputs.ok == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - if: steps.ready.outputs.ok == 'true'
+        run: npm ci
+      - if: steps.ready.outputs.ok == 'true'
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+      # The update URL follows from the project id; fill it in if only `eas init` was run.
+      - if: steps.ready.outputs.ok == 'true'
+        run: |
+          node -e "
+            const fs = require('fs');
+            const app = JSON.parse(fs.readFileSync('app.json', 'utf8'));
+            app.expo.updates = { url: 'https://u.expo.dev/' + app.expo.extra.eas.projectId, ...app.expo.updates };
+            fs.writeFileSync('app.json', JSON.stringify(app, null, 2));
+          "
+      # Channel "main" is what the Expo Go link opens: exp://u.expo.dev/<project id>?channel-name=main
+      - if: steps.ready.outputs.ok == 'true'
+        run: eas update --channel main --environment production --non-interactive --message "$(git log -1 --pretty=%s)"

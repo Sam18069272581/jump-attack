@@ -44,7 +44,7 @@ const mockSync = {
   email: null as string | null,
   busy: false,
   status: null as string | null,
-  conflict: null,
+  conflict: null as object | null,
   signIn: jest.fn(async (_e: string, _p: string): Promise<string | null> => null),
   signUp: jest.fn(async (_e: string, _p: string): Promise<string | null> => null),
   signOut: jest.fn(async () => {}),
@@ -91,7 +91,7 @@ beforeEach(async () => {
   mockFiles.clear();
   mockPicked = null;
   mockShare.mockClear();
-  Object.assign(mockSync, { configured: false, email: null, status: null });
+  Object.assign(mockSync, { configured: false, email: null, status: null, conflict: null });
   jest.clearAllMocks();
   mockDb = openMemoryDb();
   await migrate(mockDb);
@@ -179,4 +179,19 @@ it('shows the account and sync state once signed in', async () => {
   expect(mockSync.syncNow).toHaveBeenCalledTimes(1);
   await press(r.root, '退出登录');
   expect(mockSync.signOut).toHaveBeenCalledTimes(1);
+});
+
+it('lets the person pick a side of a conflict with plain buttons, which also work on the web', async () => {
+  Object.assign(mockSync, {
+    configured: true,
+    email: 'me@example.com',
+    conflict: { kind: 'conflict', phone: '1 个测试对象、3 次测试、0 次训练', cloud: '1 个测试对象、5 次测试、2 次训练', cloudAt: '2026-10-27T20:00:00Z' },
+  });
+  const r = await render();
+  expect(texts(r.root)).toContain('手机上：1 个测试对象、3 次测试、0 次训练');
+  expect(texts(r.root)).toContain('云端：1 个测试对象、5 次测试、2 次训练');
+  await press(r.root, '用云端的');
+  expect(mockSync.syncNow).toHaveBeenLastCalledWith('cloud');
+  await press(r.root, '用手机上的');
+  expect(mockSync.syncNow).toHaveBeenLastCalledWith('phone');
 });

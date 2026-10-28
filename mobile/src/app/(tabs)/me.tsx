@@ -48,7 +48,7 @@ export default function Me() {
                 </Pressable>
               );
             })}
-            {Platform.OS === 'ios' && <Button label="添加测试对象" variant="secondary" onPress={add} />}
+            {Platform.OS !== 'android' && <Button label="添加测试对象" variant="secondary" onPress={add} />}
           </View>
 
           {/* Keyed so the form starts fresh when switching athlete. */}
@@ -59,6 +59,11 @@ export default function Me() {
             <Text style={styles.athleteName}>数据备份与同步</Text>
             <Icon name="chevronRight" size={18} color={colors.textMuted} />
           </Pressable>
+          {Platform.OS === 'web' && (
+            <Text style={styles.footnote}>
+              网页版的数据保存在这个浏览器里，换浏览器或清除网站数据就看不到了，登录上面的云端同步就不怕丢。iPhone 上用 Safari 点「分享 → 添加到主屏幕」，之后从主屏幕图标打开，数据保存更稳。
+            </Text>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
