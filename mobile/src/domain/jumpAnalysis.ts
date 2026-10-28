@@ -171,3 +171,23 @@ function median(xs: number[]): number {
   const k = s.length >> 1;
   return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2;
 }
+
+/**
+ * How high the centre of mass is above where it left the ground, frame by frame from `from` to `to` (cm): zero on the
+ * ground, g·τ·(FT − τ)/2 in the air, τ the time since take-off. Drawn as the jump curve on a replay; its peak is the jump
+ * height by the same assumption that gives the height from flight time.
+ */
+export function flightCurve(events: JumpEvents[], captureFps: number, from: number, to: number): number[] {
+  const out: number[] = [];
+  for (let f = from; f <= to; f++) {
+    const e = events.find((j) => f >= j.takeoff && f < j.landing);
+    if (!e) {
+      out.push(0);
+      continue;
+    }
+    const ft = (e.landing - e.takeoff) / captureFps;
+    const tau = (f - e.takeoff) / captureFps;
+    out.push(((G * tau * (ft - tau)) / 2) * 100);
+  }
+  return out;
+}

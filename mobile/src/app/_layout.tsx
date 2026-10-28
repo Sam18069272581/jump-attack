@@ -70,6 +70,8 @@ export default function RootLayout() {
             <Stack.Screen name="vbt/index" options={{ title: 'VBT 训练' }} />
             <Stack.Screen name="vbt/[lift]" options={{ title: '' }} />
             <Stack.Screen name="measure/capture" options={{ headerShown: false }} />
+            <Stack.Screen name="measure/analyse" options={{ title: '自动分析' }} />
+            <Stack.Screen name="measure/replay" options={{ title: '回放' }} />
             <Stack.Screen name="measure/mark" options={{ title: '逐帧标记' }} />
             <Stack.Screen name="measure/entry" options={{ title: '' }} />
             <Stack.Screen name="measure/result" options={{ title: '测试结果', headerBackVisible: false, gestureEnabled: false }} />

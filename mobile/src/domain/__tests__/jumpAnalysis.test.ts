@@ -1,4 +1,4 @@
-import { analyseJumps, FLAG_TEXT, frameError, SLOW_CONTACT_S, type JumpEvents } from '../jumpAnalysis';
+import { analyseJumps, FLAG_TEXT, flightCurve, frameError, SLOW_CONTACT_S, type JumpEvents } from '../jumpAnalysis';
 
 const g = 9.81;
 
@@ -169,5 +169,23 @@ describe('frameError', () => {
   it('is the jump height one frame of flight is worth', () => {
     expect(frameError(0.55, 240)).toBeCloseTo(0.562, 3);
     expect(frameError(0.55, 60)).toBeCloseTo(2.248, 3);
+  });
+});
+
+describe('flightCurve', () => {
+  // A 0.55 s flight at 240 fps from frame 100 to 232: the centre of mass rises and falls on g·τ·(FT − τ)/2, which
+  // peaks at the jump height, 37.09 cm, half-way (frame 166).
+  const curve = flightCurve([{ takeoff: 100, landing: 232 }], 240, 90, 240);
+
+  it('has one height for every frame of the part asked for', () => {
+    expect(curve).toHaveLength(151);
+  });
+
+  it('is zero on the ground and peaks at the jump height half-way through the flight', () => {
+    expect(curve[0]).toBe(0);
+    expect(curve[100 - 90]).toBe(0);
+    expect(curve[166 - 90]).toBeCloseTo(37.09, 2);
+    expect(curve[232 - 90]).toBe(0);
+    expect(Math.max(...curve)).toBeCloseTo(37.09, 2);
   });
 });
