@@ -1,4 +1,4 @@
-import { dayState, diagnose, dunkLine, tolerance, warmupState, worstState, type DunkInput } from '../dunk';
+import { dayState, diagnose, dunkLine, reachRuler, tolerance, warmupState, worstState, type DunkInput } from '../dunk';
 import type { DayReadiness } from '../readiness';
 
 const base: DunkInput = { bodyMassKg: 75, standingReachCm: 240, cmj: [], sj: [], approachTouch: [], squat1rm: [], dropJumps: [], fvPct: [] };
@@ -154,5 +154,29 @@ describe('day state', () => {
     expect(worstState('good', 'fair', 'unknown')).toBe('fair');
     expect(worstState('unknown', 'good')).toBe('good');
     expect(worstState()).toBe('unknown');
+  });
+});
+
+describe('reach ruler', () => {
+  it('places the touch and the rim between the standing reach and the dunk line', () => {
+    // Standing reach 240, dunk line 320: an 80 cm ruler. Touch 292 is 52 cm along (0.65), the rim 305 is 65 cm (0.8125).
+    expect(reachRuler(292, 240, 320)).toEqual({ progress: 0.65, rim: 0.8125 });
+  });
+
+  it('pins a touch past either end to the end', () => {
+    expect(reachRuler(330, 240, 320)!.progress).toBe(1);
+    expect(reachRuler(230, 240, 320)!.progress).toBe(0);
+  });
+
+  it('leaves the rim off when it is not between the ends', () => {
+    // A 300 cm dunk line (rim 285 + 15) sits under the regulation rim.
+    expect(reachRuler(292, 240, 300)!.rim).toBeNull();
+    expect(reachRuler(312, 310, 320)!.rim).toBeNull();
+  });
+
+  it('draws no ruler without a standing reach, a touch, or room up to the line', () => {
+    expect(reachRuler(null, 240, 320)).toBeNull();
+    expect(reachRuler(292, null, 320)).toBeNull();
+    expect(reachRuler(325, 320, 320)).toBeNull();
   });
 });

@@ -135,8 +135,22 @@ describe('with results', () => {
     expect(t).toContain('反应块');
     expect(t).toContain('1.73×');
     expect(t).not.toContain('还不知道离扣篮多远');
+    // 292 cm on a ruler from the 240 cm standing reach to the 320 cm line.
+    expect(r.root.findByProps({ accessibilityRole: 'progressbar' }).props.accessibilityValue).toEqual({ min: 0, max: 100, now: 65 });
     await press(r.root, '测助跑摸高');
     expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/measure/capture', params: { metric: 'approach_touch', session: expect.any(String) } });
+  });
+
+  it('keeps the reasons and targets folded on the home screen until asked for', async () => {
+    const r = await render(<Home />);
+    const reason = '深蹲是体重的 1.73 倍，力量够了；跳深 RSI 1.60，不到 2.0：练反应。';
+    expect(texts(r.root)).not.toContain(reason);
+    expect(texts(r.root)).not.toContain('目标 ≤ 250 ms');
+    await press(r.root, '展开诊断详情');
+    expect(texts(r.root)).toContain(reason);
+    expect(texts(r.root)).toContain('目标 ≤ 250 ms');
+    await press(r.root, '收起诊断详情');
+    expect(texts(r.root)).not.toContain(reason);
   });
 
   it('puts the drop-jump ladder first in the jump list while reactive strength is the limiter', async () => {

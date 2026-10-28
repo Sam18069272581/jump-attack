@@ -77,7 +77,7 @@ export default function HealthImportGuide() {
         <Card style={{ gap: 8 }}>
           <Text style={text.section}>隐私</Text>
           <Text style={text.caption}>
-            导入的数据只存在这台手机的 App 里，不会上传。App 只在你点导入时读一次剪贴板。{consent ? '你已同意导入健康数据。' : '你还没有同意导入，第一次导入时会先问你。'}
+            导入的数据存在这台手机的 App 里；登录了云端同步时会随全部数据备份到你自己的账号。App 只在你点导入时读一次剪贴板。{consent ? '你已同意导入健康数据。' : '你还没有同意导入，第一次导入时会先问你。'}
           </Text>
           {consent && <Button label="撤回同意" variant="ghost" onPress={withdraw} />}
         </Card>

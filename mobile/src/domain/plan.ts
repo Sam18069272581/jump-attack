@@ -318,7 +318,15 @@ export function formatPrescription(p: Prescription): string {
   return p.rpe != null ? `${base} · RPE ${formatRpe(p.rpe)}` : base;
 }
 
-export type LoggedSet = { exercise_code: string; set_no: number; reps: number; load_kg: number | null; rpe: number | null };
+export type LoggedSet = {
+  exercise_code: string;
+  set_no: number;
+  reps: number;
+  load_kg: number | null;
+  rpe: number | null;
+  /** Mean velocity of the set's fastest rep (m/s); absent when not measured. */
+  mean_velocity?: number | null;
+};
 
 export type WorkoutSummary = { setsDone: number; setsPlanned: number; jumps: number; volumeKg: number };
 

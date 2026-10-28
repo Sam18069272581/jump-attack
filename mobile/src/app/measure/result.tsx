@@ -7,9 +7,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ui';
 import { deleteTrial, listSessionResults, listTrials, type Trial } from '@/db/repo';
+import { trendBaseline } from '@/domain/assess';
 import { best as bestOf, getCategory, getMetric } from '@/domain/metrics';
 import { assess, type Assessment } from '@/domain/verdict';
 import { useAthlete } from '@/state/athlete';
+import { loadPoorDaysOf, POOR_DAY_NOTE } from '@/state/training';
 import { colors, fonts, radius } from '@/theme';
 
 export default function Result() {
@@ -17,21 +19,24 @@ export default function Result() {
   const def = getMetric(metric);
   const db = useSQLiteContext();
   const { current } = useAthlete();
-  const [data, setData] = useState<{ trials: Trial[]; assessment: Assessment | null }>({ trials: [], assessment: null });
+  const [data, setData] = useState<{ trials: Trial[]; assessment: Assessment | null; poorDay: boolean }>({ trials: [], assessment: null, poorDay: false });
   const [version, setVersion] = useState(0);
-  const { trials, assessment } = data;
+  const { trials, assessment, poorDay } = data;
 
   useEffect(() => {
     let alive = true;
     (async () => {
       const t = await listTrials(db, session);
       let a: Assessment | null = null;
+      let poorDay = false;
       if (def && current && t.length > 0) {
         const best = bestOf(def, t.map((x) => x.value))!;
-        const previous = (await listSessionResults(db, current.id, def.code, def.lowerIsBetter)).filter((r) => r.session_id !== session).map((r) => r.best);
-        a = assess(def, previous, best);
+        const all = await listSessionResults(db, current.id, def.code, def.lowerIsBetter);
+        const baseline = trendBaseline(all, session, await loadPoorDaysOf(db, current.id, def.code, all));
+        a = assess(def, baseline.previous, best);
+        poorDay = baseline.poorDay;
       }
-      if (alive) setData({ trials: t, assessment: a });
+      if (alive) setData({ trials: t, assessment: a, poorDay });
     })();
     return () => {
       alive = false;
@@ -91,6 +96,7 @@ export default function Result() {
             {assessment.readiness && (
               <Text style={[styles.assessText, { color: assessment.readiness.readiness === 'fatigued' ? colors.warn : colors.good }]}>{assessment.readiness.text}</Text>
             )}
+            {poorDay && <Text style={[styles.assessText, { color: colors.textMuted }]}>{POOR_DAY_NOTE}</Text>}
           </View>
         )}
 

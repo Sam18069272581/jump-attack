@@ -3,11 +3,13 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { listRecoveryDays } from '@/db/recovery';
 import { listSessionResults } from '@/db/repo';
 import { getActivePlan, listWorkouts, startWorkout, type Plan, type Workout } from '@/db/training';
-import { current1rm } from '@/db/vbt';
+import { current1rm, ESTIMATE_MAX_AGE_DAYS, latestOneRm, listVbtSets } from '@/db/vbt';
 import { type Readiness } from '@/domain/assess';
-import { toISODate, type ISODate } from '@/domain/dates';
-import { adjustForReadiness, planDay, type Adjustment, type PlannedSession, type PlanTemplate, type Prescription, type SessionTemplate } from '@/domain/plan';
+import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
+import { worstState, type BlockType, type DayState } from '@/domain/dunk';
+import { adjustForReadiness, blockOn, planDay, type Adjustment, type PlannedSession, type PlanTemplate, type Prescription, type SessionTemplate } from '@/domain/plan';
 import { dayReadiness, fatigueStreak, type DayReadiness } from '@/domain/readiness';
+import { poorDays, readDay, selfSignal, setTarget, type DayInputs, type DayReading, type SetTarget } from '@/domain/target';
 import { getTemplate } from '@/domain/templates';
 import { LOAD_FROM_VBT, pctOf1rm, roundLoad } from '@/domain/vbt';
 
@@ -34,24 +36,69 @@ export async function loadReadiness(db: SQLiteDatabase, athleteId: number, date:
   return { ...dayReadiness(cmj, recovery, date), streak: fatigueStreak(cmj, recovery, date) };
 }
 
-export type LoadSuggestion = { kg: number; oneRm: number; lift: string; source: 'tested' | 'velocity' };
+/** The day's condition and the training block it falls in, which together set how much the targets give. */
+export type Day = { state: DayState; block: BlockType | null };
+
+/** `kg` is the working weight after the day's allowance; `baseKg` the one the 1RM alone calls for. */
+export type LoadSuggestion = SetTarget & { oneRm: number; lift: string; source: 'tested' | 'velocity' };
 
 /**
- * Working weights for plan exercises at the share of 1RM that the prescribed reps and RPE call for, keyed by
- * exercise code. The 1RM is one the athlete actually lifted when there is a recent one (squat only), otherwise
- * the matching VBT lift's latest estimate that passed its checks.
+ * Working weights for plan exercises at the share of 1RM that the prescribed reps and RPE call for, then eased
+ * for the day's condition with the bar speed to aim for, keyed by exercise code. The 1RM is one the athlete
+ * actually lifted when there is a recent one (squat only), otherwise the matching VBT lift's latest estimate
+ * that passed its checks; the bar speed comes from that estimate's load-velocity profile.
  */
-export async function loadSuggestions(db: SQLiteDatabase, athleteId: number, items: Prescription[], date: ISODate): Promise<Record<string, LoadSuggestion>> {
+export async function loadSuggestions(
+  db: SQLiteDatabase,
+  athleteId: number,
+  items: Prescription[],
+  date: ISODate,
+  day: Day = { state: 'unknown', block: null },
+): Promise<Record<string, LoadSuggestion>> {
   const out: Record<string, LoadSuggestion> = {};
   for (const p of items) {
     const lift = LOAD_FROM_VBT[p.code];
     if (!lift) continue;
     const pick = await current1rm(db, athleteId, lift, date);
     if (!pick) continue;
-    out[p.code] = { kg: roundLoad(pick.kg * pctOf1rm(p.reps, p.rpe ?? 8)), lift, oneRm: pick.kg, source: pick.source };
+    const est = latestOneRm(await listVbtSets(db, athleteId, lift), lift);
+    const profile = est && daysBetween(toISODate(new Date(est.startedAt)), date) <= ESTIMATE_MAX_AGE_DAYS ? est.profile : null;
+    const base = roundLoad(pick.kg * pctOf1rm(p.reps, p.rpe ?? 8));
+    out[p.code] = { ...setTarget(base, profile, day.state, day.block), oneRm: pick.kg, lift, source: pick.source };
   }
   return out;
 }
+
+/** VBT lifts whose sets double as the strength-day warm-up. */
+export const WARMUP_LIFTS = [...new Set(Object.values(LOAD_FROM_VBT))];
+
+export async function loadDayInputs(db: SQLiteDatabase, athleteId: number): Promise<DayInputs> {
+  const [[cmj, recovery], warmups] = await Promise.all([readinessInputs(db, athleteId), Promise.all(WARMUP_LIFTS.map((l) => listVbtSets(db, athleteId, l)))]);
+  return { cmj, recovery, warmups: warmups.flat() };
+}
+
+/**
+ * The day's condition for a workout. A workout that started fatigued stays at least poor, as its cut volume
+ * already assumed; a warm-up logged since can only make the day worse.
+ */
+export async function loadDay(db: SQLiteDatabase, plan: Plan, date: ISODate, workout?: Workout | null): Promise<Day & DayReading> {
+  const reading = readDay(await loadDayInputs(db, plan.athleteId), date);
+  const state = worstState(reading.state, workout?.readiness === 'fatigued' ? 'poor' : 'unknown');
+  return { ...reading, state, block: blockOn(plan, date) };
+}
+
+/** Days among `dates` the athlete was in poor shape, judged without the metric's own signal. */
+export async function loadPoorDays(db: SQLiteDatabase, athleteId: number, metricCode: string, dates: ISODate[]): Promise<Set<ISODate>> {
+  return poorDays(await loadDayInputs(db, athleteId), dates, selfSignal(metricCode, WARMUP_LIFTS));
+}
+
+/** The poor days among a metric's results, judged without the metric's own signal. */
+export function loadPoorDaysOf(db: SQLiteDatabase, athleteId: number, metricCode: string, results: { started_at: string }[]): Promise<Set<ISODate>> {
+  return loadPoorDays(db, athleteId, metricCode, results.map((r) => toISODate(new Date(r.started_at))));
+}
+
+/** Shown with a result from a poor day. */
+export const POOR_DAY_NOTE = '今天状态差（恢复、CMJ 或热身速度偏低），这次成绩不计入进步趋势，也不拉低基线。';
 
 /**
  * The session to do on a day. A started workout keeps the readiness it began with; today's not-yet-started
