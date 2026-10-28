@@ -8,7 +8,7 @@ import { DayStateRow } from '@/components/dunk';
 import { DunkSummary } from '@/components/DunkPanel';
 import { Icon } from '@/components/Icon';
 import { PressScale, Rise } from '@/components/motion';
-import { PainScale } from '@/components/PainScale';
+import { ScoreScale } from '@/components/ScoreScale';
 import { ReachHero } from '@/components/ReachHero';
 import { Card } from '@/components/ui';
 import { loadDiagnosis } from '@/db/dunk';
@@ -17,7 +17,7 @@ import { listPain, setPain } from '@/db/pain';
 import { dayState, RIM_CM, type DayState, type DunkDiagnosis } from '@/domain/dunk';
 import { addDays } from '@/domain/dates';
 import { attemptSummary, BALL_NAME, type AttemptSummary } from '@/domain/dunkAttempts';
-import { kneeStatus, type PainEntry } from '@/domain/pain';
+import { kneeStatus, PAIN_HINT, PAIN_LIMIT, type PainEntry } from '@/domain/pain';
 import { CATEGORIES, SUPPORT_CATEGORIES, type CategoryDef } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { loadGoalSummary } from '@/state/goal';
@@ -116,7 +116,7 @@ function MorningKnee({ entries, today, onPick }: { entries: PainEntry[]; today: 
   const knee = morning != null ? kneeStatus(entries, today) : null;
   return (
     <Card style={{ gap: 8 }}>
-      <PainScale label="今早膝盖几分" value={morning} onPick={onPick} />
+      <ScoreScale label="今早膝盖几分" value={morning} onPick={onPick} hint={PAIN_HINT} warnAbove={PAIN_LIMIT} />
       {knee?.reasons.map((r) => (
         <Text key={r} style={[text.muted, (knee.light === 'red' || knee.light === 'stop') && { color: colors.warn }]}>
           {r}

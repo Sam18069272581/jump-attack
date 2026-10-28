@@ -19,6 +19,9 @@ export type Workout = {
   /** When it was started: later than `date` for a session made up or logged afterwards. */
   startedAt: string;
   finishedAt: string | null;
+  /** How hard the whole session felt (0–10) and how long it took, once given. */
+  sessionRpe?: number;
+  durationMin?: number;
 };
 
 type PlanRow = { id: number; athlete_id: number; template_code: string; start_date: string; weekdays: string; deloads: string; blocks: string; goal_date?: string | null };
@@ -33,6 +36,8 @@ type WorkoutRow = {
   reason: string | null;
   started_at: string;
   finished_at: string | null;
+  session_rpe?: number | null;
+  duration_min?: number | null;
 };
 
 const toPlan = (r: PlanRow): Plan => ({
@@ -57,6 +62,8 @@ const toWorkout = (r: WorkoutRow): Workout => ({
   reason: r.reason,
   startedAt: r.started_at,
   finishedAt: r.finished_at,
+  ...(r.session_rpe != null ? { sessionRpe: r.session_rpe } : {}),
+  ...(r.duration_min != null ? { durationMin: r.duration_min } : {}),
 });
 
 export async function getActivePlan(db: SQLiteDatabase, athleteId: number): Promise<Plan | null> {
@@ -132,6 +139,11 @@ export async function startWorkout(db: SQLiteDatabase, w: NewWorkout): Promise<W
 
 export async function finishWorkout(db: SQLiteDatabase, workoutId: number): Promise<void> {
   await db.runAsync("UPDATE workout SET finished_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?", workoutId);
+}
+
+/** The session's RPE and minutes, given after training; either can be left out. */
+export async function setSessionLoad(db: SQLiteDatabase, workoutId: number, v: { rpe: number | null; minutes: number | null }): Promise<void> {
+  await db.runAsync('UPDATE workout SET session_rpe = ?, duration_min = ? WHERE id = ?', v.rpe, v.minutes, workoutId);
 }
 
 export async function listSets(db: SQLiteDatabase, workoutId: number): Promise<LoggedSet[]> {

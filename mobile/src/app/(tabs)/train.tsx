@@ -15,15 +15,18 @@ import { addDays, daysBetween, shortDate, weekday, WEEKDAY_NAMES, type ISODate }
 import { isRetestWeek, nextBlockStart, retestCodes } from '@/domain/blocks';
 import { blockPosition, DELOAD_DAYS, missedThisWeek, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
 import { APPROACH_TOUCH } from '@/domain/metrics';
+import { loadNote } from '@/domain/load';
 import { kneeStatus, type PainEntry } from '@/domain/pain';
 import { DELOAD_STREAK } from '@/domain/readiness';
 import { STATUS_TEXT } from '@/domain/recovery';
 import { useAthlete } from '@/state/athlete';
 import { acceptBlockSuggestion, declineBlockSuggestion, loadBlockAdvice, type BlockAdvice } from '@/state/blocks';
+import { loadTrainingLoads } from '@/state/load';
 import { beginWorkout, loadReadiness, loadTraining, sessionFor, todayISO, type DayReadiness, type TrainingData } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
 
-type Loaded = { data: TrainingData | null; readiness: DayReadiness & { streak: number }; advice: BlockAdvice; pain: PainEntry[] };
+type LoadLine = { text: string; high: boolean };
+type Loaded = { data: TrainingData | null; readiness: DayReadiness & { streak: number }; advice: BlockAdvice; pain: PainEntry[]; loads: LoadLine[] };
 
 export default function Train() {
   const db = useSQLiteContext();
@@ -35,9 +38,15 @@ export default function Train() {
 
   const load = useCallback(async () => {
     if (!current) return;
-    const [data, readiness, pain] = await Promise.all([loadTraining(db, current.id), loadReadiness(db, current.id, todayISO()), listPain(db, current.id)]);
+    const [data, readiness, pain, loads] = await Promise.all([
+      loadTraining(db, current.id),
+      loadReadiness(db, current.id, todayISO()),
+      listPain(db, current.id),
+      loadTrainingLoads(db, current.id),
+    ]);
     const advice = data ? await loadBlockAdvice(db, current, data, todayISO()) : { diagnosis: null, suggestion: null };
-    setLoaded({ data, readiness, advice, pain });
+    const notes = loads.map((l) => loadNote(l.name, l.entries, todayISO())).filter((n): n is LoadLine => n != null);
+    setLoaded({ data, readiness, advice, pain, loads: notes });
   }, [db, current]);
 
   useFocusEffect(
@@ -54,7 +63,7 @@ export default function Train() {
     );
   }
 
-  const { data, readiness, advice, pain } = loaded;
+  const { data, readiness, advice, pain, loads } = loaded;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -65,6 +74,7 @@ export default function Train() {
             readiness={readiness}
             advice={advice}
             pain={pain}
+            loads={loads}
             today={today}
             selected={selected}
             onSelect={setSelected}
@@ -99,7 +109,7 @@ export default function Train() {
         ) : (
           <>
             <Text style={text.title}>训练</Text>
-            <ReadinessCard readiness={readiness} />
+            <ReadinessCard readiness={readiness} loads={loads} />
             <Card style={{ gap: 12 }}>
               <Text style={text.section}>还没有训练计划</Text>
               <Text style={text.muted}>选一个模板，按你的训练日生成每周的训练。每次练之前测一次 CMJ，状态差时自动减量。</Text>
@@ -117,6 +127,7 @@ function PlanView({
   readiness,
   advice,
   pain,
+  loads,
   today,
   selected,
   onSelect,
@@ -129,6 +140,7 @@ function PlanView({
   readiness: DayReadiness & { streak: number };
   advice: BlockAdvice;
   pain: PainEntry[];
+  loads: LoadLine[];
   today: ISODate;
   selected: ISODate;
   onSelect: (d: ISODate) => void;
@@ -205,7 +217,7 @@ function PlanView({
         onShift={(n) => onSelect(addDays(selected, n * 7))}
       />
 
-      {isToday && <ReadinessCard readiness={readiness} />}
+      {isToday && <ReadinessCard readiness={readiness} loads={loads} />}
 
       {isToday && (knee?.light === 'yellow' || knee?.light === 'stop') && (
         <Card style={{ gap: 4 }}>
@@ -303,7 +315,7 @@ function TestDayActions({ today }: { today: boolean }) {
   );
 }
 
-function ReadinessCard({ readiness }: { readiness: DayReadiness }) {
+function ReadinessCard({ readiness, loads }: { readiness: DayReadiness; loads: LoadLine[] }) {
   const testCmj = () => router.push({ pathname: '/measure/capture', params: { metric: 'cmj', session: newSessionId(), from: 'train' } });
 
   if (readiness.today == null) {
@@ -322,6 +334,7 @@ function ReadinessCard({ readiness }: { readiness: DayReadiness }) {
             </>
           )}
           <RecoveryLine readiness={readiness} />
+          <LoadLines loads={loads} />
         </View>
         <Button label="测 CMJ" onPress={testCmj} style={{ paddingHorizontal: 18 }} />
       </Card>
@@ -343,16 +356,26 @@ function ReadinessCard({ readiness }: { readiness: DayReadiness }) {
         <Text style={[styles.readinessLabel, { color }]}>{label}</Text>
         <Text style={text.muted}>{detail}</Text>
         <RecoveryLine readiness={readiness} />
+        <LoadLines loads={loads} />
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel="再测一次 CMJ" onPress={testCmj} style={{ alignItems: 'flex-end' }}>
         <Text style={styles.cmj}>
           {readiness.today.toFixed(1)}
           <Text style={styles.cmjUnit}> cm</Text>
         </Text>
-        <Text style={text.caption}>今日 CMJ</Text>
+        <Text style={text.caption}>今日 CMJ 均值</Text>
       </Pressable>
     </Card>
   );
+}
+
+/** Training load this week against usual (domain/load.ts); well above usual counts only with another signal. */
+function LoadLines({ loads }: { loads: LoadLine[] }) {
+  return loads.map((l) => (
+    <Text key={l.text} style={[text.caption, l.high && { color: colors.warn }]}>
+      {l.text}
+    </Text>
+  ));
 }
 
 /** Today's recovery read (HRV, resting HR, sleep), which also counts towards readiness. */

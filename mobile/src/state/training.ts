@@ -1,9 +1,9 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { listDropJumps } from '@/db/jumps';
+import { listCmjMeans } from '@/db/load';
 import { listPain } from '@/db/pain';
 import { listRecoveryDays } from '@/db/recovery';
-import { listSessionResults } from '@/db/repo';
 import { getActivePlan, listWorkouts, startWorkout, type Plan, type Workout } from '@/db/training';
 import { current1rm, ESTIMATE_MAX_AGE_DAYS, latestOneRm, listVbtSets } from '@/db/vbt';
 import { type Readiness } from '@/domain/assess';
@@ -27,6 +27,8 @@ import { poorDays, readDay, selfSignal, setTarget, type DayInputs, type DayReadi
 import { getTemplate } from '@/domain/templates';
 import { LOAD_FROM_VBT, pctOf1rm, roundLoad } from '@/domain/vbt';
 
+import { loadTrainingLoads } from './load';
+
 export type { DayReadiness };
 
 export type TrainingData = { plan: Plan; template: PlanTemplate; workouts: Workout[] };
@@ -41,8 +43,9 @@ export async function loadTraining(db: SQLiteDatabase, athleteId: number): Promi
   return { plan, template, workouts: await listWorkouts(db, plan.id) };
 }
 
+/** CMJ for readiness is each session's mean of its best 3 jumps (db/load.ts), today and in the baseline alike. */
 async function readinessInputs(db: SQLiteDatabase, athleteId: number) {
-  return Promise.all([listSessionResults(db, athleteId, 'cmj'), listRecoveryDays(db, athleteId)]);
+  return Promise.all([listCmjMeans(db, athleteId), listRecoveryDays(db, athleteId)]);
 }
 
 export async function loadReadiness(db: SQLiteDatabase, athleteId: number, date: ISODate): Promise<DayReadiness & { streak: number }> {
@@ -97,12 +100,13 @@ export async function loadPersonalNumbers(db: SQLiteDatabase, athleteId: number,
 export const WARMUP_LIFTS = [...new Set(Object.values(LOAD_FROM_VBT))];
 
 export async function loadDayInputs(db: SQLiteDatabase, athleteId: number): Promise<DayInputs> {
-  const [[cmj, recovery], warmups, pain] = await Promise.all([
+  const [[cmj, recovery], warmups, pain, loads] = await Promise.all([
     readinessInputs(db, athleteId),
     Promise.all(WARMUP_LIFTS.map((l) => listVbtSets(db, athleteId, l))),
     listPain(db, athleteId),
+    loadTrainingLoads(db, athleteId),
   ]);
-  return { cmj, recovery, warmups: warmups.flat(), pain };
+  return { cmj, recovery, warmups: warmups.flat(), pain, loads };
 }
 
 /**

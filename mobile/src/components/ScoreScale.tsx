@@ -4,15 +4,28 @@ import { colors, fonts } from '@/theme';
 
 const SCORES = Array.from({ length: 11 }, (_, i) => i);
 
-/** Knee pain 0–10 in one tap. Above 5 shows in the warning colour, as the pain-monitoring model's limit. */
-export function PainScale({ label, value, onPick }: { label: string; value: number | null; onPick: (score: number) => void }) {
+/** A 0–10 score in one tap: knee pain, or how hard a session was. Scores above `warnAbove` show in the warning colour. */
+export function ScoreScale({
+  label,
+  value,
+  onPick,
+  hint,
+  warnAbove = 10,
+}: {
+  label: string;
+  value: number | null;
+  onPick: (score: number) => void;
+  /** What 0 and 10 mean. */
+  hint: string;
+  warnAbove?: number;
+}) {
   return (
     <View style={{ gap: 8 }}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.row}>
         {SCORES.map((n) => {
           const selected = n === value;
-          const tone = n > 5 ? colors.warn : colors.accent;
+          const tone = n > warnAbove ? colors.warn : colors.accent;
           return (
             <Pressable
               key={n}
@@ -28,7 +41,7 @@ export function PainScale({ label, value, onPick }: { label: string; value: numb
           );
         })}
       </View>
-      <Text style={styles.hint}>0 不疼 · 10 最疼</Text>
+      <Text style={styles.hint}>{hint}</Text>
     </View>
   );
 }

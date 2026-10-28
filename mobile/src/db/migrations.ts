@@ -133,6 +133,11 @@ const MIGRATIONS: string[] = [
     UNIQUE (athlete_id, date, kind)
   );
   `,
+  `
+  -- Session RPE (0–10) and minutes, given after a workout: their product is the session's training load.
+  ALTER TABLE workout ADD COLUMN session_rpe REAL;
+  ALTER TABLE workout ADD COLUMN duration_min REAL;
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

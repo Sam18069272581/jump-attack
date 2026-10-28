@@ -11,6 +11,8 @@ export type PainKind = 'session' | 'morning';
 export type PainEntry = { date: ISODate; kind: PainKind; score: number };
 export type KneeLight = 'green' | 'yellow' | 'red' | 'stop';
 
+export const PAIN_HINT = '0 不疼 · 10 最疼';
+
 /** Up to this in training: carry on as planned. */
 export const PAIN_OK = 2;
 /** Above this in training: cut the jumps. */
