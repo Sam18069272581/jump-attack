@@ -85,6 +85,18 @@ describe('before any test', () => {
     expect(t).toContain('训练和测试\n测一次 CMJ 或记录恢复数据，判断今天的状态');
   });
 
+  it('folds mobility and conditioning under 辅助, since they add little to the jump itself', async () => {
+    const r = await render(<Home />);
+    const shown = (name: string) => r.root.findAll((n) => n.props.accessibilityLabel === name).length > 0;
+    for (const name of ['跳跃测试', '速度训练', 'VBT 训练', '恢复', '辅助']) expect(shown(name)).toBe(true);
+    expect(shown('灵活度')).toBe(false);
+    expect(shown('体能耐力')).toBe(false);
+
+    await press(r.root, '辅助');
+    expect(shown('灵活度')).toBe(true);
+    expect(shown('体能耐力')).toBe(true);
+  });
+
   it('keeps the history tab empty but tells how to get a touch curve', async () => {
     const r = await render(<History />);
     const t = texts(r.root);

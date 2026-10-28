@@ -67,6 +67,9 @@ export function getCategory(key: Category): CategoryDef {
   return CATEGORIES.find((c) => c.key === key)!;
 }
 
+/** Modules that add little to the jump itself; home keeps them folded under 辅助 (their screens and data stay). */
+export const SUPPORT_CATEGORIES: Category[] = ['conditioning', 'mobility'];
+
 /**
  * How high the hand reaches in a run-up jump, the number the whole app works towards: the dunk line is the rim
  * plus clearance (domain/dunk.ts). Typed in from a mark on a wall or the backboard, or measured from video as
