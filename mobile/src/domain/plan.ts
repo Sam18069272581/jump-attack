@@ -303,7 +303,8 @@ export function planFinished(t: PlanTemplate, s: PlanSettings, date: ISODate): b
 /** Share of sets kept on a fatigued day: total volume about −30%. */
 export const FATIGUE_SET_FACTOR = 0.7;
 
-export type Adjustment = { code: string; name: string; change: string };
+/** A change to a planned exercise; `cause` is set when the knee, not general fatigue, called for it. */
+export type Adjustment = { code: string; name: string; change: string; cause?: 'knee' };
 
 /**
  * The "readiness low → cut volume" rule: on a fatigued day, skip maximal-intensity work, cut every

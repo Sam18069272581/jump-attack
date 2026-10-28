@@ -70,6 +70,14 @@ describe('the day’s state', () => {
     expect(readDay({ ...base, cmj: cmj(36) }, today, 'cmj').state).toBe('good');
   });
 
+  it('counts a red knee as a poor day, a yellow one not', () => {
+    const base: DayInputs = { cmj: cmj(40), recovery: recovery(7.5), warmups: history };
+    const red = readDay({ ...base, pain: [{ date: addDays(today, -1), kind: 'session', score: 6 }] }, today);
+    expect(red.state).toBe('poor');
+    expect(red.reasons).toContain('训练中膝盖 6 分，超过 5 分：这次跳跃减半，不做跳深');
+    expect(readDay({ ...base, pain: [{ date: addDays(today, -1), kind: 'session', score: 4 }] }, today).state).toBe('good');
+  });
+
   it('lists the poor days among the given dates', () => {
     const inputs: DayInputs = { cmj: [], recovery: recovery(7.5, 40), warmups: [] };
     expect([...poorDays(inputs, [today, addDays(today, -1), today])]).toEqual([today]);

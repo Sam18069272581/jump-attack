@@ -1,5 +1,6 @@
 import { addDays, toISODate, type ISODate } from './dates';
 import { dayState, tolerance, warmupState, worstState, type BlockType, type DayState } from './dunk';
+import { kneeStatus, type PainEntry } from './pain';
 import { dayReadiness } from './readiness';
 import type { RecoveryDay } from './recovery';
 import { roundLoad, STOP_LOSS, velocityLoss, type LvProfile } from './vbt';
@@ -55,6 +56,8 @@ export type DayInputs = {
   recovery: RecoveryDay[];
   /** Sets of the VBT lifts that serve as the warm-up (back squat). */
   warmups: VelocitySet[];
+  /** Knee pain: a red or stopped knee makes the day poor. */
+  pain?: PainEntry[];
 };
 
 export type DayReading = { state: DayState; reasons: string[]; warmup: WarmupReading | null };
@@ -71,7 +74,10 @@ export function readDay(inputs: DayInputs, date: ISODate, ignore?: 'cmj' | 'warm
   if (warmup && (warmup.state === 'fair' || warmup.state === 'poor')) {
     reasons.push(`热身 ${warmup.load} kg 速度 ${warmup.v.toFixed(2)} m/s，是 30 天均值的 ${Math.round(warmup.pct * 100)}%`);
   }
-  return { state: worstState(dayState(r), warmup?.state ?? 'unknown'), reasons: [...new Set(reasons)], warmup };
+  const knee = kneeStatus(inputs.pain ?? [], date);
+  const kneeBad = knee?.light === 'red' || knee?.light === 'stop';
+  if (kneeBad) reasons.push(...knee.reasons);
+  return { state: worstState(dayState(r), warmup?.state ?? 'unknown', kneeBad ? 'poor' : 'unknown'), reasons: [...new Set(reasons)], warmup };
 }
 
 /** Days among `dates` that were poor and so stay out of progress trends. */

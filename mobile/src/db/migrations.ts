@@ -122,6 +122,17 @@ const MIGRATIONS: string[] = [
   -- The day the dunk goal is due (YYYY-MM-DD): the plan tapers before it and makes it the dunk test day. Null: none set.
   ALTER TABLE athlete ADD COLUMN goal_date TEXT;
   `,
+  `
+  -- Knee pain, 0 (none) to 10: the worst during a day's training ('session') and on waking ('morning'), one of each a day.
+  CREATE TABLE knee_pain (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    athlete_id INTEGER NOT NULL REFERENCES athlete(id) ON DELETE CASCADE,
+    date TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('session', 'morning')),
+    score INTEGER NOT NULL CHECK (score BETWEEN 0 AND 10),
+    UNIQUE (athlete_id, date, kind)
+  );
+  `,
 ];
 
 export async function migrate(db: SQLiteDatabase): Promise<void> {

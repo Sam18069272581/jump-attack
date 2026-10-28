@@ -8,11 +8,16 @@ import { DayStateRow } from '@/components/dunk';
 import { DunkSummary } from '@/components/DunkPanel';
 import { Icon } from '@/components/Icon';
 import { PressScale, Rise } from '@/components/motion';
+import { PainScale } from '@/components/PainScale';
 import { ReachHero } from '@/components/ReachHero';
+import { Card } from '@/components/ui';
 import { loadDiagnosis } from '@/db/dunk';
 import { listDunkAttempts } from '@/db/dunkAttempts';
+import { listPain, setPain } from '@/db/pain';
 import { dayState, RIM_CM, type DayState, type DunkDiagnosis } from '@/domain/dunk';
+import { addDays } from '@/domain/dates';
 import { attemptSummary, BALL_NAME, type AttemptSummary } from '@/domain/dunkAttempts';
+import { kneeStatus, type PainEntry } from '@/domain/pain';
 import { CATEGORIES, SUPPORT_CATEGORIES, type CategoryDef } from '@/domain/metrics';
 import { useAthlete } from '@/state/athlete';
 import { loadGoalSummary } from '@/state/goal';
@@ -25,6 +30,8 @@ export default function Home() {
   const { current } = useAthlete();
   const [goal, setGoal] = useState<{ diagnosis: DunkDiagnosis; state: DayState; attempts: AttemptSummary | null; due: GoalText } | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
+  const [pain, setPainEntries] = useState<PainEntry[]>([]);
+  const today = todayISO();
   const main = CATEGORIES.filter((c) => !SUPPORT_CATEGORIES.includes(c.key));
   const support = CATEGORIES.filter((c) => SUPPORT_CATEGORIES.includes(c.key));
 
@@ -32,6 +39,7 @@ export default function Home() {
     useCallback(() => {
       if (!current) return;
       const today = todayISO();
+      listPain(db, current.id).then(setPainEntries);
       Promise.all([loadDiagnosis(db, current), loadReadiness(db, current.id, today), listDunkAttempts(db, current.id)]).then(async ([diagnosis, readiness, attempts]) =>
         setGoal({
           diagnosis,
@@ -62,6 +70,17 @@ export default function Home() {
           </View>
         )}
 
+        {current && (
+          <MorningKnee
+            entries={pain}
+            today={today}
+            onPick={async (score) => {
+              await setPain(db, current.id, { date: today, kind: 'morning', score });
+              setPainEntries(await listPain(db, current.id));
+            }}
+          />
+        )}
+
         <Rise index={2} style={{ gap: 12 }}>
           <Text style={text.section}>训练和测试</Text>
           {goal && <DayStateRow state={goal.state} />}
@@ -83,6 +102,28 @@ export default function Home() {
         </Rise>
       </ScrollView>
     </SafeAreaView>
+  );
+}
+
+/**
+ * The morning after training with knee pain recorded: how is it today? The pain-monitoring model reads this
+ * against the morning before (domain/pain.ts).
+ */
+function MorningKnee({ entries, today, onPick }: { entries: PainEntry[]; today: string; onPick: (score: number) => void }) {
+  const askedYesterday = entries.some((e) => e.kind === 'session' && e.date === addDays(today, -1));
+  if (!askedYesterday) return null;
+  const morning = entries.find((e) => e.kind === 'morning' && e.date === today)?.score ?? null;
+  const knee = morning != null ? kneeStatus(entries, today) : null;
+  return (
+    <Card style={{ gap: 8 }}>
+      <PainScale label="今早膝盖几分" value={morning} onPick={onPick} />
+      {knee?.reasons.map((r) => (
+        <Text key={r} style={[text.muted, (knee.light === 'red' || knee.light === 'stop') && { color: colors.warn }]}>
+          {r}
+        </Text>
+      ))}
+      {knee?.light === 'green' && <Text style={text.muted}>膝盖没问题，照常练。</Text>}
+    </Card>
   );
 }
 

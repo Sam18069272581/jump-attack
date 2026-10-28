@@ -9,11 +9,13 @@ import { Icon } from '@/components/Icon';
 import { AdjustmentNote, SessionItems, WeekStrip, type DayStatus } from '@/components/training';
 import { Button, Card } from '@/components/ui';
 import { newSessionId } from '@/db/repo';
+import { listPain } from '@/db/pain';
 import { insertDeload } from '@/db/training';
 import { addDays, daysBetween, shortDate, weekday, WEEKDAY_NAMES, type ISODate } from '@/domain/dates';
 import { isRetestWeek, nextBlockStart, retestCodes } from '@/domain/blocks';
 import { blockPosition, DELOAD_DAYS, missedThisWeek, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
 import { APPROACH_TOUCH } from '@/domain/metrics';
+import { kneeStatus, type PainEntry } from '@/domain/pain';
 import { DELOAD_STREAK } from '@/domain/readiness';
 import { STATUS_TEXT } from '@/domain/recovery';
 import { useAthlete } from '@/state/athlete';
@@ -21,7 +23,7 @@ import { acceptBlockSuggestion, declineBlockSuggestion, loadBlockAdvice, type Bl
 import { beginWorkout, loadReadiness, loadTraining, sessionFor, todayISO, type DayReadiness, type TrainingData } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
 
-type Loaded = { data: TrainingData | null; readiness: DayReadiness & { streak: number }; advice: BlockAdvice };
+type Loaded = { data: TrainingData | null; readiness: DayReadiness & { streak: number }; advice: BlockAdvice; pain: PainEntry[] };
 
 export default function Train() {
   const db = useSQLiteContext();
@@ -33,9 +35,9 @@ export default function Train() {
 
   const load = useCallback(async () => {
     if (!current) return;
-    const [data, readiness] = await Promise.all([loadTraining(db, current.id), loadReadiness(db, current.id, todayISO())]);
+    const [data, readiness, pain] = await Promise.all([loadTraining(db, current.id), loadReadiness(db, current.id, todayISO()), listPain(db, current.id)]);
     const advice = data ? await loadBlockAdvice(db, current, data, todayISO()) : { diagnosis: null, suggestion: null };
-    setLoaded({ data, readiness, advice });
+    setLoaded({ data, readiness, advice, pain });
   }, [db, current]);
 
   useFocusEffect(
@@ -52,7 +54,7 @@ export default function Train() {
     );
   }
 
-  const { data, readiness, advice } = loaded;
+  const { data, readiness, advice, pain } = loaded;
 
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
@@ -62,6 +64,7 @@ export default function Train() {
             data={data}
             readiness={readiness}
             advice={advice}
+            pain={pain}
             today={today}
             selected={selected}
             onSelect={setSelected}
@@ -113,6 +116,7 @@ function PlanView({
   data,
   readiness,
   advice,
+  pain,
   today,
   selected,
   onSelect,
@@ -124,6 +128,7 @@ function PlanView({
   data: TrainingData;
   readiness: DayReadiness & { streak: number };
   advice: BlockAdvice;
+  pain: PainEntry[];
   today: ISODate;
   selected: ISODate;
   onSelect: (d: ISODate) => void;
@@ -165,7 +170,8 @@ function PlanView({
   const planned = planDay(template, plan, selected);
   const workout = byDate.get(selected);
   const isToday = selected === today;
-  const shown = planned ? sessionFor(planned, workout, isToday ? readiness.readiness : null) : null;
+  const knee = kneeStatus(pain, selected);
+  const shown = planned ? sessionFor(planned, workout, isToday ? readiness.readiness : null, knee?.light) : null;
   const next = planned ? null : nextSession(template, plan, addDays(selected, 1));
   // A rest day today can take a session missed earlier this week.
   const missed = isToday && !planned ? missedThisWeek(template, plan, workouts.map((w) => w.date), today) : [];
@@ -200,6 +206,17 @@ function PlanView({
       />
 
       {isToday && <ReadinessCard readiness={readiness} />}
+
+      {isToday && (knee?.light === 'yellow' || knee?.light === 'stop') && (
+        <Card style={{ gap: 4 }}>
+          <Text style={[text.section, knee.light === 'stop' && { color: colors.warn }]}>{knee.light === 'stop' ? '膝盖：暂停跳跃' : '膝盖：黄灯'}</Text>
+          {knee.reasons.map((r) => (
+            <Text key={r} style={text.muted}>
+              {r}
+            </Text>
+          ))}
+        </Card>
+      )}
 
       {isToday && suggestDeload && (
         <Card style={styles.deload}>
@@ -238,6 +255,7 @@ function PlanView({
               adjustments={shown.adjustments}
               reason={workout ? workout.reason : readiness.signals.join('；') || null}
               dropPct={workout ? workout.cmjDrop : readiness.dropPct}
+              kneeReasons={knee?.reasons}
             />
             <SessionItems session={shown.session} />
             {planned.goal === 'test' ? (

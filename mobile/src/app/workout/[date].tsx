@@ -6,12 +6,15 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Icon } from '@/components/Icon';
+import { PainScale } from '@/components/PainScale';
 import { AdjustmentNote } from '@/components/training';
 import { Button, Card, Empty } from '@/components/ui';
+import { listPain, listTestJumps, setPain } from '@/db/pain';
 import { finishWorkout, getWorkout, lastLoads, listSets, logSet, unlogSet, type Workout } from '@/db/training';
 import { addVbtSet, listVbtSets } from '@/db/vbt';
 import { shortDate, toISODate } from '@/domain/dates';
 import { parseNumber } from '@/domain/entry';
+import { jumpVolumeNote, kneeStatus } from '@/domain/pain';
 import { formatPrescription, formatRpe, isLoaded, personalNote, planDay, summarizeWorkout, type LoggedSet, type PersonalNumbers, type Prescription } from '@/domain/plan';
 import { allowanceText, checkSet, setTarget, STATE_LABEL, usualWarmupLoad, type DayReading } from '@/domain/target';
 import { LOAD_FROM_VBT } from '@/domain/vbt';
@@ -30,6 +33,11 @@ type Loaded =
       /** Usual warm-up load per VBT lift. */
       warmupKg: Record<string, number | null>;
       personal: PersonalNumbers;
+      knee: ReturnType<typeof kneeStatus>;
+      /** The worst knee pain during this day's training, once given. */
+      pain: number | null;
+      /** Jump-test attempts the same day, which count towards the day's jumps. */
+      testJumps: number;
     }
   | 'none';
 
@@ -47,17 +55,21 @@ export default function WorkoutScreen() {
     const workout = data && ((await getWorkout(db, data.plan.id, date)) ?? (await beginWorkout(db, data, date)));
     if (!data || !workout) return setLoaded('none');
     const planned = planDay(data.template, data.plan, date);
-    const items = planned ? sessionFor(planned, workout, null).session.items : [];
+    const painEntries = await listPain(db, current.id);
+    const knee = kneeStatus(painEntries, date);
+    const items = planned ? sessionFor(planned, workout, null, knee?.light).session.items : [];
     const day = await loadDay(db, data.plan, date, workout);
     const lifts = [...new Set(items.map((p) => LOAD_FROM_VBT[p.code]).filter((l): l is string => l != null))];
-    const [sets, loads, suggested, warmups, personal] = await Promise.all([
+    const [sets, loads, suggested, warmups, personal, testJumps] = await Promise.all([
       listSets(db, workout.id),
       lastLoads(db, current.id),
       loadSuggestions(db, current.id, items, date, day),
       Promise.all(lifts.map(async (l) => [l, usualWarmupLoad(await listVbtSets(db, current.id, l), date)] as const)),
       loadPersonalNumbers(db, current.id, date),
+      listTestJumps(db, current.id, date),
     ]);
-    setLoaded({ data, workout, sets, loads, suggested, day, warmupKg: Object.fromEntries(warmups), personal });
+    const pain = painEntries.find((e) => e.date === date && e.kind === 'session')?.score ?? null;
+    setLoaded({ data, workout, sets, loads, suggested, day, warmupKg: Object.fromEntries(warmups), personal, knee, pain, testJumps });
   }, [db, current, date]);
 
   useFocusEffect(
@@ -76,11 +88,12 @@ export default function WorkoutScreen() {
     );
   }
 
-  const { workout, sets, loads, suggested, day, warmupKg, personal } = loaded;
+  const { workout, sets, loads, suggested, day, warmupKg, personal, knee, pain, testJumps } = loaded;
   // A session made up (or logged) on a later day than planned.
   const startedOn = toISODate(new Date(workout.startedAt));
-  const { session } = sessionFor(planned, workout, null);
+  const { session } = sessionFor(planned, workout, null, knee?.light);
   const summary = summarizeWorkout(session, sets);
+  const volume = jumpVolumeNote(summary.jumps + testJumps);
   const done = workout.finishedAt != null;
   const logged = (code: string, n: number) => sets.find((s) => s.exercise_code === code && s.set_no === n);
   const allowance = allowanceText(day.state, day.block);
@@ -103,6 +116,12 @@ export default function WorkoutScreen() {
     if (!current) return;
     await addVbtSet(db, current.id, `warmup-${workout.id}-${lift}`, lift, { load: kg, v, reps: null, source: 'manual' });
     Haptics.selectionAsync();
+    await reload();
+  }
+
+  async function recordPain(score: number) {
+    if (!current) return;
+    await setPain(db, current.id, { date, kind: 'session', score });
     await reload();
   }
 
@@ -141,10 +160,12 @@ export default function WorkoutScreen() {
               <Stat label="训练量" value={`${summary.volumeKg}`} unit="kg" />
             </View>
             {workout.adjustments.length === 0 && <Text style={text.caption}>{workout.readiness === 'ready' ? '准备度正常，按计划完成。' : '没测 CMJ，按原计划完成。'}</Text>}
+            {summary.jumps + testJumps > 0 && <Text style={[text.caption, volume.warn && { color: colors.warn }]}>{volume.text}</Text>}
+            <PainScale label="训练中膝盖最疼几分" value={pain} onPick={recordPain} />
           </Card>
         )}
 
-        <AdjustmentNote adjustments={workout.adjustments} reason={workout.reason} dropPct={workout.cmjDrop} />
+        <AdjustmentNote adjustments={workout.adjustments} reason={workout.reason} dropPct={workout.cmjDrop} kneeReasons={knee?.reasons} />
 
         {(day.state === 'fair' || day.state === 'poor') && (
           <View style={[styles.dayNote, day.state === 'poor' && { borderColor: colors.warn }]}>
