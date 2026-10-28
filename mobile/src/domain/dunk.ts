@@ -53,6 +53,8 @@ export type DunkInput = {
   approachTouch: number[];
   /** Estimated back-squat 1RM, kg. */
   squat1rm: number[];
+  /** Body mass weighed near each 1RM's day (domain/bodyMass.ts), null where none: then `bodyMassKg`. */
+  squatMassKg?: (number | null)[];
   /** The best jump of each drop-jump box ladder. */
   dropJumps: { rsi: number; contactMs: number }[];
   /** FV% of each force-velocity profile. */
@@ -164,9 +166,10 @@ type Snapshot = { squatRatio: number | null; rsi: number | null; contactMs: numb
 /** The deciding results as of the latest test (`back` 0) or the one before (`back` 1), each metric on its own. */
 function snapshot(input: DunkInput, back: number): Snapshot {
   const oneRm = input.squat1rm.at(-1 - back);
+  const mass = input.squatMassKg?.at(-1 - back) ?? input.bodyMassKg;
   const dj = input.dropJumps.at(-1 - back);
   return {
-    squatRatio: oneRm != null && input.bodyMassKg ? oneRm / input.bodyMassKg : null,
+    squatRatio: oneRm != null && mass ? oneRm / mass : null,
     rsi: dj?.rsi ?? null,
     contactMs: dj?.contactMs ?? null,
   };
