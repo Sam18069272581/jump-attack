@@ -1039,7 +1039,8 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     return (atan2(-(sh.x - hp.x), sh.y - hp.y) * 180) / PI;
   });
   const at = s.frame.indexOf(plantDown);
-  if (at >= 0 && !Number.isNaN(lean[at])) metrics.trunk = measured('trunk', lean[at], TRUNK_ERROR_DEG);
+  // Only at a touch it saw: one before the clip's first frame has no lean to state.
+  if (at >= 0 && !Number.isNaN(lean[at])) metrics.trunk = measured('trunk', lean[at], Number.isFinite(firstPlant.downErr) ? TRUNK_ERROR_DEG : Infinity);
 
   // Scales off by more than a wrong frame rate or a wrong tap could explain: no figure is one to trust.
   if (flags.includes('scale-broken')) for (const m of Object.values(metrics)) m!.status = 'imprecise';

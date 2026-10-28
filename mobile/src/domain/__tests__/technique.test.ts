@@ -250,6 +250,15 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('a clip that starts inside the plant: no trunk lean at a touch-down it can’t see', () => {
+    const scene = poseScene();
+    const cut = Math.ceil(scene.truth.plantDownS * 240) + 12;
+    const frames = scene.frames.slice(cut).map((f, k) => ({ ...f, frame: k, t: k / 240 }));
+    const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: scene.markers }));
+    expect(result.metrics.trunk).toBeUndefined();
+    expect(result.flags).toContain('unseen');
+  });
+
   it('at 60 fps with the athlete lost for 4 frames at take-off: no endless error, and says why figures are missing', () => {
     const scene = poseScene({ fps: 60 });
     const tk = scene.truth.takeoffFrame;
