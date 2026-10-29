@@ -906,7 +906,21 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     otherOff && lastOff.upAt - otherOff.upAt <= hypot(lastOff.upErr, otherOff.upErr)
       ? together({ t: lastOff.upAt, err: lastOff.upErr }, { t: otherOff.upAt, err: otherOff.upErr })
       : { t: lastOff.upAt, err: lastOff.upErr };
-  const takeoffAt = off.t;
+  // The plant toes, each with the height it stood at in its contact's second half.
+  const tol = FLOOR_TOL_M / roughScale;
+  const toes = plant.map((c) => ({
+    toe: traces[c.foot].toe,
+    y: standingHeight(traces[c.foot].toe, s.frame.findIndex((f) => f >= (c.downAt + c.upAt) / 2), s.frame.findIndex((f) => f >= c.upAt)),
+  }));
+  // A take-off whose moment wasn't seen has its contact end before the frames the model lost there, which keeps a
+  // two-foot take-off's feet together in the plant (moved past them, a foot would fall out of it). The take-off itself
+  // is later when a toe is seen still where it stood after them: the foot left after the last frame it is seen so.
+  let takeoffAt = off.t;
+  if (!Number.isFinite(off.err)) {
+    for (let k = s.frame.findIndex((f) => f > off.t); k >= 0 && k < s.frame.length && (s.lost[k] || toes.some(({ toe, y }) => abs(toe.sy[k] - y) <= tol)); k++) {
+      if (!s.lost[k]) takeoffAt = frameAt(s, k + 0.5);
+    }
+  }
   const takeoff = ceil(takeoffAt - 1e-6);
   const sides = new Set(plant.map((c) => c.foot));
   const style = { kind: sides.size === 2 ? ('two' as const) : ('one' as const), foot: sides.size === 2 ? null : plant[0].foot };
@@ -937,15 +951,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // from the frame beside them, which isn't known to be in the air: its stillness can't be read next to the gap, and its
   // smoothed height, bent by the gap, can read above where the toe stood while the foot is still down. The toes seen on
   // the last frame within the take-off's error, and none of them leaving: the moment it left wasn't seen (an error that
-  // ends inside lost frames says nothing). The take-off itself stays where the foot was last seen down: moved past them,
-  // a two-foot take-off's foot would fall out of the plant.
+  // ends inside lost frames says nothing).
   let freeFrom = takeoffAt;
   if (!Number.isFinite(off.err) || s.frame.some((f, k) => abs(f - takeoffAt) <= off.err && s.lost[k] && s.lost[k + 1])) {
-    const tol = FLOOR_TOL_M / roughScale;
-    const toes = plant.map((c) => ({
-      toe: traces[c.foot].toe,
-      y: standingHeight(traces[c.foot].toe, s.frame.findIndex((f) => f >= (c.downAt + c.upAt) / 2), s.frame.findIndex((f) => f >= c.upAt)),
-    }));
     const leaving = (q: number) => !s.lost[q] && !s.lost[q + 1] && toes.every(({ toe, y }) => toe.sy[q] - y > tol && toe.sy[q + 1] > toe.sy[q]);
     let k = s.frame.findIndex((f) => f > takeoffAt);
     while (k >= 0 && k < s.frame.length && s.frame[k] < takeoffAt + off.err && !leaving(k)) k++;

@@ -452,6 +452,17 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('at 60 fps, frames lost late in the plant and the take-off not timed: the take-off frame shown is where the foot left', () => {
+    // The toe is seen still where it stood after the gap: the foot left after that, not where its frames down ended
+    // before the gap.
+    for (const seed of [1, 2, 3, 79000]) {
+      const scene = poseScene({ fps: 60, seed });
+      const to = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, to - 5, to - 2), captureFps: 60, markers: scene.markers }));
+      expect([seed, Math.abs(result.events.takeoff - to) <= 1, misses(scene, result)]).toEqual([seed, true, []]);
+    }
+  });
+
   it('a 24 or 25 fps clip (a phone’s video mode): the plant is found, and knee and trunk come out as angles', () => {
     for (const fps of [24, 25]) {
       const { scene, r } = analyse({ fps });
