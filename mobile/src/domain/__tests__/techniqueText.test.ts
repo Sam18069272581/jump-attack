@@ -33,3 +33,9 @@ it('says why the speeds, times and lengths are missing when the scales disagree,
   expect(FLAG_TEXT['scale-broken']).toMatch(/速度.*时间.*长度.*不给/);
   expect(FLAG_TEXT['scale-broken']).toMatch(/再分析/);
 });
+
+it('says which figures go by gravity’s scale when it and the lines’ differ, and that their errors take in the gap', () => {
+  // The last step, the run-up speed and the braking's run-in speed are all read on gravity's scale then.
+  expect(FLAG_TEXT['off-line']).toMatch(/步长.*助跑速度.*刹车.*重力/);
+  expect(FLAG_TEXT['off-line']).toMatch(/误差/);
+});

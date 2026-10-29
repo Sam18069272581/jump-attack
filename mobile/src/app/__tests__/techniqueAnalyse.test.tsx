@@ -200,7 +200,7 @@ it('measures a slow-motion run-up jump from the athlete and the two floor lines 
   expect(mockRouter.back).toHaveBeenCalled();
 });
 
-it('asks for each line on the frame the athlete runs over it, tapped right at their feet', async () => {
+it('asks for each line on the frame the athlete runs over it, tapped on the tape under their body', async () => {
   // Where along the tape the athlete ran is where the hips cross the line: a guess at it moves the line in the picture.
   const scene = poseScene();
   await open(scene, { uri: 'file:///picked/IMG_0015.MOV', fps: '0', source: 'import', session: 'tt-8' });
@@ -208,7 +208,7 @@ it('asks for each line on the frame the athlete runs over it, tapped right at th
   expect(texts(r.root)).toContain('点起跳线：拖到运动员跑到这条胶带上的那一帧');
   const g = geometry(scene);
   await tapScreen(g.toScreen(scene.markers!.b));
-  expect(texts(r.root)).toContain('放大了：点准运动员脚下的胶带。');
+  expect(texts(r.root)).toContain('放大了：点运动员身体正下方、两脚中间的胶带，别点在脚上。');
   await tapScreen({ x: g.w / 2, y: g.h / 2 });
   expect(texts(r.root)).toContain('点 3 米线');
   expect(texts(r.root)).toContain('同样拖到运动员跑到它上面的那一帧');
@@ -230,7 +230,7 @@ it('asks for the tape under the athlete’s body, between the feet, rather than 
   await tapAthlete(scene, scene.truth.takeoffFrame - 30);
   expect(texts(r.root)).toContain('放大后点准身体正下方的胶带');
   await tapScreen(geometry(scene).toScreen(scene.markers!.b));
-  expect(texts(r.root)).toContain('对准身体正下方、两脚中间，别点在脚上。');
+  expect(texts(r.root)).toContain('两脚中间的胶带，别点在脚上');
 });
 
 it.each([

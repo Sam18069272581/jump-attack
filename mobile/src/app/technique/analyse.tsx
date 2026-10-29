@@ -299,7 +299,7 @@ export default function TechniqueAnalyse() {
             </View>
             <Text style={styles.lead}>
               {zoom
-                ? '放大了：点准运动员脚下的胶带。对准身体正下方、两脚中间，别点在脚上。'
+                ? '放大了：点运动员身体正下方、两脚中间的胶带，别点在脚上。'
                 : step === 'athlete'
                   ? '拖动进度条到起跳前后，点一下运动员。'
                   : step === 'takeoff'
