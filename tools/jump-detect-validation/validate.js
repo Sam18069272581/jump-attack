@@ -94,7 +94,7 @@ function encodeInWorker(scenePath, o, file) {
 function encode(S, o, file) {
   return new Promise((resolve, reject) => {
     const frames = Math.floor(o.durationS * o.fps);
-    const ff = spawn('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'gray', '-s', `${o.width}x${o.height}`, '-r', String(o.fps), '-i', '-', '-c:v', 'libx264', '-crf', '20', '-pix_fmt', 'yuv420p', '-g', '60', file]);
+    const ff = spawn('ffmpeg', lib.encodeArgs(o, file));
     ff.on('error', reject);
     ff.on('close', (code) => (code === 0 ? resolve(frames) : reject(new Error(`ffmpeg exited ${code}`))));
     let f = 0;
