@@ -1,6 +1,7 @@
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { tr } from '@/i18n';
 import { colors, text } from '@/theme';
 
 import { Button } from './ui';
@@ -13,12 +14,12 @@ export function ErrorScreen({ error, retry }: { error: Error; retry: () => Promi
   return (
     <SafeAreaView style={styles.screen}>
       <View style={styles.body}>
-        <Text style={text.heading}>出错了</Text>
-        <Text style={text.body}>App 没能打开。{Platform.OS === 'web' ? '记录都还在这个浏览器里' : '记录都还在手机上'}，可以先重试；还不行的话，把下面这行发给开发者。</Text>
+        <Text style={text.heading}>{tr('出错了')}</Text>
+        <Text style={text.body}>{tr('App 没能打开。{p}，可以先重试；还不行的话，把下面这行发给开发者。', { p: Platform.OS === 'web' ? tr('记录都还在这个浏览器里') : tr('记录都还在手机上') })}</Text>
         <Text selectable style={styles.message}>
           {error.message}
         </Text>
-        <Button label="重试" onPress={retry} />
+        <Button label={tr('重试')} onPress={retry} />
       </View>
     </SafeAreaView>
   );

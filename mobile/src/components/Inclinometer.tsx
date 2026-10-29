@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import { Button } from '@/components/ui';
 import { angleBetween } from '@/domain/mobility';
+import { tr } from '@/i18n';
 import { needsMotionPermission, requestMotionPermission, startGravity, type Vec } from '@/media/gravity';
 import { colors, fonts, radius } from '@/theme';
 
@@ -33,13 +34,13 @@ export function Inclinometer({ onUse }: { onUse: (degrees: number) => void }) {
   if (!permitted) {
     return (
       <View style={styles.box}>
-        <Text style={styles.hint}>浏览器要先允许读取手机的运动传感器，才能用手机量角度。</Text>
-        <Button label="允许使用运动传感器" variant="secondary" onPress={() => requestMotionPermission().then(setPermitted)} style={{ alignSelf: 'stretch' }} />
+        <Text style={styles.hint}>{tr('浏览器要先允许读取手机的运动传感器，才能用手机量角度。')}</Text>
+        <Button label={tr('允许使用运动传感器')} variant="secondary" onPress={() => requestMotionPermission().then(setPermitted)} style={{ alignSelf: 'stretch' }} />
       </View>
     );
   }
 
-  if (available === false) return <Text style={styles.hint}>这台设备没有可用的加速度计，请手动输入角度。</Text>;
+  if (available === false) return <Text style={styles.hint}>{tr('这台设备没有可用的加速度计，请手动输入角度。')}</Text>;
 
   const angle = now && zero ? angleBetween(zero, now) : null;
 
@@ -49,16 +50,16 @@ export function Inclinometer({ onUse }: { onUse: (degrees: number) => void }) {
         {angle != null ? Math.round(angle) : '—'}
         <Text style={styles.deg}>°</Text>
       </Text>
-      <Text style={styles.hint}>{zero ? '移动到最大位置，手机停稳后点「用这个角度」' : '在起始位置把手机贴稳，点「归零」'}</Text>
+      <Text style={styles.hint}>{zero ? tr('移动到最大位置，手机停稳后点「用这个角度」') : tr('在起始位置把手机贴稳，点「归零」')}</Text>
       <View style={styles.buttons}>
         <Button
-          label="归零"
+          label={tr('归零')}
           variant="secondary"
           onPress={() => setZero(now)}
           disabled={!now}
           style={{ flex: 1 }}
         />
-        <Button label="用这个角度" onPress={() => angle != null && onUse(Math.round(angle))} disabled={angle == null} style={{ flex: 1 }} />
+        <Button label={tr('用这个角度')} onPress={() => angle != null && onUse(Math.round(angle))} disabled={angle == null} style={{ flex: 1 }} />
       </View>
     </View>
   );

@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
 import { cheer, useReduceMotion } from '@/components/motion';
+import { tr } from '@/i18n';
 import { colors, fonts } from '@/theme';
 
 const SIZE = 300;
@@ -50,13 +51,13 @@ export function RecordHero({ label, value, unit, gain }: { label: string; value:
 
   const late = (from: number) => p.interpolate({ inputRange: [0, from, 1], outputRange: [0, 0, 1], extrapolate: 'clamp' });
   return (
-    <View style={styles.hero} accessible accessibilityLabel={`新纪录，${label} ${value} ${unit}，${gain}`}>
+    <View style={styles.hero} accessible accessibilityLabel={tr('新纪录，{label} {value} {unit}，{gain}', { label, value, unit, gain })}>
       <Animated.View style={[styles.rays, { opacity: p, transform: [{ scale: p.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) }] }]}>
         <Svg width={SIZE * 2} height={SIZE * 2} viewBox={`${-SIZE} ${-SIZE} ${SIZE * 2} ${SIZE * 2}`}>
           <Path d={RAY_PATH} fill={colors.surfaceRaised} />
         </Svg>
       </Animated.View>
-      <Animated.Text style={[styles.stamp, { opacity: late(0.3), transform: [{ rotate: '-6deg' }, { scale: late(0.3).interpolate({ inputRange: [0, 1], outputRange: [2, 1] }) }] }]}>新纪录</Animated.Text>
+      <Animated.Text style={[styles.stamp, { opacity: late(0.3), transform: [{ rotate: '-6deg' }, { scale: late(0.3).interpolate({ inputRange: [0, 1], outputRange: [2, 1] }) }] }]}>{tr('新纪录')}</Animated.Text>
       <Text style={styles.label}>{label}</Text>
       <Animated.View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, transform: [{ translateX: shake.interpolate({ inputRange: [-1, 1], outputRange: [-6, 6] }) }, { scale: p.interpolate({ inputRange: [0, 1], outputRange: [2.4, 1] }) }] }}>
         <Text style={styles.value}>{value}</Text>

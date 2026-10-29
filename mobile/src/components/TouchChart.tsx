@@ -4,6 +4,7 @@ import Svg, { Circle, Line, Polyline } from 'react-native-svg';
 
 import type { TouchPoint } from '@/domain/dunkSummary';
 import { APPROACH_TOUCH } from '@/domain/metrics';
+import { tr } from '@/i18n';
 import { colors, fonts } from '@/theme';
 
 const PAD_X = 20;
@@ -30,7 +31,7 @@ export function TouchChart({ approach, standing, line, height = 170 }: { approac
   const path = (ps: TouchPoint[]) => ps.map((p) => `${x(p.at)},${y(p.value)}`).join(' ');
 
   return (
-    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={`摸高趋势，助跑实测 ${approach.length} 次，原地估算 ${standing.length} 次，扣篮线 ${line} cm`}>
+    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={tr('摸高趋势，助跑实测 {length} 次，原地估算 {length2} 次，扣篮线 {line} cm', { length: approach.length, length2: standing.length, line })}>
       {width > 0 && all.length > 0 && (
         <>
           <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
@@ -44,7 +45,7 @@ export function TouchChart({ approach, standing, line, height = 170 }: { approac
               <Circle key={`a${i}`} cx={x(p.at)} cy={y(p.value)} r={4.5} fill={color} />
             ))}
           </Svg>
-          <Text style={[styles.lineLabel, { top: y(line) - 18 }]}>扣篮线 {line}</Text>
+          <Text style={[styles.lineLabel, { top: y(line) - 18 }]}>{tr('扣篮线 {line}', { line })}</Text>
         </>
       )}
     </View>
