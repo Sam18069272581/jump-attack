@@ -237,7 +237,7 @@ async function synthetic(M) {
     '',
     '这里的重复性只是分析流程对画面噪声的稳定性，不是运动员两次测试之间的信度；后者要用真实的同日多跳或隔天重测来算。',
   ].join('\n');
-  return { md, json: { cases: cases.map((c) => ({ name: c.name, kind: c.kind, videos: c.videos.map((v) => ({ name: v.name, ok: v.result.ok, problem: v.result.problem, jumps: v.result.events, ms: v.ms })) })), agreement, repeat, perJump, perSet } };
+  return { md, json: { trueJumps, found, extra, cases: cases.map((c) => ({ name: c.name, kind: c.kind, videos: c.videos.map((v) => ({ name: v.name, ok: v.result.ok, problem: v.result.problem, jumps: v.result.events, ms: v.ms })) })), agreement, repeat, perJump, perSet } };
 }
 
 function readCsv(file) {
