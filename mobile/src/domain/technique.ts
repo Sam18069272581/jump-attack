@@ -1140,15 +1140,18 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const off = abs(dot(sub(p, { x: width / 2, y: height / 2 }), frame.xAxis));
     return hypot(tapPx, (off * TAP_DEPTH_M * markerPx) / markers.distanceM / f);
   };
-  // Lengths along the floor: on the lines' scale, or on gravity's where the lines are off (`SCALE_MISMATCH`).
+  // Lengths along the floor: on the lines' scale, or on gravity's where the lines are off (`SCALE_MISMATCH`). Gravity's is
+  // right then only if its parabola is: one cut short at a hang (or what looked like one) can bend by as much as the two
+  // disagree, and which of them is right can't be told, so its error takes in the whole gap between them.
   const linesScale = flags.includes('off-line') ? null : markerScale;
   const floorScale = linesScale ?? gravityScale;
+  const scalesApart = linesScale == null && markerScale != null && flags.includes('hang') ? abs(gravityScale / markerScale - 1) : 0;
   if (penultimate) {
     const step = abs(firstPlant.toeX - penultimate.toeX) * floorScale;
     // Each toe's place (a median over its stance); the feet stand a hand's breadth either side of the line the scale
     // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself: the lines
     // are laid to 1 %, and each is tapped to `tapAlong`, a share of the gap between them that grows with the distance.
-    const scaleRel = linesScale != null ? hypot(0.01, (1.96 * hypot(tapAlong(markers!.a), tapAlong(markers!.b))) / markerPx!) : 1.96 * gravityScaleRel;
+    const scaleRel = linesScale != null ? hypot(0.01, (1.96 * hypot(tapAlong(markers!.a), tapAlong(markers!.b))) / markerPx!) : hypot(1.96 * gravityScaleRel, scalesApart);
     const toes = hypot(firstPlant.toeErr, penultimate.toeErr) * floorScale;
     metrics.step = measured('step', step, sqrt(toes ** 2 + 0.03 ** 2 + (step * (scaleRel + sizeChange)) ** 2));
   }
@@ -1206,9 +1209,10 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     if (ts.length >= 4) {
       const fin = polyFit(ts, xs, 1);
       const vin = fin.c[1] * floorScale;
-      // The fit, the segment model's drift over this short stretch, and a run-up that comes at the camera.
+      // The fit, the segment model's drift over this short stretch, and a run-up that comes at the camera. Both speeds on
+      // gravity's scale, where it may be as far off as the scales are apart, move the braking by that share of it.
       const vinErr = sqrt((1.96 * fin.se[1] * floorScale) ** 2 + (COM_DRIFT_M / (ts[ts.length - 1] - ts[0])) ** 2 + (vin * sizeChange) ** 2);
-      metrics.brake = measured('brake', vin - vx, hypot(vinErr, vxErr));
+      metrics.brake = measured('brake', vin - vx, hypot(vinErr, vxErr, (vin - vx) * scalesApart));
     }
   }
 

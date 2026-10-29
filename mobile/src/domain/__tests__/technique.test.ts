@@ -575,6 +575,23 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     }
   });
 
+  it.each([
+    ['filmed as the guide asks', {}, 5068],
+    ['the phone on its side', { rotate90: true }, 5029],
+  ])('lines where the athlete ran, %s, but the flight taken for a hang on the rim: the last step and braking still hold the truth', (_, over, seed) => {
+    // Two clips of tools/pose-validation's, read and tapped as it does. Jitter cuts the parabola short where no hand is on
+    // the rim, and the short fit puts gravity's scale 7 % and 14 % below the lines': the lines are right, but which of
+    // the two is can't be told once the fit has stopped short.
+    const scene = poseScene({ ...over, seed });
+    const { frames, target } = readAsTheScreen(scene);
+    const finger = normals(seed * 7919);
+    const tap = (p: Pt) => ({ x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() });
+    const markers = { a: tap(scene.markers!.a), b: tap(scene.markers!.b), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+    const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+    expect(result.flags).toEqual(expect.arrayContaining(['hang', 'off-line']));
+    expect(misses(scene, result).filter((x) => /^(brake|step):/.test(x))).toEqual([]);
+  });
+
   it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
     const scene = poseScene();
     const b = scene.markers!.b;
