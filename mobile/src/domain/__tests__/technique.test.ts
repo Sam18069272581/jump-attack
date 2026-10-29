@@ -592,6 +592,32 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     expect(misses(scene, result).filter((x) => /^(brake|step):/.test(x))).toEqual([]);
   });
 
+  it.each([
+    ['twice the jitter', { noisePx: 3 }, 40214, null],
+    ['twice the jitter', { noisePx: 3 }, 41323, null],
+    ['4K from 10 m, each line tapped a hand’s breadth off the hips’ path', { width: 3840, height: 2160, focalPx: 2740, fps: 120, noisePx: 3, distanceM: 10, approachSpeed: 4.5 }, 42047, 3],
+  ])('lines where the athlete ran, %s, and gravity’s scale 5–13 %% off theirs with no hand on the rim: the last step and braking still hold the truth', (_, over, seed, draw) => {
+    // Clips of the probes', read as the screen reads them. Jitter alone can bend the parabola as far as a hang can, and
+    // which of the two scales is right can't be told: both figures on gravity's carry the whole gap between them.
+    const scene = poseScene({ ...over, seed });
+    const { frames, target } = readAsTheScreen(scene);
+    const picture = { width: scene.width, height: scene.height };
+    let markers: Markers = { ...scene.markers!, distanceM: 3, picture, tapPx: TAP_PX };
+    if (draw != null) {
+      // Tapped as the probe did: 8 px of finger on a 4K clip, and 8 cm (1 SD) along each tape.
+      const finger = normals(seed * 104729 + 2 * draw);
+      const depth = normals(seed * 104729 + 2 * draw + 1);
+      const tap = (xM: number) => {
+        const p = scene.floorPoint(xM, 0.08 * depth());
+        return { x: p.x + 8 * finger(), y: p.y + 8 * finger() };
+      };
+      markers = { a: tap(scene.options.markers!.aM), b: tap(scene.options.markers!.bM), distanceM: 3, picture, tapPx: 8 };
+    }
+    const result = resultOf(analyseTechnique({ frames, captureFps: scene.options.fps, markers, target }));
+    expect([seed, result.flags.includes('off-line'), result.flags.includes('hang')]).toEqual([seed, true, false]);
+    expect([seed, misses(scene, result).filter((x) => /^(brake|step):/.test(x))]).toEqual([seed, []]);
+  });
+
   it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
     const scene = poseScene();
     const b = scene.markers!.b;

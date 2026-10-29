@@ -1145,11 +1145,13 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // How far a line's tap is off along the run (px, 1 SD).
   const tapAlong = (p: Pt): number => tapOff(p, frame.xAxis);
   // Lengths along the floor: on the lines' scale, or on gravity's where the lines are off (`SCALE_MISMATCH`). Gravity's is
-  // right then only if its parabola is: one cut short at a hang (or what looked like one) can bend by as much as the two
-  // disagree, and which of them is right can't be told, so its error takes in the whole gap between them.
+  // right then only if its parabola is: one cut short at a hang, or bent by twice the usual jitter with no hang at all,
+  // can be off by as much as the two disagree, and which of them is right can't be told. A figure on gravity's scale is
+  // then either as read or off by that gap, so its error is its own plus the whole gap, added outright: the gap is one
+  // of two answers, not a scatter that the others may cancel.
   const linesScale = flags.includes('off-line') ? null : markerScale;
   const floorScale = linesScale ?? gravityScale;
-  const scalesApart = linesScale == null && markerScale != null && flags.includes('hang') ? abs(gravityScale / markerScale - 1) : 0;
+  const scalesApart = linesScale == null && markerScale != null ? abs(gravityScale / markerScale - 1) : 0;
   // The lines' scale (95 %, share): they are laid to 1 %, and each is tapped to `tapAlong`, a share of the gap between
   // them that grows with the distance.
   const linesRel = linesScale != null ? hypot(0.01, (1.96 * hypot(tapAlong(markers!.a), tapAlong(markers!.b))) / markerPx!) : 0;
@@ -1157,9 +1159,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const step = abs(firstPlant.toeX - penultimate.toeX) * floorScale;
     // Each toe's place (a median over its stance); the feet stand a hand's breadth either side of the line the scale
     // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself.
-    const scaleRel = linesScale != null ? linesRel : hypot(1.96 * gravityScaleRel, scalesApart);
+    const scaleRel = linesScale != null ? linesRel : 1.96 * gravityScaleRel;
     const toes = hypot(firstPlant.toeErr, penultimate.toeErr) * floorScale;
-    metrics.step = measured('step', step, sqrt(toes ** 2 + 0.03 ** 2 + (step * (scaleRel + sizeChange)) ** 2));
+    metrics.step = measured('step', step, sqrt(toes ** 2 + 0.03 ** 2 + (step * (scaleRel + sizeChange)) ** 2) + step * scalesApart);
   }
 
   // --- Run-up speed: the time the hips take between the markers.
@@ -1195,9 +1197,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       // Where the lines are off, gravity's scale has its own error, and the stretch between the crossings isn't the
       // lines': it is as much longer or shorter as the scales disagree, about the picture's middle, so each end moves
       // along the run-up, the take-off line's through the plant's braking. With the take-off line within 3 m of the
-      // middle, that moves the mean speed by up to the same share.
-      const offBy = linesScale != null ? 0 : hypot(1.96 * gravityScaleRel, gravityScale / markerScale! - 1);
-      metrics.approach = measured('approach', v, v * hypot(1.96 * rel, sizeChange, offBy));
+      // middle, that moves the mean speed by up to the same share (`scalesApart`, added outright as for the lengths).
+      const gravityRel = linesScale != null ? 0 : 1.96 * gravityScaleRel;
+      metrics.approach = measured('approach', v, v * (hypot(1.96 * rel, sizeChange, gravityRel) + scalesApart));
     }
   }
 
@@ -1219,7 +1221,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       // scale where it is on theirs (the take-off speed is on gravity's). Both speeds on gravity's scale, where it may be
       // as far off as the scales are apart, move the braking by that share of it.
       const vinErr = sqrt((1.96 * fin.se[1] * floorScale) ** 2 + (COM_DRIFT_M / (ts[ts.length - 1] - ts[0])) ** 2 + (vin * sizeChange) ** 2 + (vin * linesRel) ** 2);
-      metrics.brake = measured('brake', vin - vx, hypot(vinErr, vxErr, (vin - vx) * scalesApart));
+      metrics.brake = measured('brake', vin - vx, hypot(vinErr, vxErr) + abs(vin - vx) * scalesApart);
     }
   }
 
