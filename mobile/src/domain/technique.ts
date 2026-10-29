@@ -712,7 +712,8 @@ function contactsOf(traces: Record<Side, FootTrace>, s: Series, floor: Floor, fp
     const merged: [number, number][] = [];
     for (const r of runs) {
       const prev = merged.at(-1);
-      if (prev && r[0] - prev[1] <= 0.06 * fps && abs(toeNear(max(prev[0], prev[1] - 5), prev[1]) - toeNear(r[0], min(r[1], r[0] + 5))) * scale < 0.1) prev[1] = r[1];
+      // Frames the model lost in between don't count: the foot can't be seen there, not seen in the air.
+      if (prev && s.lost.slice(prev[1], r[0]).filter((l) => !l).length <= 0.06 * fps && abs(toeNear(max(prev[0], prev[1] - 5), prev[1]) - toeNear(r[0], min(r[1], r[0] + 5))) * scale < 0.1) prev[1] = r[1];
       else merged.push([...r]);
     }
     for (const [i, j] of merged) {

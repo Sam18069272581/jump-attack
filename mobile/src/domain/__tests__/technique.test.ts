@@ -42,6 +42,7 @@ function misses(scene: PoseScene, result: TechniqueResult, widen = 1): string[] 
 }
 const grossMisses = (scene: PoseScene, result: TechniqueResult) => misses(scene, result, 2);
 const lose = (scene: PoseScene, from: number, to: number) => scene.frames.map((f) => (f.frame >= from && f.frame <= to ? { ...f, poses: [] } : f));
+const touchDownOf = (scene: PoseScene) => scene.truth.contacts.find((c) => c.downS === scene.truth.plantDownS)!.downFrame;
 
 describe('polyFit', () => {
   it('recovers a parabola exactly', () => {
@@ -325,6 +326,15 @@ describe('what the clip lacks or gets wrong', () => {
     const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: scene.markers }));
     for (const k of ['vz', 'angle', 'plant'] as const) expect([k, result.metrics[k]!.error <= 1.1 * clean.metrics[k]!.error]).toEqual([k, true]);
     expect(misses(scene, result)).toEqual([]);
+  });
+
+  it('at 60 fps with 5–6 frames lost inside the plant: the plant isn’t lost and the step before it isn’t taken for it', () => {
+    // Lost frames aren't the foot seen in the air: the two pieces either side of them are one contact.
+    for (const [seed, from, to] of [[1, 76, 80], [3, 76, 81]]) {
+      const scene = poseScene({ fps: 60, seed });
+      const result = resultOf(analyseTechnique({ frames: lose(scene, from, to), captureFps: 60, markers: scene.markers }));
+      expect([seed, Math.abs(result.events.plantDown! - touchDownOf(scene)) <= 2, misses(scene, result)]).toEqual([seed, true, []]);
+    }
   });
 
   it('at 60 fps with the take-off inside 8 lost frames: the free fall isn’t fitted on a frame with the foot still down', () => {
