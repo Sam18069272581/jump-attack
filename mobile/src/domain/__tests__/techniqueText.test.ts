@@ -86,3 +86,14 @@ it('when a hand on the rim cut the fall short, says so rather than that the line
   expect(shownFlags(['low-fps', 'hang', 'off-line', 'short-fall'])).toEqual(['low-fps', 'hang', 'short-fall']);
   expect(shownFlags(['off-line'])).toEqual(['off-line']);
 });
+
+it('after a hand on the rim, says the take-off rests on the rise before it, and the short fall’s line says the same', () => {
+  // The fit stops where the hand takes hold: before the top, or up to 0.2 s past it. Shown together, the two lines must
+  // agree on what was seen. And the take-off's horizontal velocity goes by the lines' scale only after a short fall:
+  // "still" (仍) would say it always did.
+  expect(FLAG_TEXT.hang).toMatch(/上升段/);
+  expect(FLAG_TEXT.hang).toMatch(/一点下落/);
+  expect(FLAG_TEXT['short-fall']).not.toMatch(/一小段下落/);
+  expect(FLAG_TEXT['short-fall']).not.toMatch(/仍/);
+  expect(FLAG_TEXT['short-fall']).toMatch(/起跳水平速度都按两条线/);
+});
