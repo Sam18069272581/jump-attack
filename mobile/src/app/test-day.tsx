@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Button, Card } from '@/components/ui';
 import { newSessionId, type Athlete } from '@/db/repo';
+import { athleteName } from '@/domain/athletes';
 import { toISODate } from '@/domain/dates';
 import { nextTurn } from '@/domain/team';
 import { nextStep } from '@/domain/testDay';
@@ -68,7 +69,7 @@ export default function TestDay() {
           const on = crew.some((c) => c.id === a.id);
           return (
             <Pressable key={a.id} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => toggle(a.id)} style={[styles.chip, on && styles.chipOn]}>
-              <Text style={[styles.chipText, on && { color: colors.onAccent }]}>{a.name}</Text>
+              <Text style={[styles.chipText, on && { color: colors.onAccent }]}>{athleteName(a.name)}</Text>
             </Pressable>
           );
         })}
@@ -93,11 +94,11 @@ export default function TestDay() {
                 <Pressable
                   key={a.id}
                   accessibilityRole="button"
-                  accessibilityLabel={tr('{name} 测 {name2}', { name: a.name, name2: step.def.name })}
+                  accessibilityLabel={tr('{name} 测 {name2}', { name: athleteName(a.name), name2: step.def.name })}
                   onPress={() => measure(row, a.id)}
                   style={({ pressed }) => [styles.turn, isNext && styles.current, pressed && { opacity: 0.75 }]}
                 >
-                  <Text style={[styles.turnName, row.trials > 0 && { color: colors.good }]}>{a.name}</Text>
+                  <Text style={[styles.turnName, row.trials > 0 && { color: colors.good }]}>{athleteName(a.name)}</Text>
                   <Text style={styles.status}>{row.trials > 0 ? result(row) : row.box ? tr('{box} cm 箱', { box: row.box }) : tr('未测')}</Text>
                 </Pressable>
               );
@@ -105,7 +106,7 @@ export default function TestDay() {
           </Card>
         ))}
         {up ? (
-          <Button label={tr('下一位：{name} · {name2}', { name: up.athlete.name, name2: up.row.def.name })} onPress={() => measure(up.row, up.athlete.id)} />
+          <Button label={tr('下一位：{name} · {name2}', { name: athleteName(up.athlete.name), name2: up.row.def.name })} onPress={() => measure(up.row, up.athlete.id)} />
         ) : (
           <Card style={styles.done}>
             <Text style={text.section}>{tr('{p}三项都测完了', { p: crew.length === athletes.length ? tr('全队') : tr('{length} 人', { length: crew.length }) })}</Text>

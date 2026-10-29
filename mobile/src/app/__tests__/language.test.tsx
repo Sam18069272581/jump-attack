@@ -70,6 +70,12 @@ it('redraws the page in English, then German, and keeps the pick', async () => {
   expect(texts(r.root)).toContain('Sprache');
   expect(mockKv.get('language')).toBe('de');
 
+  // The phone's own athlete is Ich here, and saving the profile keeps the name the database had.
+  expect(texts(r.root)).toContain('Ich');
+  const save = r.root.find((n) => n.props.accessibilityRole === 'button' && typeof n.props.onPress === 'function' && n.findAllByType(Text).some((t) => t.props.children === 'Speichern'));
+  await act(async () => save.props.onPress());
+  expect(await mockDb.getFirstAsync('SELECT name FROM athlete WHERE id = 1')).toEqual({ name: '我自己' });
+
   await act(async () => option(r.root, 'Wie das Handy').props.onPress());
   expect(texts(r.root)).toContain('语言');
   expect(mockKv.has('language')).toBe(false);

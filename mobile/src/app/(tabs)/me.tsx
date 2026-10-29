@@ -10,6 +10,7 @@ import { exportAthlete, findSameAthlete, importAthlete } from '@/db/athleteData'
 import { listBodyMass, recordBodyMass } from '@/db/bodyMass';
 import { LATEST_VERSION } from '@/db/migrations';
 import { clearSavedVideoUris, createAthlete, updateAthlete, type Athlete } from '@/db/repo';
+import { athleteName } from '@/domain/athletes';
 import { describeBackup, parseAthleteFile } from '@/domain/backup';
 import { CLEARANCE_CM, dunkLine, RIM_CM } from '@/domain/dunk';
 import { toISODate } from '@/domain/dates';
@@ -135,8 +136,8 @@ function Athletes() {
     }
     const here = describeBackup(await exportAthlete(db, same.id));
     Alert.alert(
-      tr('更新{name}的数据？', { name: same.name }),
-      tr('文件里：{file}\n手机上现在：{here}\n\n{name}在这台手机上的记录会换成文件里的，只在这台手机上记的会没有，不能撤销；需要的话先导出一份。其他人的数据不受影响。', { file: describeBackup(file), here, name: same.name }),
+      tr('更新{name}的数据？', { name: athleteName(same.name) }),
+      tr('文件里：{file}\n手机上现在：{here}\n\n{name}在这台手机上的记录会换成文件里的，只在这台手机上记的会没有，不能撤销；需要的话先导出一份。其他人的数据不受影响。', { file: describeBackup(file), here, name: athleteName(same.name) }),
       [
         { text: tr('取消'), style: 'cancel' },
         { text: tr('更新'), style: 'destructive', onPress: () => void run(same.id) },
@@ -152,7 +153,7 @@ function Athletes() {
         return (
           <Pressable key={a.id} accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => select(a.id)} style={[styles.athlete, selected && styles.athleteSelected]}>
             <Icon name="user" size={18} color={selected ? colors.accent : colors.textMuted} />
-            <Text style={[styles.athleteName, selected && { color: colors.accent }]}>{a.name}</Text>
+            <Text style={[styles.athleteName, selected && { color: colors.accent }]}>{athleteName(a.name)}</Text>
             {selected && <Icon name="check" size={18} color={colors.accent} />}
           </Pressable>
         );
@@ -178,7 +179,7 @@ function Athletes() {
         </Pressable>
       )}
       <View style={styles.addRow}>
-        {current && <Button label={tr('导出 {name} 的数据', { name: current.name })} variant="ghost" onPress={exportFile} busy={busy === 'export'} style={{ flex: 1 }} />}
+        {current && <Button label={tr('导出 {name} 的数据', { name: athleteName(current.name) })} variant="ghost" onPress={exportFile} busy={busy === 'export'} style={{ flex: 1 }} />}
         <Button label={tr('导入运动员')} variant="ghost" onPress={importFile} busy={busy === 'import'} style={{ flex: 1 }} />
       </View>
       <Text style={styles.footnote}>{tr('一台手机可以记好几个人，测之前先点选是谁。导出的文件只含这个人的数据，可以发给本人导入到他自己的手机；云端同步备份的是这台手机上的所有人。')}</Text>
@@ -188,7 +189,7 @@ function Athletes() {
 
 function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Promise<void> }) {
   const db = useSQLiteContext();
-  const [name, setName] = useState(athlete.name);
+  const [name, setName] = useState(athleteName(athlete.name));
   const [mass, setMass] = useState(athlete.body_mass_kg?.toString() ?? '');
   const [reach, setReach] = useState(athlete.standing_reach_cm?.toString() ?? '');
   const [leg, setLeg] = useState(athlete.leg_length_cm?.toString() ?? '');
@@ -212,7 +213,8 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
     }
     await updateAthlete(db, {
       ...athlete,
-      name: name.trim(),
+      // The default athlete keeps its stored name unless it was renamed, so it still reads right after a language switch.
+      name: name.trim() === athleteName(athlete.name) ? athlete.name : name.trim(),
       body_mass_kg: toNumber(mass),
       standing_reach_cm: toNumber(reach),
       leg_length_cm: legCm,

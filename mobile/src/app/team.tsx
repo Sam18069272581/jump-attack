@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ui';
+import { athleteName } from '@/domain/athletes';
 import type { TeamRow } from '@/domain/team';
 import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
@@ -42,11 +43,11 @@ export default function Team() {
 function Member({ row, onPress }: { row: TeamRow; onPress: () => void }) {
   const change = row.change == null ? null : `${row.change > 0 ? '+' : ''}${row.change.toFixed(1)}`;
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel={tr('看 {name} 的扣篮诊断', { name: row.name })} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.75 }]}>
+    <Pressable accessibilityRole="button" accessibilityLabel={tr('看 {name} 的扣篮诊断', { name: athleteName(row.name) })} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.75 }]}>
       <Text style={styles.rank}>{row.rank ?? '–'}</Text>
       <View style={{ flex: 1, gap: 3 }}>
         <View style={styles.line}>
-          <Text style={styles.name}>{row.name}</Text>
+          <Text style={styles.name}>{athleteName(row.name)}</Text>
           <Text style={[styles.gap, row.gap.startsWith(tr('过线')) && { color: colors.good }]}>{row.gap}</Text>
         </View>
         <Text style={styles.detail}>{row.weakness.startsWith(tr('先测')) ? row.weakness : tr('短板：{weakness}', { weakness: row.weakness })}</Text>

@@ -981,7 +981,6 @@ export const en: Record<string, string> = {
   '已过 {gapCm} cm': '{gapCm} cm over',
   '摸高器：扣篮线 {line} cm，还没有摸高': 'Reach board: dunk line {line} cm, no touch yet',
   '切换测试对象': 'Switch athlete',
-  '你好，{name}': 'Hi, {name}',
   '今天练什么？': 'What’s today’s training?',
 
   // components/RecordHero.tsx
@@ -1130,6 +1129,11 @@ export const en: Record<string, string> = {
 
   // db/backup.ts
   '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。': 'The backup has a problem and was not restored. The data on the phone is unchanged.',
+
+  // domain/athletes.ts
+  '我自己': 'Me',
+  '你好，我自己': 'Hi',
+  '你好，{name}': 'Hi, {name}',
 
   // domain/backup.ts
   '这不是 Jump Attack 的备份文件。': 'This isn’t a Jump Attack backup file.',

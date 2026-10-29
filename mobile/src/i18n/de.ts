@@ -981,7 +981,6 @@ export const de: Record<string, string> = {
   '已过 {gapCm} cm': '{gapCm} cm darüber',
   '摸高器：扣篮线 {line} cm，还没有摸高': 'Reichhöhenmesser: Dunk-Linie {line} cm, noch keine Reichhöhe',
   '切换测试对象': 'Athlet wechseln',
-  '你好，{name}': 'Hallo, {name}',
   '今天练什么？': 'Was steht heute an?',
 
   // components/RecordHero.tsx
@@ -1130,6 +1129,11 @@ export const de: Record<string, string> = {
 
   // db/backup.ts
   '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。': 'Die Sicherung ist fehlerhaft und wurde nicht wiederhergestellt. Die Daten auf dem Handy bleiben unverändert.',
+
+  // domain/athletes.ts
+  '我自己': 'Ich',
+  '你好，我自己': 'Hallo',
+  '你好，{name}': 'Hallo, {name}',
 
   // domain/backup.ts
   '这不是 Jump Attack 的备份文件。': 'Das ist keine Sicherungsdatei von Jump Attack.',

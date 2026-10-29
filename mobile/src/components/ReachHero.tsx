@@ -5,6 +5,7 @@ import Svg, { Defs, Line, LinearGradient, Path, Rect, Stop } from 'react-native-
 import { openDunkTest } from '@/components/dunkTests';
 import { Icon } from '@/components/Icon';
 import { CountUp, useReduceMotion } from '@/components/motion';
+import { greeting } from '@/domain/athletes';
 import { RIM_CM, reachRuler, type DunkDiagnosis } from '@/domain/dunk';
 import { gapHeading, touchSpread } from '@/domain/dunkSummary';
 import { reachVanes, type Vane } from '@/domain/vanes';
@@ -129,7 +130,7 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
 
       <View style={styles.column}>
         <Pressable accessibilityRole="button" accessibilityLabel={tr('切换测试对象')} hitSlop={8} onPress={onSwitchAthlete} style={styles.greeting}>
-          <Text style={text.muted} numberOfLines={1}>{tr('你好，{name}', { name })}</Text>
+          <Text style={text.muted} numberOfLines={1}>{greeting(name)}</Text>
           <Icon name="chevronDown" size={12} color={colors.textMuted} />
         </Pressable>
         <Text style={text.title}>{tr('今天练什么？')}</Text>

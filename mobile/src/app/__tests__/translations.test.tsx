@@ -18,6 +18,8 @@ import Me from '../(tabs)/me';
 import Train from '../(tabs)/train';
 import Dunk from '../dunk';
 import Recovery from '../recovery';
+import Team from '../team';
+import TestDay from '../test-day';
 import WorkoutScreen from '../workout/[date]';
 
 const mockDb = openMemoryDb();
@@ -25,9 +27,10 @@ const mockRouter = { push: jest.fn(), back: jest.fn(), navigate: jest.fn(), repl
 let mockParams: Record<string, string> = {};
 
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
+// The athlete the first migration creates, named 我自己 in the database whatever the language.
 const mockAthlete = {
-  current: { id: 1, name: 'Sam', body_mass_kg: 75, standing_reach_cm: 240 },
-  athletes: [{ id: 1, name: 'Sam' }],
+  current: { id: 1, name: '我自己', body_mass_kg: 75, standing_reach_cm: 240 },
+  athletes: [{ id: 1, name: '我自己' }],
   select: jest.fn(),
   reload: jest.fn(),
 };
@@ -74,7 +77,7 @@ async function jumps(metric: string, session: string, values: number[]) {
 
 beforeAll(async () => {
   await migrate(mockDb);
-  await mockDb.runAsync("UPDATE athlete SET name = 'Sam', body_mass_kg = 75, standing_reach_cm = 240 WHERE id = 1");
+  await mockDb.runAsync('UPDATE athlete SET body_mass_kg = 75, standing_reach_cm = 240 WHERE id = 1');
   await jumps('cmj', 'cmj-1', [44, 45]);
   await jumps('sj', 'sj-1', [40]);
   await jumps('approach_touch', 'touch-1', [300, 302, 301]);
@@ -95,6 +98,8 @@ const screens: [string, () => React.ReactElement][] = [
   ['dunk diagnosis', () => <Dunk />],
   ['recovery', () => <Recovery />],
   ['today’s workout', () => <WorkoutScreen />],
+  ['team', () => <Team />],
+  ['test day', () => <TestDay />],
 ];
 
 describe.each<[string, Lang]>([
