@@ -69,6 +69,7 @@ const CHECKS = {
       ...agreementFigures(r, '滞空 FT', 'FT', 'ms', 0.5),
       ...agreementFigures(r, '触地 GCT', 'GCT', 'ms', 0.5),
       ...agreementFigures(r, 'RSI', 'RSI', '', 0.005),
+      { key: 'twinPairs', name: 'repeated jumps found again in the re-noised copy', better: 'higher', tol: 0, value: r.repeat.find((x) => x.metric === '跳高 JH')?.n ?? null },
       { key: 'JH.te', name: 'JH typical error, same set re-noised (cm)', better: 'lower', tol: 0.05, value: r.repeat.find((x) => x.metric === '跳高 JH')?.te ?? null },
     ],
   },
