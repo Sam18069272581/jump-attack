@@ -24,7 +24,8 @@ const http = require('http');
 const os = require('os');
 const path = require('path');
 
-const MOBILE = path.resolve(__dirname, '../../mobile');
+const lib = require('../jump-analysis-validation/lib');
+
 const args = process.argv.slice(2);
 const opt = (name, dflt) => {
   const i = args.indexOf(name);
@@ -37,17 +38,8 @@ const SEED = Number(opt('--seed', 1));
 const SCALE = Number(opt('--scale', 1));
 
 function compile() {
-  const build = path.join(OUT, 'build');
-  execFileSync(
-    'npx',
-    ['tsc', '--ignoreConfig', '--outDir', build, '--module', 'commonjs', '--target', 'es2022', '--skipLibCheck', '--rootDir', 'src', 'src/domain/autoMark.ts', 'src/domain/testing/jumpScene.ts', 'src/media/frameGrabberHtml.ts'],
-    { cwd: MOBILE, stdio: 'inherit' },
-  );
-  return {
-    A: require(path.join(build, 'domain/autoMark.js')),
-    S: require(path.join(build, 'domain/testing/jumpScene.js')),
-    H: require(path.join(build, 'media/frameGrabberHtml.js')),
-  };
+  const M = lib.compile(OUT, ['domain/autoMark.ts', 'domain/testing/jumpScene.ts', 'media/frameGrabberHtml.ts']);
+  return { A: M('domain/autoMark'), S: M('domain/testing/jumpScene'), H: M('media/frameGrabberHtml') };
 }
 
 function rng(seed) {

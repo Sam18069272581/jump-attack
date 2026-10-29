@@ -10,12 +10,18 @@ const MOBILE = path.resolve(__dirname, '../../mobile');
 /** Compiles the given files under mobile/src (and what they import) and returns a loader for the compiled modules. */
 function compile(out, files) {
   const build = path.join(out, 'build');
-  // Type errors are the app's typecheck's business (`npm run typecheck`); here tsc runs without the app's config, so
-  // `@/` imports of types don't resolve, which changes nothing in the JavaScript it writes.
-  const r = spawnSync('npx', ['tsc', '--ignoreConfig', '--outDir', build, '--module', 'commonjs', '--target', 'es2022', '--skipLibCheck', '--rootDir', 'src', ...files.map((f) => `src/${f}`)], {
-    cwd: MOBILE,
-    encoding: 'utf8',
-  });
+  // Type errors are the app's typecheck's business (`npm run typecheck`). The app's own tsconfig pulls in Expo's, so a
+  // small one here maps `@/x` to `src/x` (the app's alias), which lets tsc follow those imports and compile them too.
+  const config = path.join(out, 'tsconfig.validate.json');
+  fs.mkdirSync(out, { recursive: true });
+  fs.writeFileSync(
+    config,
+    JSON.stringify({
+      compilerOptions: { outDir: build, rootDir: path.join(MOBILE, 'src'), module: 'commonjs', target: 'es2022', skipLibCheck: true, types: [], paths: { '@/*': [path.join(MOBILE, 'src/*')] } },
+      files: files.map((f) => path.join(MOBILE, 'src', f)),
+    }),
+  );
+  const r = spawnSync('npx', ['tsc', '-p', config], { cwd: MOBILE, encoding: 'utf8' });
   const missing = files.filter((f) => !fs.existsSync(path.join(build, f.replace(/\.ts$/, '.js'))));
   if (missing.length) throw new Error(`tsc wrote nothing for ${missing.join(', ')}:\n${r.stdout}${r.stderr}`);
   // The app imports `@/x` for `src/x`.
