@@ -932,11 +932,13 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // --- Flight parabola, on the raw centre of mass (the fit does the smoothing; a filter would bend the take-off).
   // A take-off that can't be timed is next to frames the model lost: the foot may still be down until they end. One
   // timed next to such frames, its error reaching across them (`acrossGap`), may be later than timed too. Either way
-  // the free fall is fitted from where every plant toe is seen off the height it stood at (within the take-off's
-  // error), after those frames. Not from the frame beside them, which isn't known to be in the air: its stillness can't
-  // be read next to the gap, and its smoothed height, bent by the gap, can read above where the toe stood while the
-  // foot is still down. The take-off itself stays where the foot was last seen down: moved past them, a two-foot
-  // take-off's foot would fall out of the plant.
+  // the free fall is fitted from where every plant toe is seen leaving, after those frames: above the height it stood at
+  // and rising (the path guessed across a gap can hold a toe that is still down above that height, sinking back). Not
+  // from the frame beside them, which isn't known to be in the air: its stillness can't be read next to the gap, and its
+  // smoothed height, bent by the gap, can read above where the toe stood while the foot is still down. The toes seen on
+  // the last frame within the take-off's error, and none of them leaving: the moment it left wasn't seen (an error that
+  // ends inside lost frames says nothing). The take-off itself stays where the foot was last seen down: moved past them,
+  // a two-foot take-off's foot would fall out of the plant.
   let freeFrom = takeoffAt;
   if (!Number.isFinite(off.err) || s.frame.some((f, k) => abs(f - takeoffAt) <= off.err && s.lost[k] && s.lost[k + 1])) {
     const tol = FLOOR_TOL_M / roughScale;
@@ -944,9 +946,12 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       toe: traces[c.foot].toe,
       y: standingHeight(traces[c.foot].toe, s.frame.findIndex((f) => f >= (c.downAt + c.upAt) / 2), s.frame.findIndex((f) => f >= c.upAt)),
     }));
+    const leaving = (q: number) => !s.lost[q] && !s.lost[q + 1] && toes.every(({ toe, y }) => toe.sy[q] - y > tol && toe.sy[q + 1] > toe.sy[q]);
     let k = s.frame.findIndex((f) => f > takeoffAt);
-    while (k >= 0 && k < s.frame.length && s.frame[k] < takeoffAt + off.err && (s.lost[k] || s.lost[k + 1] || toes.some(({ toe, y }) => !(toe.sy[k] - y > tol)))) k++;
+    while (k >= 0 && k < s.frame.length && s.frame[k] < takeoffAt + off.err && !leaving(k)) k++;
     if (k >= 0) freeFrom = max(takeoffAt, frameAt(s, k - 0.5));
+    const last = k - 1;
+    if (k >= 0 && !(k < s.frame.length && leaving(k)) && s.frame[last] > takeoffAt && !s.lost[last] && !s.lost[last + 1]) off.err = Infinity;
   }
   // Time runs from take-off, s.
   const fitRange = (toFrame: number) => {

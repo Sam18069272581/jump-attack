@@ -425,6 +425,33 @@ describe('what the clip lacks or gets wrong', () => {
     expect([result.flags.includes('hang'), misses(scene, result)]).toEqual([false, []]);
   });
 
+  it('at 120 fps, the far foot taking off, frames lost late in the plant: the take-off figures hold the truth, or none is given', () => {
+    // The far toe jitters twice as much as the near one, and the path guessed across the gap can hold its smoothed
+    // height above where it stood until the foot leaves: there it sinks back, where a toe that has left rises.
+    for (const [from, to] of [[-7, -5], [-10, -4], [-11, -4]]) {
+      const scene = poseScene({ fps: 120, foot: 'left', seed: 71000 });
+      const t = scene.truth.takeoffFrame;
+      const r = analyseTechnique({ frames: lose(scene, t + from, t + to), captureFps: 120, markers: scene.markers });
+      expect([from, r.ok ? misses(scene, r.result).filter((m) => /^(vz|angle|plant):/.test(m)) : []]).toEqual([from, []]);
+    }
+  });
+
+  it('two feet leaving together, frames lost across the take-off: its figures are given, and hold the truth', () => {
+    // Timed together, the take-off's error is the surer foot's and can end inside the lost frames: no toe is seen there,
+    // leaving or not, so nothing says the error is too narrow.
+    const cases: [Partial<PoseSceneOptions>, number, number, number][] = [
+      [{ fps: 240, markers: null }, 82000, -4, 3], // options, seed, first and last frame lost around the take-off
+      [{ fps: 120 }, 82000, -6, 0],
+    ];
+    for (const [over, seed, from, to] of cases) {
+      const scene = poseScene({ ...over, style: 'two', seed });
+      const t = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, t + from, t + to), captureFps: scene.options.fps, markers: scene.markers }));
+      const given = (['vz', 'angle', 'plant'] as const).filter((k) => result.metrics[k]);
+      expect([seed, given, misses(scene, result).filter((m) => /^(vz|angle|plant):/.test(m))]).toEqual([seed, ['vz', 'angle', 'plant'], []]);
+    }
+  });
+
   it('a 24 or 25 fps clip (a phone’s video mode): the plant is found, and knee and trunk come out as angles', () => {
     for (const fps of [24, 25]) {
       const { scene, r } = analyse({ fps });
