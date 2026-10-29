@@ -416,6 +416,15 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('at 60 fps without lines, frames lost across the take-off: the free fall isn’t fitted from the frame next to them', () => {
+    // That frame ends a stretch the filter smooths on its own: the toe can read a little above where it stood while the
+    // foot is still down. Fitted from there, the path leaves the parabola early, as if a hand were on the rim.
+    const scene = poseScene({ fps: 60, markers: null, seed: 71000 });
+    const to = scene.truth.takeoffFrame;
+    const result = resultOf(analyseTechnique({ frames: lose(scene, to - 1, to + 2), captureFps: 60, markers: null }));
+    expect([result.flags.includes('hang'), misses(scene, result)]).toEqual([false, []]);
+  });
+
   it('a 24 or 25 fps clip (a phone’s video mode): the plant is found, and knee and trunk come out as angles', () => {
     for (const fps of [24, 25]) {
       const { scene, r } = analyse({ fps });

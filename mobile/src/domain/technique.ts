@@ -930,12 +930,13 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   }
 
   // --- Flight parabola, on the raw centre of mass (the fit does the smoothing; a filter would bend the take-off).
-  // A take-off that can't be timed is next to frames the model lost: the foot may still be down until they end, and the
-  // frame beside them isn't known to be in the air (its stillness can't be read next to the gap). One timed next to
-  // such frames, its error reaching across them (`acrossGap`), may be later than timed too. Either way the free fall is
-  // fitted from where every plant toe is seen off the height it stood at (within the take-off's error), after those
-  // frames. The take-off itself stays where the foot was last seen down: moved past them, a two-foot take-off's foot
-  // would fall out of the plant.
+  // A take-off that can't be timed is next to frames the model lost: the foot may still be down until they end. One
+  // timed next to such frames, its error reaching across them (`acrossGap`), may be later than timed too. Either way
+  // the free fall is fitted from where every plant toe is seen off the height it stood at (within the take-off's
+  // error), after those frames. Not from the frame beside them, which isn't known to be in the air: its stillness can't
+  // be read next to the gap, and its smoothed height, bent by the gap, can read above where the toe stood while the
+  // foot is still down. The take-off itself stays where the foot was last seen down: moved past them, a two-foot
+  // take-off's foot would fall out of the plant.
   let freeFrom = takeoffAt;
   if (!Number.isFinite(off.err) || s.frame.some((f, k) => abs(f - takeoffAt) <= off.err && s.lost[k] && s.lost[k + 1])) {
     const tol = FLOOR_TOL_M / roughScale;
@@ -944,8 +945,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       y: standingHeight(traces[c.foot].toe, s.frame.findIndex((f) => f >= (c.downAt + c.upAt) / 2), s.frame.findIndex((f) => f >= c.upAt)),
     }));
     let k = s.frame.findIndex((f) => f > takeoffAt);
-    if (!Number.isFinite(off.err)) while (k >= 0 && k < s.lost.length && (s.lost[k] || s.lost[k + 1])) k++;
-    while (k >= 0 && k < s.frame.length && s.frame[k] < takeoffAt + off.err && (s.lost[k] || toes.some(({ toe, y }) => !(toe.sy[k] - y > tol)))) k++;
+    while (k >= 0 && k < s.frame.length && s.frame[k] < takeoffAt + off.err && (s.lost[k] || s.lost[k + 1] || toes.some(({ toe, y }) => !(toe.sy[k] - y > tol)))) k++;
     if (k >= 0) freeFrom = max(takeoffAt, frameAt(s, k - 0.5));
   }
   // Time runs from take-off, s.
