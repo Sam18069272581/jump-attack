@@ -41,8 +41,8 @@ jobs:
       matrix:
         check: [detect, analysis, pose, vbt]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -59,7 +59,7 @@ jobs:
           playwright install --with-deps chromium
           echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
       - if: matrix.check == 'vbt'
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: pip
@@ -70,7 +70,7 @@ jobs:
         run: node --test tools/accuracy-regression/*.test.js
       - run: node tools/accuracy-regression/run.js ${{ matrix.check }} --out "$RUNNER_TEMP/accuracy"
       - if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: accuracy-${{ matrix.check }}
           path: |

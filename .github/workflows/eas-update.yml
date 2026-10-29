@@ -25,7 +25,7 @@ jobs:
       run:
         working-directory: mobile
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - id: ready
         run: |
           project_id=$(node -p "require('./app.json').expo.extra?.eas?.projectId ?? ''")
@@ -36,7 +36,7 @@ jobs:
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
       - if: steps.ready.outputs.ok == 'true'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -44,7 +44,7 @@ jobs:
       - if: steps.ready.outputs.ok == 'true'
         run: npm ci
       - if: steps.ready.outputs.ok == 'true'
-        uses: expo/expo-github-action@v8
+        uses: expo/expo-github-action@v9
         with:
           eas-version: latest
           token: ${{ secrets.EXPO_TOKEN }}
