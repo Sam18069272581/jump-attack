@@ -119,10 +119,12 @@ export const TAP_PT = 3;
 /**
  * How far nearer the lens or further a line is tapped than where the hips crossed it (m, 1 SD): on the tape under the
  * runner's body, between the feet, which land a hand's breadth either side of the hips' path, as the screen asks. A tap
- * drawn the same way every time is a lean, not a scatter, and isn't allowed for: leaning 5 cm towards the planted foot
- * at the take-off line leaves the run-up speed's error holding the truth in 93.5 % of 1000 clips read as
- * tools/pose-validation reads them (`tap-lean`), and at both lines in 92.5 %. Folding the lean into the scatter
- * (hypot(8, 5) = 9.4 cm) would still leave 94.8 % and 94.1 %.
+ * drawn the same way every time is a lean, not a scatter, and isn't in this figure: leaning 5 cm towards the planted
+ * foot at the take-off line, this alone leaves the run-up speed's error holding the truth in 93.5 % of 1000 clips read
+ * as tools/pose-validation reads them (`tap-lean`), and at both lines in 92.5 %; folding the lean into the scatter
+ * (hypot(8, 5) = 9.4 cm) would still leave 94.8 % and 94.1 %. What holds the rest is the check of the two scales
+ * (`scalesApart`): the taps that throw the run-up speed out also pull the lines' scale off gravity's by more than the
+ * two can explain, and the gap goes into the error. With it the same clips hold the truth in 97.2 % and 97.4 %.
  */
 export const TAP_DEPTH_M = 0.08;
 
@@ -1171,10 +1173,16 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // A figure read on gravity's scale is 1/r of it on the lines' (r: gravity's over the lines'): the two answers are 1/r − 1
   // of it apart, more than r − 1 where gravity's is the smaller (r = 0.83 puts them 20 % apart, not 17 %).
   const scaleRatio = markerScale != null ? gravityScale / markerScale : 1;
-  const scalesApart = linesScale == null && markerScale != null ? max(abs(scaleRatio - 1), abs(1 / scaleRatio - 1)) : 0;
+  const gap = max(abs(scaleRatio - 1), abs(1 / scaleRatio - 1));
   // The lines' scale (95 %, share): they are laid to 1 %, and each is tapped to `tapAlong`, a share of the gap between
   // them that grows with the distance.
   const linesRel = linesScale != null ? hypot(0.01, (1.96 * hypot(tapAlong(markers!.a), tapAlong(markers!.b))) / markerPx!) : 0;
+  // Lines a little off (the 3 m tape laid at 2.9 m, or a few tenths of a metre nearer or further than the athlete ran) put
+  // the scales 2–5 % apart, short of `SCALE_MISMATCH`. Each scale has its own error (1 SD: gravity's fit, the lines'
+  // laying and taps), and two right scales are within 1.96 of their combined SD in 95 % of clips: further apart, one of
+  // them is off and which can't be told, so the figures on the lines' scale take in the whole gap too, as off the line.
+  const scalesDisagree = linesScale != null && abs(scaleRatio - 1) > 1.96 * hypot(gravityScaleRel, linesRel / 1.96);
+  const scalesApart = markerScale != null && (linesScale == null || scalesDisagree) ? gap : 0;
   if (penultimate) {
     const step = abs(firstPlant.toeX - penultimate.toeX) * floorScale;
     // Each toe's place (a median over its stance); the feet stand a hand's breadth either side of the line the scale
@@ -1239,9 +1247,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       const vin = fin.c[1] * floorScale;
       // The fit, the segment model's drift over this short stretch, a run-up that comes at the camera, and the lines'
       // scale where it is on theirs (the take-off speed is on gravity's). Both speeds on gravity's scale, where it may be
-      // as far off as the scales are apart, move the braking by that share of it.
+      // as far off as the scales are apart, move the braking by that share of it; the run-in speed alone on the lines'.
       const vinErr = sqrt((1.96 * fin.se[1] * floorScale) ** 2 + (COM_DRIFT_M / (ts[ts.length - 1] - ts[0])) ** 2 + (vin * sizeChange) ** 2 + (vin * linesRel) ** 2);
-      metrics.brake = measured('brake', vin - vx, hypot(vinErr, vxErr) + abs(vin - vx) * scalesApart);
+      metrics.brake = measured('brake', vin - vx, hypot(vinErr, vxErr) + abs(linesScale != null ? vin : vin - vx) * scalesApart);
     }
   }
 

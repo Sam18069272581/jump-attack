@@ -723,6 +723,49 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     expect(Object.entries(tally).filter(([k, c]) => (k !== 'brake' && c.n < 240) || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 
+  it.each([
+    ['the 3 m line laid at 2.9 m', { aM: -2.9, bM: 0, nearerM: 0 }],
+    ['both lines 0.3 m further from the camera than where the athlete ran', { aM: -3, bM: 0, nearerM: -0.3 }],
+  ])('%s, too little to flag: the last step, braking and run-up speed still cover the truth in 95 %% of clips', (_, m) => {
+    // The lines' scale is 3–4 % off, within `SCALE_MISMATCH`, but further from gravity's than either's own error explains.
+    // Read and tapped as the screen does it, 40 clips.
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (let seed = 11; seed <= 50; seed++) {
+      const scene = poseScene({ seed, markers: m });
+      const { frames, target } = readAsTheScreen(scene);
+      const finger = normals(seed * 7919);
+      const tap = (p: Pt) => ({ x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() });
+      const markers = { a: tap(scene.markers!.a), b: tap(scene.markers!.b), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+      const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+      const missed = new Set(misses(scene, result).map((x) => x.split(':')[0]));
+      for (const k of ['approach', 'brake', 'step'] as const) {
+        if (!result.metrics[k]) continue;
+        tally[k] ??= { n: 0, covered: 0 };
+        tally[k].n++;
+        if (!missed.has(k)) tally[k].covered++;
+      }
+    }
+    expect(Object.entries(tally).filter(([k, c]) => (k !== 'brake' && c.n < 40) || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
+  });
+
+  it('lines where the athlete ran, tapped at their feet: the last step is still a figure to trust in most clips', () => {
+    // Two scales a little apart by chance aren't lines laid wrong: only a gap beyond both their errors widens the step.
+    const depth = normals(38);
+    const finger = normals(39);
+    let ok = 0;
+    for (let seed = 11; seed <= 50; seed++) {
+      const scene = poseScene({ seed });
+      const { frames, target } = readAsTheScreen(scene);
+      const tap = (xM: number) => {
+        const p = scene.floorPoint(xM, 0.08 * depth());
+        return { x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() };
+      };
+      const markers = { a: tap(-3), b: tap(0), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+      if (resultOf(analyseTechnique({ frames, captureFps: 240, markers, target })).metrics.step?.status === 'ok') ok++;
+    }
+    expect(ok).toBeGreaterThanOrEqual(34);
+  });
+
   it('lines tapped along their tapes: braking’s run-in speed is as unsure as their scale, and where along the tapes they were tapped tilts up', () => {
     // The run-in speed is measured on the lines' scale, which is only as good as their taps: tapped less well, the
     // braking is less sure. And a line tapped nearer the lens than the hips' path sits lower in the picture too (further
