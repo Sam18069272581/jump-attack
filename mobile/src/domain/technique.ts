@@ -743,7 +743,11 @@ function contactsOf(traces: Record<Side, FootTrace>, s: Series, floor: Floor, fp
         const downs = seenInAir ? [heel, toe].flatMap((pt) => edgeTime(pt, i, 'down', fps, [i, j], pt === heel ? stand.heel : stand.toe, scale) ?? []) : [];
         // The heel or the toe, whichever comes down first.
         const dn = acrossGap(downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 }, s.lost, fps);
-        const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: j - 0.5 }), s.lost, fps);
+        // An up edge that can't be timed is next to frames the model lost: the foot may still be down until they end, and
+        // the frame beside them isn't known to be in the air (its stillness can't be read next to the gap).
+        let seenUp = j;
+        while (seenUp < s.lost.length && (s.lost[seenUp] || s.lost[seenUp + 1])) seenUp++;
+        const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: seenUp - 0.5 }), s.lost, fps);
         const downAt = frameAt(s, dn.t);
         const upAt = frameAt(s, max(up.t, dn.t + 1));
         // The toe's place: the median over the part of the stance it is planted for, good to 1.25σ/√n (1 SD).

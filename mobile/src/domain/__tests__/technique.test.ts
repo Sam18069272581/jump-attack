@@ -41,6 +41,7 @@ function misses(scene: PoseScene, result: TechniqueResult, widen = 1): string[] 
   });
 }
 const grossMisses = (scene: PoseScene, result: TechniqueResult) => misses(scene, result, 2);
+const lose = (scene: PoseScene, from: number, to: number) => scene.frames.map((f) => (f.frame >= from && f.frame <= to ? { ...f, poses: [] } : f));
 
 describe('polyFit', () => {
   it('recovers a parabola exactly', () => {
@@ -324,6 +325,16 @@ describe('what the clip lacks or gets wrong', () => {
     const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: scene.markers }));
     for (const k of ['vz', 'angle', 'plant'] as const) expect([k, result.metrics[k]!.error <= 1.1 * clean.metrics[k]!.error]).toEqual([k, true]);
     expect(misses(scene, result)).toEqual([]);
+  });
+
+  it('at 60 fps with the take-off inside 8 lost frames: the free fall isn’t fitted on a frame with the foot still down', () => {
+    // The frame next to the gap has no stillness to read, so it isn't counted as down: the unknown take-off goes after
+    // the lost frames, not before that frame.
+    for (const seed of [1, 2, 3, 4]) {
+      const scene = poseScene({ fps: 60, seed });
+      const result = resultOf(analyseTechnique({ frames: lose(scene, 82, 89), captureFps: 60, markers: scene.markers }));
+      expect([seed, result.flags.includes('scale-broken'), misses(scene, result)]).toEqual([seed, false, []]);
+    }
   });
 
   it('a 24 or 25 fps clip (a phone’s video mode): the plant is found, and knee and trunk come out as angles', () => {
