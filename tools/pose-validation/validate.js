@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * How far to trust the take-off technique figures (mobile/src/app/technique/analyse.tsx) before any real footage: each
- * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed thirty-three ways. Everything runs the
+ * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed thirty-four ways. Everything runs the
  * app's own code: domain/testing/poseScene.ts builds a run-up jump with known take-off velocity, contacts, step and
  * knee angle and gives its landmarks the pose model's jitter, swaps and misses; domain/techniqueRead.ts reads it the way
  * the screen does (a coarse pass around a tap near the take-off, the jump's window, every frame in it), with the floor
@@ -37,6 +37,8 @@ const ALL_WAYS = [
   { key: 'rotate90', name: '手机竖着拿、画面横着', over: { rotate90: true } },
   { key: 'roll', name: '手机歪了 3°', over: { rollDeg: 3 } },
   { key: 'curve', name: '助跑斜着朝手机来（15°）', over: { curveDeg: 15 } },
+  // Lines laid where that run-up went: the 3 m line nearer the lens, and lower in the picture than the take-off line.
+  { key: 'curve-path', name: '助跑斜着来（15°），两条线贴在运动员跑过的地方，点线时点在身体下方近或远 8 厘米', over: { curveDeg: 15 }, tapDepthM: 0.08, tapOnPath: true },
   { key: 'hang', name: '手碰到篮筐、挂了一下', over: { hangAfterS: 0.34 } },
   { key: 'curve-bare', name: '助跑斜着来（15°），没贴线', over: { curveDeg: 15, markers: null } },
   { key: 'hang-bare', name: '挂了一下，没贴线', over: { hangAfterS: 0.34, markers: null } },
@@ -110,17 +112,19 @@ function fingerPx(T, scene) {
 /**
  * The floor lines as a finger taps them on the zoomed picture: each off by `fingerPx` (1 SD) either way, and with
  * `depthM`, on its tape that much (1 SD) nearer the lens or further than where the athlete ran; with `leanM`, the
- * take-off line that much nearer the lens on top, towards the planted foot on the camera's side. The screen takes them
- * to be `MARKER_GAP_M` apart, wherever they really are, and sends the picture's size and the finger's miss with them.
+ * take-off line that much nearer the lens on top, towards the planted foot on the camera's side; with `onPath`, laid
+ * where a run-up at an angle to the picture went, the 3 m line nearer the lens. The screen takes them to be
+ * `MARKER_GAP_M` apart, wherever they really are, and sends the picture's size and the finger's miss with them.
  */
-function tapped(T, R, scene, depthM, leanM = 0) {
+function tapped(T, R, scene, depthM, leanM = 0, onPath = false) {
   const m = scene.markers;
   if (!m) return null;
   const normal = normals(scene.options.seed * 7919);
   const depth = normals(scene.options.seed * 7919 + 1);
   const { aM, bM, nearerM } = scene.options.markers;
   const tapPx = fingerPx(T, scene);
-  const at = (xM, p, lean) => (depthM || lean ? scene.floorPoint(xM, nearerM + lean + (depthM ? depthM * depth() : 0)) : p);
+  const path = (xM) => (onPath && xM < 0 ? -xM * Math.tan((scene.options.curveDeg * Math.PI) / 180) : 0);
+  const at = (xM, p, lean) => (depthM || lean || onPath ? scene.floorPoint(xM, nearerM + lean + path(xM) + (depthM ? depthM * depth() : 0)) : p);
   const tap = (p) => ({ x: p.x + tapPx * normal(), y: p.y + tapPx * normal() });
   return { a: tap(at(aM, m.a, 0)), b: tap(at(bM, m.b, leanM)), distanceM: R.MARKER_GAP_M, picture: { width: scene.width, height: scene.height }, tapPx };
 }
@@ -143,7 +147,7 @@ function measure(S, R, T, LM, scene, way) {
   if (!plan.ok) return { ok: false, problem: plan.problem };
   const dense = R.denseFrames(plan.win, total, coarse.map((f) => f.frame));
   const frames = R.windowOf(R.framesFromWire([...coarseWire, ...read(dense)], scene.width, scene.height, fps), plan.win);
-  return T.analyseTechnique({ frames, captureFps: fps, markers: tapped(T, R, scene, way.tapDepthM, way.tapLeanM), target: plan.win.target });
+  return T.analyseTechnique({ frames, captureFps: fps, markers: tapped(T, R, scene, way.tapDepthM, way.tapLeanM, way.tapOnPath), target: plan.win.target });
 }
 
 function stats(rows) {

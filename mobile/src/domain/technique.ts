@@ -1162,7 +1162,10 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // c drops towards the lens instead: from a lens h up and d away, by h·tan(c)/d in the picture, while the body's size
   // changes by L·tan(c)/d over L along it, so the false slope is h/L of that change, whatever the roll. Up is off by at
   // most that, with h at its highest (`LENS_HEIGHT_M`), plus what slope the fit has left: a bound, which is taken as the
-  // 95 % error, as the feet's 3 cm and the foreshortening are below.
+  // 95 % error, as the feet's 3 cm and the foreshortening are below. Lines laid where such a run-up went drop the same
+  // way, the 3 m line nearer the lens than the take-off line: up between them is off by that false slope too, on top of
+  // the taps. Without it, lines laid on a run-up 10–20° to the picture had the vertical take-off velocity cover the
+  // truth in 2 of 40 clips.
   const runUpTilt = () => {
     const k0 = s.frame.findIndex((f) => f >= takeoffAt);
     const upTo = (pt: PointTrace): PointTrace => ({ x: pt.x.slice(0, k0), y: pt.y.slice(0, k0), sy: pt.sy.slice(0, k0), still: pt.still.slice(0, k0) });
@@ -1172,7 +1175,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const runupSlope = (LENS_HEIGHT_M * sizeChange) / max(1e-3, sizeSpanPx * gravityScale);
   const tilt =
     markerPx != null
-      ? hypot(tapOff(markers!.a, frame.up), tapOff(markers!.b, frame.up)) / markerPx
+      ? hypot(tapOff(markers!.a, frame.up), tapOff(markers!.b, frame.up)) / markerPx + (sizeChange > SLIGHT_CURVE ? runupSlope / 1.96 : 0)
       : flags.includes('hang')
         ? max(releveled + (LEVEL_DEG * PI) / 180, runUpTilt())
         : sizeChange > SLIGHT_CURVE
