@@ -1656,6 +1656,8 @@ export const de: Record<string, string> = {
   '点准运动员；人要全身在画面里，别太小（至少画面高度的五分之一）。': 'Genau auf den Athleten tippen. Der ganze Körper muss im Bild sein und darf nicht zu klein sein (mindestens ein Fünftel der Bildhöhe).',
   '没找到起跳': 'Kein Absprung gefunden',
   '视频里要有完整的助跑、起跳和落地；拍摄帧率选对。': 'Das Video braucht den ganzen Anlauf, Absprung und Landung, und die richtige Aufnahme-Bildrate.',
+  '分不清哪一下是起跳，可能把助跑的一步当成了起跳': 'Der Absprung war nicht klar zu erkennen; vielleicht wurde ein Anlaufschritt dafür gehalten',
+  '没贴线、助跑又斜着朝手机跑来时会这样。贴好两条线再拍，或者站到助跑路线的正侧面拍，让运动员横着跑过画面。': 'Das passiert ohne Linien am Boden, wenn der Anlauf schräg auf das Handy zukommt. Die zwei Linien kleben und neu filmen, oder genau seitlich zum Anlauf filmen, sodass der Athlet quer durchs Bild läuft.',
   '找到了腾空，但起跳那一步不在视频里': 'Flugphase gefunden, aber der Absprungschritt ist nicht im Video',
   '从最后两步之前就开始拍，起跳点放在画面中间偏落地那边。': 'Vor den letzten zwei Schritten mit dem Filmen beginnen, der Absprungpunkt liegt in der Bildmitte, eher zur Landeseite hin.',
   '两条线点得太近': 'Die zwei Linien liegen zu nah beieinander',

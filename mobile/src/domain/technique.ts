@@ -55,6 +55,9 @@ export type TechniqueProblem =
   | 'no-jump'
   /** A flight, but no plant before it in the clip. */
   | 'no-plant'
+  /** No lines, and the flight found falls too slowly for the athlete's size: a stride of the run-up, taken for the jump
+   *  where the floor was read wrong (a run-up that comes at the camera, a high or rolled phone). */
+  | 'unclear-jump'
   /** The two floor lines were tapped too close together to be 3 m apart: both on the same tape. */
   | 'markers';
 
@@ -1099,6 +1102,12 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const curvature = -2 * fy.c[2];
   if (!(curvature > 0)) return { ok: false, problem: 'no-jump' };
   const gravityScale = G / curvature;
+  // Without lines nothing else checks gravity's scale. On it, the hips can't stand further above the ankles than the
+  // 0.9 m `roughScale` takes them to: a jump's fall puts them at 0.6–0.8 of that in the synthetic clips of
+  // tools/pose-validation, a 2 m athlete's at about 0.86. A fall that makes them longer is far too slow for this
+  // athlete, the drop of a run-up stride taken for the jump (1.2–6 times in the clips where that happens), and every
+  // figure would rest on it.
+  if (!markers && gravityScale > roughScale) return { ok: false, problem: 'unclear-jump' };
   const gravityScaleRel = (2 * fy.se[2]) / curvature;
   const gWithMarkers = markerScale != null ? curvature * markerScale : null;
   if (markerScale != null) {

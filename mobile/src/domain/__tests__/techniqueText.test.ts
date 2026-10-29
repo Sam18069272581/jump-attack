@@ -1,6 +1,6 @@
 import { PASS_LINE } from '../technique';
 import { setLang } from '@/i18n';
-import { FLAG_TEXT, flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, shownFlags } from '../techniqueText';
+import { FLAG_TEXT, flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT, shownFlags } from '../techniqueText';
 
 describe('formatMeasured', () => {
   it('writes the figure with its 95 % error, to the figure’s own precision', () => {
@@ -109,4 +109,11 @@ it('says every flag in the app’s language, the slanted run-up’s line too', (
   } finally {
     setLang('zh');
   }
+});
+
+it('when the jump couldn’t be told from the run-up, says so rather than that there was none, and how to film it', () => {
+  expect(PROBLEM_TEXT['unclear-jump'].what).toMatch(/起跳/);
+  expect(PROBLEM_TEXT['unclear-jump'].what).not.toBe(PROBLEM_TEXT['no-jump'].what);
+  expect(PROBLEM_TEXT['unclear-jump'].advice).toMatch(/两条线/);
+  expect(PROBLEM_TEXT['unclear-jump'].advice).toMatch(/侧面/);
 });

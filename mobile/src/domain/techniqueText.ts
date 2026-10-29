@@ -76,6 +76,10 @@ export const PROBLEM_TEXT: Record<TechniqueProblem, { what: string; advice: stri
   'no-athlete': { what: '没跟住运动员', advice: '点准运动员；人要全身在画面里，别太小（至少画面高度的五分之一）。' },
   'no-jump': { what: '没找到起跳', advice: '视频里要有完整的助跑、起跳和落地；拍摄帧率选对。' },
   'no-plant': { what: '找到了腾空，但起跳那一步不在视频里', advice: '从最后两步之前就开始拍，起跳点放在画面中间偏落地那边。' },
+  'unclear-jump': {
+    what: '分不清哪一下是起跳，可能把助跑的一步当成了起跳',
+    advice: '没贴线、助跑又斜着朝手机跑来时会这样。贴好两条线再拍，或者站到助跑路线的正侧面拍，让运动员横着跑过画面。',
+  },
   markers: { what: '两条线点得太近', advice: '起跳线点在起跳点的胶带上，3 米线点在往回 3 米的那条胶带上；没贴线就点「没贴线，跳过」。' },
 };
 

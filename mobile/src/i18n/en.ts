@@ -1656,6 +1656,8 @@ export const en: Record<string, string> = {
   '点准运动员；人要全身在画面里，别太小（至少画面高度的五分之一）。': 'Tap right on the athlete. The whole body must be in the frame and not too small (at least a fifth of the frame height).',
   '没找到起跳': 'No take-off found',
   '视频里要有完整的助跑、起跳和落地；拍摄帧率选对。': 'The video needs the whole run-up, take-off and landing, and the right capture frame rate.',
+  '分不清哪一下是起跳，可能把助跑的一步当成了起跳': 'Couldn’t tell which step was the take-off; a run-up step may have been taken for it',
+  '没贴线、助跑又斜着朝手机跑来时会这样。贴好两条线再拍，或者站到助跑路线的正侧面拍，让运动员横着跑过画面。': 'This happens without lines on the floor when the run-up comes diagonally toward the phone. Lay the two lines and film again, or film from straight side-on to the run-up so the athlete runs across the picture.',
   '找到了腾空，但起跳那一步不在视频里': 'Found the flight, but the take-off step isn’t in the video',
   '从最后两步之前就开始拍，起跳点放在画面中间偏落地那边。': 'Start filming before the last two steps, with the take-off spot in the middle of the frame, toward the landing side.',
   '两条线点得太近': 'The two lines are too close together',

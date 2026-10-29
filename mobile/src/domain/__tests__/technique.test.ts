@@ -1056,6 +1056,21 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     }
   });
 
+  it.each([
+    ['at 60 fps, a run-up that comes in at 25° to the picture', { fps: 60, curveDeg: 25 }, [1, 2, 3]],
+    ['a run-up at 20° and the phone rolled 3° the other way', { curveDeg: 20, rollDeg: -3 }, [1, 2]],
+    ['the phone 1.3 m up and rolled 3°, a run-up at 15°', { curveDeg: 15, rollDeg: -3, lensM: 1.3 }, [35000]],
+  ])('no lines, %s: a stride of the run-up isn’t measured as the jump, and it says the jump couldn’t be told from the run-up', (_, over, seeds) => {
+    // The floor read wrong, a stride before the plant passes for the flight. Its fall is far too slow for the athlete's
+    // size: on the scale it gives, the hips would stand 1.2–6 times as far above the ankles as a 0.9 m leg. With no lines
+    // nothing else checks that scale, and every figure would rest on it.
+    for (const seed of seeds) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const r = analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: null });
+      expect([seed, r.ok ? `take-off at ${r.result.events.takeoff}, truth ${scene.truth.takeoffFrame}` : r.problem]).toEqual([seed, 'unclear-jump']);
+    }
+  });
+
   it('lines each tapped TAP_PX in towards the other, filmed from 10 m: the last step, measured on their scale, still holds the truth', () => {
     // A 1.4 SD error in their gap: the scale is good only to the taps, a share that grows with the distance.
     for (const seed of [1, 2, 3, 4, 5]) {
