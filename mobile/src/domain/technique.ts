@@ -977,8 +977,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   if (penultimate) {
     const step = abs(firstPlant.toeX - penultimate.toeX) * floorScale;
     // Each toe's place (a median over its stance); the feet stand a hand's breadth either side of the line the scale
-    // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself.
-    const scaleRel = markerScale != null ? 0.01 : 1.96 * gravityScaleRel;
+    // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself: the lines
+    // are laid to 1 %, and each is tapped to `TAP_PX`, a share of the gap between them that grows with the distance.
+    const scaleRel = markerScale != null ? hypot(0.01, (1.96 * sqrt(2) * TAP_PX) / markerPx!) : 1.96 * gravityScaleRel;
     const toes = hypot(firstPlant.toeErr, penultimate.toeErr) * floorScale;
     metrics.step = measured('step', step, sqrt(toes ** 2 + 0.03 ** 2 + (step * (scaleRel + sizeChange)) ** 2));
   }

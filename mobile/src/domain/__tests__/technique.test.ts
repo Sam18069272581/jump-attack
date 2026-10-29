@@ -408,6 +408,19 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       for (const rollDeg of [-3, -1, 2]) expect([seed, rollDeg, Math.abs(resultOf(analyse({ seed, markers: null, rollDeg }).r).metrics.vz!.value - level) < 0.005]).toEqual([seed, rollDeg, true]);
     }
   });
+
+  it('lines each tapped TAP_PX in towards the other, filmed from 10 m: the last step, measured on their scale, still holds the truth', () => {
+    // A 1.4 SD error in their gap: the scale is good only to the taps, a share that grows with the distance.
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const scene = poseScene({ seed, distanceM: 10, approachSpeed: 4.5 });
+      const { a, b, distanceM } = scene.markers!;
+      const len = Math.hypot(b.x - a.x, b.y - a.y);
+      const u = { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+      const markers = { a: { x: a.x + TAP_PX * u.x, y: a.y + TAP_PX * u.y }, b: { x: b.x - TAP_PX * u.x, y: b.y - TAP_PX * u.y }, distanceM };
+      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers }));
+      expect([seed, misses(scene, result).filter((m) => m.startsWith('step:'))]).toEqual([seed, []]);
+    }
+  });
 });
 
 describe('pose-model mistakes it copes with', () => {
