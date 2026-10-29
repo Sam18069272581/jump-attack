@@ -809,6 +809,18 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     }
   });
 
+  it('both lines 0.3 m nearer the camera than where the athlete ran, and a hand on the rim: the run-up speed, further off than the scales are apart, still holds the truth', () => {
+    // Clips of the probes', read and tapped as tools/pose-validation does. Gravity's scale came out 4–5 % off the lines',
+    // and the run-up speed 9–11 % (0.56–0.65 m/s) off, with 0.52–0.56 stated: the take-off line is crossed in the plant,
+    // at about half the run-up's speed, so its being out of place costs about twice the time.
+    for (const seed of [73410, 73433, 73435]) {
+      const scene = poseScene({ seed, hangAfterS: 0.34, markers: { aM: -3, bM: 0, nearerM: 0.3 } });
+      const { frames, target } = readAsTheScreen(scene);
+      const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: tappedAtTheFeet(scene, 0.08), target }));
+      expect([seed, result.flags.includes('hang'), misses(scene, result).filter((x) => /^approach:/.test(x))]).toEqual([seed, true, []]);
+    }
+  });
+
   it('lines where the athlete ran, tapped at their feet: the last step is still a figure to trust in most clips', () => {
     // Two scales a little apart by chance aren't lines laid wrong: only a gap beyond both their errors widens the step.
     const depth = normals(38);

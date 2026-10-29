@@ -124,7 +124,9 @@ export const TAP_PT = 3;
  * as tools/pose-validation reads them (`tap-lean`), and at both lines in 92.5 %; folding the lean into the scatter
  * (hypot(8, 5) = 9.4 cm) would still leave 94.8 % and 94.1 %. What holds the rest is the check of the two scales
  * (`scalesApart`): the taps that throw the run-up speed out also pull the lines' scale off gravity's by more than the
- * two can explain, and the gap goes into the error. With it the same clips hold the truth in 97.2 % and 97.4 %.
+ * two can explain, and the gap goes into the error. With it the same clips hold the truth in 97.2 % and 97.4 %; with
+ * the share of such a gap that chance could hide added too (`unseen`), both times the slowing through the take-off
+ * line (`k`), in 999 of the 1000 at one line and at both.
  */
 export const TAP_DEPTH_M = 0.08;
 
@@ -1253,9 +1255,17 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       // lines': it is as much longer or shorter as the scales disagree, about the picture's middle, so each end moves
       // along the run-up, the take-off line's through the plant's braking. With the take-off line within 3 m of the
       // middle, that moves the mean speed by up to the same share (`scalesApart`, added outright as for the lengths).
-      // On the lines' scale with no gap seen, the gap that could pass unseen (`unseen`).
+      // On the lines' scale, the gap seen, or with none seen the most that could pass unseen (`unseen`), moves the time
+      // between the crossings, not the 3 m: lines a share off where the athlete ran put each crossing that share of its
+      // distance from the picture's middle (`xm`) along the run-up, and the hips take that over their speed there. The
+      // take-off line is crossed in the plant at about half the run-up's speed, so the run-up speed is off by `k` times
+      // the gap: each crossing's distance from the middle over its speed, summed, over the time between them. That is 1
+      // at an even speed with the middle halfway, and 1.5–1.7 in the synthetic clips: without it, lines 0.3 m nearer than
+      // the athlete ran, with a hand on the rim, had the run-up speed cover the truth in 83 of 100.
       const gravityRel = linesScale != null ? 0 : 1.96 * gravityScaleRel;
-      metrics.approach = measured('approach', v, v * (hypot(1.96 * rel, sizeChange, gravityRel) + scalesApart + unseen));
+      const xm = markers.picture ? toWorld(frame, { x: markers.picture.width / 2, y: markers.picture.height / 2 }).x : (xa + xb) / 2;
+      const k = linesScale != null ? max(1, (abs(xa - xm) / max(1, ca.speed) + abs(xb - xm) / max(1, cb.speed)) / dt) : 1;
+      metrics.approach = measured('approach', v, v * (hypot(1.96 * rel, sizeChange, gravityRel) + k * (scalesApart + unseen)));
     }
   }
 

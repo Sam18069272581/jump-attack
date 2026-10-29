@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * How far to trust the take-off technique figures (mobile/src/app/technique/analyse.tsx) before any real footage: each
- * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed thirty-two ways. Everything runs the
+ * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed thirty-three ways. Everything runs the
  * app's own code: domain/testing/poseScene.ts builds a run-up jump with known take-off velocity, contacts, step and
  * knee angle and gives its landmarks the pose model's jitter, swaps and misses; domain/techniqueRead.ts reads it the way
  * the screen does (a coarse pass around a tap near the take-off, the jump's window, every frame in it), with the floor
@@ -58,6 +58,8 @@ const ALL_WAYS = [
   { key: 'tap-lean', name: '点起跳线时偏向踩线的起跳脚 5 厘米，两条线再近或远 8 厘米', over: {}, tapDepthM: 0.08, tapLeanM: 0.05 },
   // A fall cut short at 60 fps can put gravity's scale well off the lines': lengths stay on theirs (`short-fall`).
   { key: 'hang-60-depth', name: '60 帧、手碰到篮筐挂了一下，点线时点在身体下方近或远 8 厘米', over: { fps: 60, hangAfterS: 0.34 }, tapDepthM: 0.08 },
+  // The run-up speed on the lines' scale is off by more than the scales are apart: the take-off line is crossed in the plant.
+  { key: 'lines-near-hang', name: '两条线比运动员跑的地方近 0.3 米、手碰到篮筐挂了一下，点线时点在身体下方近或远 8 厘米', over: { hangAfterS: 0.34, markers: { aM: -3, bM: 0, nearerM: 0.3 } }, tapDepthM: 0.08 },
   { key: 'bystander', name: '旁边站着一个人', over: { bystanderM: 2 } },
   { key: 'dropout', name: '5% 的帧没认出人，起跳前左右腿认反几帧', over: { dropout: 0.05, swaps: [[200, 208]] } },
   { key: 'far', name: '离得远（10 米）、助跑慢（4.5 m/s）', over: { distanceM: 10, approachSpeed: 4.5 } },
