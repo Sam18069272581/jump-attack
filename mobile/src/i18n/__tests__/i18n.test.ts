@@ -1,4 +1,8 @@
-import { getLang, langFromLocales, localized, setLang, tr } from '..';
+import { getLang, htmlTexts, langFromLocales, localizeHtml, localized, setLang, speechLanguage, tr } from '..';
+
+// The mechanism, with dictionaries of its own; the real ones are checked in dictionaries.test.ts.
+jest.mock('../en', () => ({ en: { 我的: 'Me', '导出 {name} 的数据': 'Export {name}’s data', 引号: `it's <b>` } }));
+jest.mock('../de', () => ({ de: { 我的: 'Ich', '导出 {name} 的数据': 'Daten von {name} exportieren' } }));
 
 afterEach(() => setLang('zh'));
 
@@ -56,5 +60,63 @@ describe('localized', () => {
     expect(item.name).toBe('Me');
     expect({ ...item }).toEqual({ code: 'me', name: 'Me' });
     expect(JSON.stringify(item)).toBe('{"code":"me","name":"Me"}');
+  });
+
+  it('reaches into nested objects and arrays, and translates lists of text', () => {
+    const shared = { name: '我的' };
+    const listed = { name: '我的', steps: ['我的', '我的'] };
+    const data = localized({ items: [shared, listed], again: shared }, 'name', 'steps');
+    setLang('en');
+    expect(data.items[0].name).toBe('Me');
+    expect(listed.steps).toEqual(['Me', 'Me']);
+    expect(data.again.name).toBe('Me');
+  });
+
+  it('translates every text field when no field is named, for tables keyed by code', () => {
+    const table = localized({ a: '我的', b: { what: '我的' } });
+    setLang('en');
+    expect(table).toEqual({ a: 'Me', b: { what: 'Me' } });
+  });
+
+  it('keeps the Chinese key when the same data is wrapped twice, whatever the language', () => {
+    const item = localized({ name: '我的' }, 'name');
+    setLang('en');
+    localized(item, 'name');
+    setLang('de');
+    expect(item.name).toBe('Ich');
+  });
+
+  it('lets code overwrite a translated field', () => {
+    const item = localized({ name: '我的' }, 'name');
+    item.name = 'Sam';
+    setLang('en');
+    expect(item.name).toBe('Sam');
+  });
+});
+
+describe('localizeHtml', () => {
+  const page = "<div id=\"msg\">我的</div><script>post({ message: '我的' }); post({ message: '我的：' + e.name });</script>";
+
+  it('finds the Chinese text nodes and quoted script strings of a WebView page', () => {
+    expect(htmlTexts(page)).toEqual(['我的', '我的', '我的：']);
+  });
+
+  it('leaves the page alone in Chinese and translates what it can in English', () => {
+    expect(localizeHtml(page)).toBe(page);
+    setLang('en');
+    expect(localizeHtml(page)).toBe("<div id=\"msg\">Me</div><script>post({ message: 'Me' }); post({ message: '我的：' + e.name });</script>");
+  });
+
+  it('escapes what it puts into a script string or a text node', () => {
+    setLang('en');
+    expect(localizeHtml("<p>引号</p><script>x('引号')</script>")).toBe("<p>it's &lt;b&gt;</p><script>x('it\\'s <b>')</script>");
+  });
+});
+
+describe('speechLanguage', () => {
+  it('speaks cues in the app’s language', () => {
+    expect(speechLanguage()).toBe('zh-CN');
+    setLang('de');
+    expect(speechLanguage()).toBe('de-DE');
   });
 });

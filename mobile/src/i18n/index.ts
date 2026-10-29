@@ -27,6 +27,11 @@ export function setLang(lang: Lang): void {
   current = lang;
 }
 
+/** The voice for spoken cues (expo-speech), in the app's language. */
+export function speechLanguage(): string {
+  return { zh: 'zh-CN', en: 'en-US', de: 'de-DE' }[current];
+}
+
 export function isLang(s: unknown): s is Lang {
   return s === 'zh' || s === 'en' || s === 'de';
 }
@@ -52,15 +57,51 @@ export function tr(zh: string, params?: Record<string, unknown>): string {
 }
 
 /**
- * Module-level data whose text fields are read in the current language each time, e.g. metric names. Each listed
- * field holds the Chinese text and becomes a getter that translates it; spreading the object copies the
- * translation of that moment.
+ * Module-level data whose text is read in the current language each time, e.g. metric names. In `data` and every
+ * object and array inside it, each field named in `keys` that holds Chinese text, or a list of it, becomes a getter
+ * that translates it; with no `keys`, every such field does. Call it once the data is built: spreading a wrapped object copies the translation of that moment.
  */
-export function localized<T extends object>(data: T, ...keys: (keyof T)[]): T {
-  for (const key of keys) {
-    const zh = data[key];
-    if (typeof zh !== 'string') continue;
-    Object.defineProperty(data, key, { get: () => tr(zh), enumerable: true, configurable: true });
-  }
+export function localized<T>(data: T, ...keys: string[]): T {
+  const seen = new Set<object>();
+  const visit = (node: unknown) => {
+    if (node == null || typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    for (const [key, desc] of Object.entries(Object.getOwnPropertyDescriptors(node))) {
+      if (!('value' in desc)) continue;
+      const zh: unknown = desc.value;
+      const text = typeof zh === 'string' || (Array.isArray(zh) && zh.length > 0 && zh.every((x) => typeof x === 'string'));
+      if ((keys.length === 0 || keys.includes(key)) && text && desc.configurable) {
+        Object.defineProperty(node, key, {
+          get: () => (typeof zh === 'string' ? tr(zh) : (zh as string[]).map((s) => tr(s))),
+          set(value: unknown) {
+            Object.defineProperty(this, key, { value, writable: true, enumerable: true, configurable: true });
+          },
+          enumerable: desc.enumerable,
+          configurable: true,
+        });
+      } else {
+        visit(zh);
+      }
+    }
+  };
+  visit(data);
   return data;
+}
+
+/** Chinese in a WebView page: text between tags (not script), and single-quoted strings in its script. */
+const HTML_TEXT = /'([^'\n\\]*[\u3400-\u9fff][^'\n\\]*)'|>([^<>\n'"(){};=]*[\u3400-\u9fff][^<>\n'"(){};=]*)</g;
+
+/** The Chinese texts of a WebView page, each a dictionary key. */
+export function htmlTexts(html: string): string[] {
+  return [...html.matchAll(HTML_TEXT)].map((m) => m[1] ?? m[2]);
+}
+
+/** A WebView page (media/*Html.ts) with its Chinese texts in the current language. */
+export function localizeHtml(html: string): string {
+  if (current === 'zh') return html;
+  return html.replace(HTML_TEXT, (_, js: string | undefined, text: string | undefined) =>
+    js != null
+      ? `'${tr(js).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`
+      : `>${tr(text!).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}<`,
+  );
 }
