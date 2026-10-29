@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * How far to trust the take-off technique figures (mobile/src/app/technique/analyse.tsx) before any real footage: each
- * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed sixteen ways. Everything runs the
+ * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed nineteen ways. Everything runs the
  * app's own code: domain/testing/poseScene.ts builds a run-up jump with known take-off velocity, contacts, step and
  * knee angle and gives its landmarks the pose model's jitter, swaps and misses; domain/techniqueRead.ts reads it the way
  * the screen does (a coarse pass around a tap near the take-off, the jump's window, every frame in it), with the floor
@@ -39,6 +39,9 @@ const ALL_WAYS = [
   { key: 'hang', name: '手碰到篮筐、挂了一下', over: { hangAfterS: 0.34 } },
   { key: 'curve-bare', name: '助跑斜着来（15°），没贴线', over: { curveDeg: 15, markers: null } },
   { key: 'hang-bare', name: '挂了一下，没贴线', over: { hangAfterS: 0.34, markers: null } },
+  { key: 'curve-roll-bare', name: '没贴线、斜跑 15° 且手机反向歪 1.5°', over: { curveDeg: 15, rollDeg: -1.5, markers: null } },
+  { key: 'hang-roll-bare', name: '挂了一下，没贴线，手机反向歪 3°', over: { hangAfterS: 0.34, rollDeg: -3, markers: null } },
+  { key: 'slight-bare', name: '没贴线、助跑偏了 4°（不到算斜跑的程度）', over: { curveDeg: 4, markers: null } },
   { key: 'bystander', name: '旁边站着一个人', over: { bystanderM: 2 } },
   { key: 'dropout', name: '5% 的帧没认出人，起跳前左右腿认反几帧', over: { dropout: 0.05, swaps: [[200, 208]] } },
   { key: 'far', name: '离得远（10 米）、助跑慢（4.5 m/s）', over: { distanceM: 10, approachSpeed: 4.5 } },

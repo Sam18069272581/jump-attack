@@ -25,6 +25,7 @@
 import { lowPass } from './barPath';
 import { G } from './jump';
 import { centreOfMass, jointAngle, LM, mid, SIDE, type Pose, type Pt, type Side } from './pose';
+import { LEVEL_DEG } from './poseSetup';
 
 const { abs, atan2, ceil, hypot, max, min, PI, round, sqrt } = Math;
 
@@ -105,6 +106,13 @@ export const TAP_PX = 4;
 
 /** Shortest flight that is a jump rather than a running stride, s. */
 export const MIN_FLIGHT_S = 0.25;
+
+/**
+ * The body's size changes by more than this share along a run-up a couple of degrees off the picture: too little to
+ * call it curved, but enough to slope the floor. A straight run-up's changes by about 1 % (up to 2 % with twice the
+ * jitter, or at 60 fps, in the synthetic clips of tools/pose-validation).
+ */
+const SLIGHT_CURVE = 0.02;
 
 /** Markers and gravity disagree on the scale by more than this share: the athlete wasn't on the markers' line. */
 export const SCALE_MISMATCH = 0.05;
@@ -1034,7 +1042,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const vx = fx.c[1] * gravityScale;
   // Which way is up, to 1 SD (rad). Two lines each tapped to `TAP_PX`: one a little high or low tilts it. Without lines,
   // a run-up that comes at the camera makes the floor drop towards the lens, and still feet hanging from the rim sit
-  // above it: either way the floor fit can't be told from a tilted phone, so its whole turn is in doubt.
+  // above it: either way the floor fit can't be told from a tilted phone. Its turn is then the phone's roll plus that
+  // false slope, and a phone rolled the other way hides the slope, so the turn alone doesn't bound it: the roll is at
+  // most `LEVEL_DEG` (what the camera's level check lets through), and the slope at most the turn and that.
   // Hanging feet can also outnumber those on the floor and pull the fit their way: on a rolled phone it can come out
   // nearly level and stop turning short. The floor under the feet up to take-off alone says how far off level that left.
   const runUpTilt = () => {
@@ -1043,7 +1053,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const runUp = k0 > 0 ? fitFloor({ left: { heel: upTo(traces.left.heel), toe: upTo(traces.left.toe) }, right: { heel: upTo(traces.right.heel), toe: upTo(traces.right.toe) } }, nearPx, offPx) : null;
     return runUp ? abs(Math.atan(runUp.c1)) : 0;
   };
-  const tilt = markerPx != null ? (sqrt(2) * TAP_PX) / markerPx : flags.includes('hang') ? max(releveled, runUpTilt()) : flags.includes('curved') ? releveled : 0;
+  const doubtful = sizeChange > SLIGHT_CURVE || flags.includes('curved') || flags.includes('hang');
+  const tilt =
+    markerPx != null ? (sqrt(2) * TAP_PX) / markerPx : doubtful ? max(releveled + (LEVEL_DEG * PI) / 180, flags.includes('hang') ? runUpTilt() : 0) : 0;
   // A tilt θ adds θ·vx to the vertical take-off velocity, and θ·(vz − g·t̄) to the horizontal one, t̄ the middle of the
   // fitted stretch: nothing over a whole flight, whose rise and fall cancel, but not so when the fit stops at a hang.
   const tMid = (pts.ts[0] + pts.ts[pts.ts.length - 1]) / 2;

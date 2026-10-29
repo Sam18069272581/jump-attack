@@ -1,5 +1,7 @@
-import { analyseTechnique, findJumpWindow, PASS_LINE, polyFit, TAP_PX, type MetricKey, type TechniqueInput, type TechniqueResult } from '../technique';
-import { poseScene, type PoseScene, type PoseSceneOptions } from '../testing/poseScene';
+import { LM, type Pt } from '../pose';
+import { analyseTechnique, findJumpWindow, PASS_LINE, polyFit, TAP_PX, type MetricKey, type PoseFrame, type TechniqueInput, type TechniqueResult } from '../technique';
+import { coarseFrames, coarseStep, denseFrames, framesFromWire, planWindow, TAP_REACH_S, windowOf, type WireFrame } from '../techniqueRead';
+import { asWire, poseScene, type PoseScene, type PoseSceneOptions } from '../testing/poseScene';
 
 function analyse(over: Partial<PoseSceneOptions> = {}, input: Partial<TechniqueInput> = {}) {
   const scene = poseScene(over);
@@ -43,6 +45,26 @@ function misses(scene: PoseScene, result: TechniqueResult, widen = 1): string[] 
 const grossMisses = (scene: PoseScene, result: TechniqueResult) => misses(scene, result, 2);
 const lose = (scene: PoseScene, from: number, to: number) => scene.frames.map((f) => (f.frame >= from && f.frame <= to ? { ...f, poses: [] } : f));
 const touchDownOf = (scene: PoseScene) => scene.truth.contacts.find((c) => c.downS === scene.truth.plantDownS)!.downFrame;
+
+/**
+ * The frames the technique screen reads of a scene, as tools/pose-validation does: a coarse pass from a tap on the
+ * athlete a quarter second before the take-off, the jump's window in it, then every frame of the window.
+ */
+function readAsTheScreen(scene: PoseScene): { frames: PoseFrame[]; target: Pt } {
+  const fps = scene.options.fps;
+  const total = scene.frames.length;
+  const wire = asWire(scene);
+  const read = (frames: number[]) => frames.map((f) => [f, f / fps, ...wire[f].values] as WireFrame);
+  const tapAt = scene.truth.takeoffFrame - Math.round(0.25 * fps);
+  const p = scene.frames[tapAt].poses[0];
+  const { forward, backward } = coarseFrames(tapAt, total, coarseStep(fps), Math.round(TAP_REACH_S * fps));
+  const coarseWire = [...read(forward), ...read(backward)];
+  const coarse = framesFromWire(coarseWire, scene.width, scene.height, fps);
+  const plan = planWindow(coarse, fps, { x: (p[LM.leftHip].x + p[LM.rightHip].x) / 2, y: (p[LM.leftHip].y + p[LM.rightHip].y) / 2 });
+  if (!plan.ok) throw new Error(`reading failed: ${plan.problem}`);
+  const dense = denseFrames(plan.win, total, coarse.map((f) => f.frame));
+  return { frames: windowOf(framesFromWire([...coarseWire, ...read(dense)], scene.width, scene.height, fps), plan.win), target: plan.win.target };
+}
 
 describe('polyFit', () => {
   it('recovers a parabola exactly', () => {
@@ -117,7 +139,7 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
 });
 
 describe('stated errors', () => {
-  // The full check is tools/pose-validation (16 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
+  // The full check is tools/pose-validation (19 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
   const WAYS: [string, Partial<PoseSceneOptions>][] = [
     ['as the guide asks', {}],
     ['twice the jitter', { noisePx: 3 }],
@@ -605,6 +627,39 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       const result = resultOf(r);
       expect(misses(scene, result).filter((m) => /^(vz|vx|angle):/.test(m))).toEqual([]);
     }
+  });
+
+  it.each([
+    ['comes in at 15° and the phone is rolled 1.5° the other way', { curveDeg: 15, rollDeg: -1.5 }],
+    ['comes in at 10° and the phone is rolled 1° the other way', { curveDeg: 10, rollDeg: -1 }],
+    ['ends with a hand on the rim and the phone is rolled 3° the other way', { hangAfterS: 0.35, rollDeg: -3 }],
+  ])('no lines, and the run-up %s: the two turns cancel, and the take-off still says how unsure it is', (_, over) => {
+    // The floor fit's turn is the phone's roll plus the false slope of the floor: rolled the other way, the phone hides
+    // the slope, and the turn left is no measure of how far up is off.
+    for (const seed of [1, 2, 3]) {
+      const { scene, r } = analyse({ ...over, seed, markers: null });
+      expect([seed, misses(scene, resultOf(r)).filter((m) => /^(vz|vx|angle):/.test(m))]).toEqual([seed, []]);
+    }
+  });
+
+  it('no lines, and the run-up comes in at 3–4°, too little to flag as curved: the take-off still covers the truth in 95 % of clips', () => {
+    // The body's size changes by 3–6 % along such a run-up (a straight one's by about 1 %), and its floor slopes by a
+    // third of a degree, which the floor fit takes for the phone's roll. Read as the screen reads it, 40 clips at each.
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (const curveDeg of [3, 4]) {
+      for (let seed = 11; seed <= 50; seed++) {
+        const scene = poseScene({ seed, curveDeg, markers: null });
+        const { frames, target } = readAsTheScreen(scene);
+        const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: null, target }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['vz', 'vx', 'angle'] as const) {
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
+      }
+    }
+    expect(Object.entries(tally).filter(([, c]) => c.n < 80 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 
   it('no lines, the phone rolled 1–3° either way: the floor is levelled as on a level phone', () => {
