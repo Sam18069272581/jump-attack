@@ -1,5 +1,7 @@
-import { analyseTechnique, findJumpWindow, PASS_LINE, polyFit, TAP_PX, type MetricKey, type TechniqueInput, type TechniqueResult } from '../technique';
-import { poseScene, type PoseScene, type PoseSceneOptions } from '../testing/poseScene';
+import { LM, type Pt } from '../pose';
+import { analyseTechnique, findJumpWindow, PASS_LINE, polyFit, TAP_PX, type Markers, type MetricKey, type PoseFrame, type TechniqueInput, type TechniqueResult } from '../technique';
+import { coarseFrames, coarseStep, denseFrames, framesFromWire, planWindow, TAP_REACH_S, windowOf, type WireFrame } from '../techniqueRead';
+import { asWire, poseScene, type PoseScene, type PoseSceneOptions } from '../testing/poseScene';
 
 function analyse(over: Partial<PoseSceneOptions> = {}, input: Partial<TechniqueInput> = {}) {
   const scene = poseScene(over);
@@ -43,6 +45,26 @@ function misses(scene: PoseScene, result: TechniqueResult, widen = 1): string[] 
 const grossMisses = (scene: PoseScene, result: TechniqueResult) => misses(scene, result, 2);
 const lose = (scene: PoseScene, from: number, to: number) => scene.frames.map((f) => (f.frame >= from && f.frame <= to ? { ...f, poses: [] } : f));
 const touchDownOf = (scene: PoseScene) => scene.truth.contacts.find((c) => c.downS === scene.truth.plantDownS)!.downFrame;
+
+/**
+ * The frames the technique screen reads of a scene, as tools/pose-validation does: a coarse pass from a tap on the
+ * athlete a quarter second before the take-off, the jump's window in it, then every frame of the window.
+ */
+function readAsTheScreen(scene: PoseScene): { frames: PoseFrame[]; target: Pt } {
+  const fps = scene.options.fps;
+  const total = scene.frames.length;
+  const wire = asWire(scene);
+  const read = (frames: number[]) => frames.map((f) => [f, f / fps, ...wire[f].values] as WireFrame);
+  const tapAt = scene.truth.takeoffFrame - Math.round(0.25 * fps);
+  const p = scene.frames[tapAt].poses[0];
+  const { forward, backward } = coarseFrames(tapAt, total, coarseStep(fps), Math.round(TAP_REACH_S * fps));
+  const coarseWire = [...read(forward), ...read(backward)];
+  const coarse = framesFromWire(coarseWire, scene.width, scene.height, fps);
+  const plan = planWindow(coarse, fps, { x: (p[LM.leftHip].x + p[LM.rightHip].x) / 2, y: (p[LM.leftHip].y + p[LM.rightHip].y) / 2 });
+  if (!plan.ok) throw new Error(`reading failed: ${plan.problem}`);
+  const dense = denseFrames(plan.win, total, coarse.map((f) => f.frame));
+  return { frames: windowOf(framesFromWire([...coarseWire, ...read(dense)], scene.width, scene.height, fps), plan.win), target: plan.win.target };
+}
 
 describe('polyFit', () => {
   it('recovers a parabola exactly', () => {
@@ -117,7 +139,8 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
 });
 
 describe('stated errors', () => {
-  // The full check is tools/pose-validation (16 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
+  // The full check is tools/pose-validation (every way of filming it lists, 40 clips each by default). Here a sample of
+  // it: 8 ways × 6 clips.
   const WAYS: [string, Partial<PoseSceneOptions>][] = [
     ['as the guide asks', {}],
     ['twice the jitter', { noisePx: 3 }],
@@ -353,6 +376,17 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('a two-foot plant with frames lost just after the first foot down: the contact time is taken from the foot that may have been first', () => {
+    // Both feet are seen down only after the gap, so both are timed there, and the foot that really landed later has the
+    // narrower error: the contact time has to start at the one whose error reaches back across the gap.
+    for (const seed of [1, 2, 3, 4]) {
+      const scene = poseScene({ style: 'two', fps: 120, seed });
+      const td = touchDownOf(scene);
+      const result = resultOf(analyseTechnique({ frames: lose(scene, td + 2, td + 8), captureFps: 120, markers: scene.markers }));
+      expect([seed, misses(scene, result).filter((m) => m.startsWith('plant:'))]).toEqual([seed, []]);
+    }
+  });
+
   it('at 60 fps with the take-off inside 8 lost frames: the free fall isn’t fitted on a frame with the foot still down', () => {
     // The frame next to the gap has no stillness to read, so it isn't counted as down: the unknown take-off goes after
     // the lost frames, not before that frame.
@@ -360,6 +394,120 @@ describe('what the clip lacks or gets wrong', () => {
       const scene = poseScene({ fps: 60, seed });
       const result = resultOf(analyseTechnique({ frames: lose(scene, 82, 89), captureFps: 60, markers: scene.markers }));
       expect([seed, result.flags.includes('scale-broken'), misses(scene, result)]).toEqual([seed, false, []]);
+    }
+  });
+
+  it('at 60 fps, a two-foot take-off with the frames right after it lost: still a two-foot take-off, left when it was', () => {
+    // An up edge that can't be timed stays where the foot was last seen down: moved past the lost frames, it falls after
+    // the other foot's and out of the plant, which then holds one foot.
+    for (const seed of [2, 5, 8]) {
+      const scene = poseScene({ style: 'two', fps: 60, seed });
+      const to = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, to, to + 4), captureFps: 60, markers: scene.markers }));
+      expect([seed, result.style.kind, result.metrics.gap != null, Math.abs(result.events.takeoff - to) <= 1, misses(scene, result)]).toEqual([seed, 'two', true, true, []]);
+    }
+  });
+
+  it('at 120 fps with 7–8 frames lost across the take-off: the take-off figures hold the truth, or none is given', () => {
+    // The up edge is timed on the frames before the lost run, and its error reaches across it: the free fall can't be
+    // fitted from there, on frames where the foot may still be down. With the foot seen still down after a run too long
+    // to bridge, the moment it left wasn't seen: what rests on it is left out.
+    const cases: [Partial<PoseSceneOptions>, number, number, number][] = [
+      [{}, 1, -3, 4], // options, seed, first and last frame lost around the take-off
+      [{}, 2, -3, 4],
+      [{ markers: null, curveDeg: 20 }, 3, -5, 2],
+      [{}, 1, -9, -3],
+      [{}, 2, -8, -1],
+    ];
+    for (const [over, seed, from, to] of cases) {
+      const scene = poseScene({ ...over, fps: 120, seed });
+      const t = scene.truth.takeoffFrame;
+      const r = analyseTechnique({ frames: lose(scene, t + from, t + to), captureFps: 120, markers: scene.markers });
+      expect([seed, from, r.ok ? misses(scene, r.result).filter((m) => /^(vz|vx|angle|plant):/.test(m)) : []]).toEqual([seed, from, []]);
+    }
+  });
+
+  it('at 60 fps with 4 frames lost inside the plant and the take-off seen after them: its figures are given, and hold the truth', () => {
+    // The gap is too long to bridge, but the take-off is timed on the frames after it, which show the foot still down
+    // and then leaving: the moment it left was seen.
+    for (const seed of [1, 2, 3, 76000]) {
+      const scene = poseScene({ fps: 60, seed });
+      const to = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, to - 7, to - 4), captureFps: 60, markers: scene.markers }));
+      const given = (['vz', 'angle', 'plant'] as const).filter((k) => result.metrics[k]);
+      expect([seed, result.flags.includes('unseen'), given, misses(scene, result)]).toEqual([seed, false, ['vz', 'angle', 'plant'], []]);
+    }
+  });
+
+  it('at 60 fps without lines, frames lost across the take-off: the free fall isn’t fitted from the frame next to them', () => {
+    // That frame ends a stretch the filter smooths on its own: the toe can read a little above where it stood while the
+    // foot is still down. Fitted from there, the path leaves the parabola early, as if a hand were on the rim.
+    const scene = poseScene({ fps: 60, markers: null, seed: 71000 });
+    const to = scene.truth.takeoffFrame;
+    const result = resultOf(analyseTechnique({ frames: lose(scene, to - 1, to + 2), captureFps: 60, markers: null }));
+    expect([result.flags.includes('hang'), misses(scene, result)]).toEqual([false, []]);
+  });
+
+  it('at 120 fps, the far foot taking off, frames lost late in the plant: the take-off figures hold the truth, or none is given', () => {
+    // The far toe jitters twice as much as the near one, and the path guessed across the gap can hold its smoothed
+    // height above where it stood until the foot leaves: there it sinks back, where a toe that has left rises.
+    for (const [from, to] of [[-7, -5], [-10, -4], [-11, -4]]) {
+      const scene = poseScene({ fps: 120, foot: 'left', seed: 71000 });
+      const t = scene.truth.takeoffFrame;
+      const r = analyseTechnique({ frames: lose(scene, t + from, t + to), captureFps: 120, markers: scene.markers });
+      expect([from, r.ok ? misses(scene, r.result).filter((m) => /^(vz|angle|plant):/.test(m)) : []]).toEqual([from, []]);
+    }
+  });
+
+  it('two feet leaving together, frames lost across the take-off: the vertical take-off speed, angle and contact time are given, and hold the truth', () => {
+    // Timed together, the take-off's error is the surer foot's and can end inside the lost frames: no toe is seen there,
+    // leaving or not, so nothing says the error is too narrow.
+    const cases: [Partial<PoseSceneOptions>, number, number, number][] = [
+      [{ fps: 240, markers: null }, 82000, -4, 3], // options, seed, first and last frame lost around the take-off
+      [{ fps: 120 }, 82000, -6, 0],
+    ];
+    for (const [over, seed, from, to] of cases) {
+      const scene = poseScene({ ...over, style: 'two', seed });
+      const t = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, t + from, t + to), captureFps: scene.options.fps, markers: scene.markers }));
+      const given = (['vz', 'angle', 'plant'] as const).filter((k) => result.metrics[k]);
+      expect([seed, given, misses(scene, result).filter((m) => /^(vz|angle|plant):/.test(m))]).toEqual([seed, ['vz', 'angle', 'plant'], []]);
+    }
+  });
+
+  it('at 240 fps, two feet leaving together, a few frames lost just before or across the take-off: the vertical take-off speed, angle and contact time are given, and hold the truth', () => {
+    // Timed together, the take-off's error is the surer foot's, under 3 frames here; the toe that leaves last is 2.5 cm
+    // above where it stood only 3–4 frames after it leaves. Looked for within that error alone, no frame shows every toe
+    // leaving, as if the moment it left wasn't seen.
+    const cases: [Partial<PoseSceneOptions>, number, number, number][] = [
+      [{ twoFootGapS: 0.08 }, 97001, -2, -1], // options, seed, first and last frame lost around the take-off
+      [{ twoFootGapS: 0.08 }, 97001, -3, -1],
+      [{}, 97008, -1, 1],
+      [{ foot: 'left' }, 97008, -2, 1],
+    ];
+    for (const [over, seed, from, to] of cases) {
+      const scene = poseScene({ ...over, fps: 240, style: 'two', seed });
+      const t = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, t + from, t + to), captureFps: 240, markers: scene.markers }));
+      const given = (['vz', 'angle', 'plant'] as const).filter((k) => result.metrics[k]);
+      expect([seed, from, result.flags.includes('unseen'), given, misses(scene, result).filter((m) => /^(vz|angle|plant):/.test(m))]).toEqual([
+        seed,
+        from,
+        false,
+        ['vz', 'angle', 'plant'],
+        [],
+      ]);
+    }
+  });
+
+  it('at 60 fps, frames lost late in the plant and the take-off not timed: the take-off frame shown is where the foot left', () => {
+    // The toe is seen still where it stood after the gap: the foot left after that, not where its frames down ended
+    // before the gap.
+    for (const seed of [1, 2, 3, 79000]) {
+      const scene = poseScene({ fps: 60, seed });
+      const to = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, to - 5, to - 2), captureFps: 60, markers: scene.markers }));
+      expect([seed, Math.abs(result.events.takeoff - to) <= 1, misses(scene, result)]).toEqual([seed, true, []]);
     }
   });
 
@@ -412,6 +560,139 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     }
   });
 
+  it.each([
+    ['both lines tapped 0.5 m nearer the camera than where the athlete ran', { aM: -3, bM: 0, nearerM: 0.5 }],
+    ['both lines tapped 1 m nearer the camera than where the athlete ran', { aM: -3, bM: 0, nearerM: 1 }],
+    ['the 3 m line laid 2.6 m back', { aM: -2.6, bM: 0, nearerM: 0 }],
+  ])('%s: the scales disagree, and the last step, braking and run-up speed still hold the truth', (_, m) => {
+    // The frame rate can't be off by less than twice (`SCALE_BROKEN`), so it is the lines' scale that is off.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ seed, markers: m });
+      // The screen takes the lines to be 3 m apart, wherever they are.
+      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { ...scene.markers!, distanceM: 3 } }));
+      expect(result.flags).toContain('off-line');
+      for (const k of ['approach', 'brake', 'step'] as const) expect([seed, k, result.metrics[k] != null]).toEqual([seed, k, true]);
+      expect([seed, misses(scene, result).filter((x) => /^(approach|brake|step):/.test(x))]).toEqual([seed, []]);
+    }
+  });
+
+  it.each([
+    ['filmed as the guide asks', {}, 5068],
+    ['the phone on its side', { rotate90: true }, 5029],
+  ])('lines where the athlete ran, %s, but the flight taken for a hang on the rim: the last step and braking still hold the truth', (_, over, seed) => {
+    // Two clips of tools/pose-validation's, read and tapped as it does. Jitter cuts the parabola short where no hand is on
+    // the rim, and the short fit puts gravity's scale 7 % and 14 % below the lines': the lines are right, but which of
+    // the two is can't be told once the fit has stopped short.
+    const scene = poseScene({ ...over, seed });
+    const { frames, target } = readAsTheScreen(scene);
+    const finger = normals(seed * 7919);
+    const tap = (p: Pt) => ({ x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() });
+    const markers = { a: tap(scene.markers!.a), b: tap(scene.markers!.b), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+    const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+    expect(result.flags).toEqual(expect.arrayContaining(['hang', 'off-line']));
+    expect(misses(scene, result).filter((x) => /^(brake|step):/.test(x))).toEqual([]);
+  });
+
+  it.each([
+    ['twice the jitter', { noisePx: 3 }, 40214, null],
+    ['twice the jitter', { noisePx: 3 }, 41323, null],
+    ['4K from 10 m, each line tapped a hand’s breadth off the hips’ path', { width: 3840, height: 2160, focalPx: 2740, fps: 120, noisePx: 3, distanceM: 10, approachSpeed: 4.5 }, 42047, 3],
+  ])('lines where the athlete ran, %s, and gravity’s scale 5–13 %% off theirs with no hand on the rim: the last step and braking still hold the truth', (_, over, seed, draw) => {
+    // Clips of the probes', read as the screen reads them. Jitter alone can bend the parabola as far as a hang can, and
+    // which of the two scales is right can't be told: both figures on gravity's carry the whole gap between them.
+    const scene = poseScene({ ...over, seed });
+    const { frames, target } = readAsTheScreen(scene);
+    const picture = { width: scene.width, height: scene.height };
+    let markers: Markers = { ...scene.markers!, distanceM: 3, picture, tapPx: TAP_PX };
+    if (draw != null) {
+      // Tapped as the probe did: 8 px of finger on a 4K clip, and 8 cm (1 SD) along each tape.
+      const finger = normals(seed * 104729 + 2 * draw);
+      const depth = normals(seed * 104729 + 2 * draw + 1);
+      const tap = (xM: number) => {
+        const p = scene.floorPoint(xM, 0.08 * depth());
+        return { x: p.x + 8 * finger(), y: p.y + 8 * finger() };
+      };
+      markers = { a: tap(scene.options.markers!.aM), b: tap(scene.options.markers!.bM), distanceM: 3, picture, tapPx: 8 };
+    }
+    const result = resultOf(analyseTechnique({ frames, captureFps: scene.options.fps, markers, target }));
+    expect([seed, result.flags.includes('off-line'), result.flags.includes('hang')]).toEqual([seed, true, false]);
+    expect([seed, misses(scene, result).filter((x) => /^(brake|step):/.test(x))]).toEqual([seed, []]);
+  });
+
+  it.each([
+    ['1.5 m', -1.5],
+    ['2 m', -2],
+  ])('both lines %s further from the camera than where the athlete ran: gravity’s scale a fifth below theirs, and the last step, braking and run-up speed reach what the lines would make them too', (_, nearerM) => {
+    // Which of the two scales is right can't be told, so each figure read on gravity's has to hold the lines' reading as
+    // well: 1/r of it, r = gravity's over the lines'. With r = 0.78 that is 28 % above it, further than 1 − r = 22 %.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ seed, markers: { aM: -3, bM: 0, nearerM } });
+      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { ...scene.markers!, distanceM: 3 } }));
+      const r = result.scale.gravity / result.scale.markers!;
+      expect([seed, result.flags.includes('off-line'), r < 0.85]).toEqual([seed, true, true]);
+      const short = (['step', 'approach', 'brake'] as const).filter((k) => Math.abs(result.metrics[k]!.value / r - result.metrics[k]!.value) > result.metrics[k]!.error);
+      expect([seed, short]).toEqual([seed, []]);
+    }
+  });
+
+  it.each([
+    ['at 60 fps, a hand on the rim', { fps: 60, hangAfterS: 0.34 }, [64524, 64593], 0],
+    ['at 120 fps, the jitter taken for a hand on the rim', { fps: 120 }, [61766], 0],
+    ['the take-off line tapped 5 cm towards the planted foot, the jitter taken for a hand on the rim', {}, [63098], 0.05],
+  ])('lines where the athlete ran, tapped at their feet, %s: a fall cut short is no reason to leave the lines’ scale, and the flag says so', (_, over, seeds, leanM) => {
+    // Clips of the probes', read and tapped as tools/pose-validation does. Fitted on the rise alone, gravity's scale came
+    // out 8–24 % off the lines': moved onto it, the last step read 0.11–0.32 m off and passed a correct 准 one for
+    // 不够准, and the run-up speed 0.36–1.1 m/s off.
+    for (const seed of seeds) {
+      const scene = poseScene({ ...over, seed });
+      const { frames, target } = readAsTheScreen(scene);
+      const markers = tappedAtTheFeet(scene, 0.08, leanM);
+      const result = resultOf(analyseTechnique({ frames, captureFps: scene.options.fps, markers, target }));
+      expect([seed, result.flags.includes('hang'), result.flags.includes('short-fall')]).toEqual([seed, true, true]);
+      const truth = truthOf(scene);
+      const far = (['step', 'approach', 'vx', 'brake'] as const).filter((k) => result.metrics[k] && Math.abs(result.metrics[k]!.value - truth[k]!) > PASS_LINE[k]);
+      expect([seed, far, misses(scene, result).filter((x) => /^(vx|approach|brake|step):/.test(x))]).toEqual([seed, [], []]);
+    }
+  });
+
+  it('lines where the athlete ran, twice the jitter bending gravity’s parabola 11 % off their scale: the horizontal velocity and the angle, read on gravity’s, hold the truth too', () => {
+    // Which of the two scales is right can't be told: the horizontal velocity on gravity's may be off by the whole gap.
+    const scene = poseScene({ noisePx: 3, seed: 40214 });
+    const { frames, target } = readAsTheScreen(scene);
+    const markers = { ...scene.markers!, distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+    const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+    expect([result.flags.includes('off-line'), result.flags.includes('hang')]).toEqual([true, false]);
+    expect(misses(scene, result).filter((x) => /^(vx|angle):/.test(x))).toEqual([]);
+  });
+
+  it('lines that put the scale 10 % off, at 60 fps with a hand on the rim at 0.25 s: the take-off angle, which rests on no scale, reads and is as sure as with lines that agree', () => {
+    // The angle is the rise over the run at take-off, both in the picture's own units: any one scale for the two cancels.
+    // Read with the run on the lines' scale and the rise on gravity's after the fall was cut short, it moved by the gap
+    // between them, 2.7° here, and its error took in the gap too. The markers still set how closely the toes are looked
+    // at (`roughScale`), which moves it by a few hundredths of a degree.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ fps: 60, hangAfterS: 0.25, seed });
+      const angleWith = (distanceM: number) => resultOf(analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: { ...scene.markers!, distanceM } }));
+      const [agree, off] = [angleWith(3), angleWith(3.3)];
+      expect([seed, off.flags.includes('off-line')]).toEqual([seed, true]);
+      const [a, b] = [agree.metrics.angle!, off.metrics.angle!];
+      expect([seed, Math.abs(b.value - a.value) < 0.1, Math.abs(b.error / a.error - 1) < 0.05, b.status]).toEqual([seed, true, true, a.status]);
+    }
+  });
+
+  it('lines where the athlete ran, tapped at their feet, at 60 fps with a hand on the rim just before the top: the vertical take-off velocity, timed to a top the fit never saw, still holds the truth', () => {
+    // Clips of the probes', read and tapped as tools/pose-validation does. On the rise alone gravity's scale came out
+    // 12–21 % off the lines', and the vertical velocity, g times the time to that top, read 0.27–0.44 m/s low with 0.27–0.30
+    // stated: it rests on the parabola's curvature as gravity's scale does, and which scale is right can't be told. Of 77
+    // such clips it covered the truth in 63.
+    for (const seed of [123006, 123026, 123071]) {
+      const scene = poseScene({ fps: 60, hangAfterS: 0.25, seed });
+      const { frames, target } = readAsTheScreen(scene);
+      const result = resultOf(analyseTechnique({ frames, captureFps: 60, markers: tappedAtTheFeet(scene, 0.08), target }));
+      expect([seed, result.flags.includes('short-fall'), misses(scene, result).filter((x) => /^vz:/.test(x))]).toEqual([seed, true, []]);
+    }
+  });
+
   it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
     const scene = poseScene();
     const b = scene.markers!.b;
@@ -430,6 +711,21 @@ function normals(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
   return () => Math.sqrt(-2 * Math.log(Math.max(1e-12, next()))) * Math.cos(2 * Math.PI * next());
+}
+
+/**
+ * The two lines as tools/pose-validation taps them: on each tape `depthM` (1 SD) nearer the lens or further than where
+ * the hips crossed it, the take-off line `leanM` nearer on top, and the finger off by `tapPx` (1 SD) either way.
+ */
+function tappedAtTheFeet(scene: PoseScene, depthM: number, leanM = 0, tapPx = TAP_PX): Markers {
+  const finger = normals(scene.options.seed * 7919);
+  const depth = normals(scene.options.seed * 7919 + 1);
+  const { aM, bM, nearerM } = scene.options.markers!;
+  const tap = (xM: number, lean: number) => {
+    const p = scene.floorPoint(xM, nearerM + lean + depthM * depth());
+    return { x: p.x + tapPx * finger(), y: p.y + tapPx * finger() };
+  };
+  return { a: tap(aM, 0), b: tap(bM, leanM), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx };
 }
 
 /** The chance that a 95 % error covers the truth in `k` or fewer of `n` clips (binomial), as tools/pose-validation judges. */
@@ -470,6 +766,119 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     expect(Object.entries(tally).filter(([, c]) => c.n < 120 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 
+  it('lines tapped at the runner’s feet, a hand’s breadth nearer or further than the hips’ path: run-up speed, braking and the last step still cover the truth in 95 % of clips', () => {
+    // A line tapped 8 cm (1 SD) nearer or further along its tape than where the hips crossed it: in the picture it moves
+    // away from or towards the middle by that share of the distance, 2 cm at 1.8 m off the middle from 7 m (4 px), on
+    // top of the finger's `TAP_PX`. Read as the screen reads it, six ways of tapping each of 40 clips: the run-up speed
+    // falls short by a few in a hundred, which 120 can't tell from chance.
+    const finger = normals(36);
+    const depth = normals(37);
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (let seed = 11; seed <= 50; seed++) {
+      const scene = poseScene({ seed });
+      const { aM, bM } = scene.options.markers!;
+      const { frames, target } = readAsTheScreen(scene);
+      for (let draw = 0; draw < 6; draw++) {
+        const tap = (xM: number) => {
+          const p = scene.floorPoint(xM, 0.08 * depth());
+          return { x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() };
+        };
+        const markers = { a: tap(aM), b: tap(bM), distanceM: 3, picture: { width: scene.width, height: scene.height } };
+        const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['approach', 'brake', 'step'] as const) {
+          if (!result.metrics[k]) continue;
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
+      }
+    }
+    expect(Object.entries(tally).filter(([k, c]) => (k !== 'brake' && c.n < 240) || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
+  });
+
+  it.each([
+    ['the 3 m line laid at 2.9 m', { aM: -2.9, bM: 0, nearerM: 0 }],
+    ['both lines 0.3 m further from the camera than where the athlete ran', { aM: -3, bM: 0, nearerM: -0.3 }],
+  ])('%s, too little to flag: the last step, braking and run-up speed still cover the truth in 95 %% of clips', (_, m) => {
+    // The lines' scale is 3–4 % off, within `SCALE_MISMATCH`, but further from gravity's than either's own error explains.
+    // Read and tapped as the screen does it, 40 clips.
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (let seed = 11; seed <= 50; seed++) {
+      const scene = poseScene({ seed, markers: m });
+      const { frames, target } = readAsTheScreen(scene);
+      const finger = normals(seed * 7919);
+      const tap = (p: Pt) => ({ x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() });
+      const markers = { a: tap(scene.markers!.a), b: tap(scene.markers!.b), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+      const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+      const missed = new Set(misses(scene, result).map((x) => x.split(':')[0]));
+      for (const k of ['approach', 'brake', 'step'] as const) {
+        if (!result.metrics[k]) continue;
+        tally[k] ??= { n: 0, covered: 0 };
+        tally[k].n++;
+        if (!missed.has(k)) tally[k].covered++;
+      }
+    }
+    expect(Object.entries(tally).filter(([k, c]) => (k !== 'brake' && c.n < 40) || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
+  });
+
+  it.each([
+    ['at 240 fps, both lines 0.2 m further from the camera', 240, -0.2, [84415, 84443, 84474]],
+    ['at 240 fps, both lines 0.2 m nearer the camera', 240, 0.2, [84640, 84673]],
+    ['at 60 fps, both lines 0.15 m further from the camera', 60, -0.15, [73863]],
+  ])('%s than where the athlete ran, the scales apart by no more than chance: the run-up speed still holds the truth', (_, fps, nearerM, seeds) => {
+    // Clips of the probes', read and tapped as tools/pose-validation does. Gravity's scale came out 2–3 % off the lines',
+    // within what the two errors explain, so nothing widened the run-up speed: it read 0.24–0.37 m/s off with 0.21–0.29
+    // stated.
+    for (const seed of seeds) {
+      const scene = poseScene({ fps, seed, markers: { aM: -3, bM: 0, nearerM } });
+      const { frames, target } = readAsTheScreen(scene);
+      const result = resultOf(analyseTechnique({ frames, captureFps: fps, markers: tappedAtTheFeet(scene, 0.08), target }));
+      expect([seed, result.flags.includes('off-line'), misses(scene, result).filter((x) => /^approach:/.test(x))]).toEqual([seed, false, []]);
+    }
+  });
+
+  it('both lines 0.3 m nearer the camera than where the athlete ran, and a hand on the rim: the run-up speed, further off than the scales are apart, still holds the truth', () => {
+    // Clips of the probes', read and tapped as tools/pose-validation does. Gravity's scale came out 4–5 % off the lines',
+    // and the run-up speed 9–11 % (0.56–0.65 m/s) off, with 0.52–0.56 stated: the take-off line is crossed in the plant,
+    // at about half the run-up's speed, so its being out of place costs about twice the time.
+    for (const seed of [73410, 73433, 73435]) {
+      const scene = poseScene({ seed, hangAfterS: 0.34, markers: { aM: -3, bM: 0, nearerM: 0.3 } });
+      const { frames, target } = readAsTheScreen(scene);
+      const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: tappedAtTheFeet(scene, 0.08), target }));
+      expect([seed, result.flags.includes('hang'), misses(scene, result).filter((x) => /^approach:/.test(x))]).toEqual([seed, true, []]);
+    }
+  });
+
+  it('lines where the athlete ran, tapped at their feet: the last step is still a figure to trust in most clips', () => {
+    // Two scales a little apart by chance aren't lines laid wrong: only a gap beyond both their errors widens the step.
+    const depth = normals(38);
+    const finger = normals(39);
+    let ok = 0;
+    for (let seed = 11; seed <= 50; seed++) {
+      const scene = poseScene({ seed });
+      const { frames, target } = readAsTheScreen(scene);
+      const tap = (xM: number) => {
+        const p = scene.floorPoint(xM, 0.08 * depth());
+        return { x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() };
+      };
+      const markers = { a: tap(-3), b: tap(0), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+      if (resultOf(analyseTechnique({ frames, captureFps: 240, markers, target })).metrics.step?.status === 'ok') ok++;
+    }
+    expect(ok).toBeGreaterThanOrEqual(34);
+  });
+
+  it('lines tapped along their tapes: braking’s run-in speed is as unsure as their scale, and where along the tapes they were tapped tilts up', () => {
+    // The run-in speed is measured on the lines' scale, which is only as good as their taps: tapped less well, the
+    // braking is less sure. And a line tapped nearer the lens than the hips' path sits lower in the picture too (further
+    // from its middle by the depth over the distance): two such lines tilt up, which the picture's size lets it allow for.
+    const scene = poseScene({ seed: 1 });
+    const lines = { ...scene.markers!, distanceM: 3 };
+    const metricsOf = (markers: Markers) => resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers })).metrics;
+    expect(metricsOf({ ...lines, tapPx: 12 }).brake!.error).toBeGreaterThan(metricsOf({ ...lines, tapPx: 4 }).brake!.error + 0.05);
+    expect(metricsOf({ ...lines, picture: { width: scene.width, height: scene.height } }).vz!.error).toBeGreaterThan(metricsOf(lines).vz!.error);
+  });
+
   it.each([
     ['comes in at 10° to the picture', { curveDeg: 10 }],
     ['comes in at 15° to the picture', { curveDeg: 15 }],
@@ -480,6 +889,132 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       const result = resultOf(r);
       expect(misses(scene, result).filter((m) => /^(vz|vx|angle):/.test(m))).toEqual([]);
     }
+  });
+
+  it.each([
+    ['comes in at 15° and the phone is rolled 1.5° the other way', { curveDeg: 15, rollDeg: -1.5 }],
+    ['comes in at 10° and the phone is rolled 1° the other way', { curveDeg: 10, rollDeg: -1 }],
+    ['ends with a hand on the rim and the phone is rolled 3° the other way', { hangAfterS: 0.35, rollDeg: -3 }],
+  ])('no lines, and the run-up %s: the two turns cancel, and the take-off still says how unsure it is', (_, over) => {
+    // The floor fit's turn is the phone's roll plus the false slope of the floor: rolled the other way, the phone hides
+    // the slope, and the turn left is no measure of how far up is off.
+    for (const seed of [1, 2, 3]) {
+      const { scene, r } = analyse({ ...over, seed, markers: null });
+      expect([seed, misses(scene, resultOf(r)).filter((m) => /^(vz|vx|angle):/.test(m))]).toEqual([seed, []]);
+    }
+  });
+
+  it('lines laid where the athlete ran, on a run-up that comes in at 10° or 20° to the picture: the take-off still covers the truth in 95 % of clips', () => {
+    // The 3 m line is then nearer the lens than the take-off line, by 3 m × tan of the angle, so lower in the picture: the
+    // two tilt up by the floor's false slope along the run-up, h/L of the body's size change over L. Read as the screen
+    // reads it, each line tapped TAP_PX off, 20 clips at each angle.
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (const curveDeg of [10, 20]) {
+      for (let seed = 500; seed < 520; seed++) {
+        const scene = poseScene({ seed, curveDeg });
+        const { frames, target } = readAsTheScreen(scene);
+        const finger = normals(seed * 7919);
+        const tap = (xM: number) => {
+          const p = scene.floorPoint(xM, -xM * Math.tan((curveDeg * Math.PI) / 180));
+          return { x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() };
+        };
+        const markers = { a: tap(-3), b: tap(0), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+        const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['vz', 'vx', 'angle'] as const) {
+          if (!result.metrics[k]) continue;
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
+      }
+    }
+    expect(Object.entries(tally).filter(([, c]) => c.n < 40 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
+  });
+
+  it.each([15, 20])('lines laid where the athlete ran, on a run-up that comes in at %i° to the picture: the run-up speed is the 3 m between them over the time it took', (curveDeg) => {
+    // The slant alone puts the two scales apart, the 3 m line nearer the lens: no sign the lines are off, and along the
+    // run-up they are 3 m apart. Moved onto gravity's scale, the run-up speed read 0.56 m/s high at 15° and 0.81 at 20°
+    // (medians of 100 clips of the probes'), 0.05 and 0.09 on the 3 m. Read and tapped as the test above.
+    for (const seed of [500, 501, 502]) {
+      const scene = poseScene({ seed, curveDeg });
+      const { frames, target } = readAsTheScreen(scene);
+      const finger = normals(seed * 7919);
+      const tap = (xM: number) => {
+        const p = scene.floorPoint(xM, -xM * Math.tan((curveDeg * Math.PI) / 180));
+        return { x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() };
+      };
+      const markers = { a: tap(-3), b: tap(0), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+      const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+      const approach = result.metrics.approach!;
+      expect([seed, result.flags.includes('curved'), result.flags.includes('off-line'), Math.abs(approach.value - scene.truth.approachSpeed!) < 0.4]).toEqual([seed, true, true, true]);
+      expect([seed, misses(scene, result).filter((x) => /^approach:/.test(x))]).toEqual([seed, []]);
+    }
+  });
+
+  it('no lines, and the run-up comes in at 3–4°, too little to flag as curved: the take-off still covers the truth in 95 % of clips', () => {
+    // The body's size changes by 3–6 % along such a run-up (a straight one's by about 1 %), and its floor slopes by a
+    // third of a degree, which the floor fit takes for the phone's roll. Read as the screen reads it, 40 clips at each.
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (const curveDeg of [3, 4]) {
+      for (let seed = 11; seed <= 50; seed++) {
+        const scene = poseScene({ seed, curveDeg, markers: null });
+        const { frames, target } = readAsTheScreen(scene);
+        const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: null, target }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['vz', 'vx', 'angle'] as const) {
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
+      }
+    }
+    expect(Object.entries(tally).filter(([, c]) => c.n < 80 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
+  });
+
+  it('no lines, a run-up 2° off the picture and the phone rolled up to 3° either way: the floor slopes by a fraction of a degree, and the take-off angle is still a figure to trust', () => {
+    // From a lens 1 m up and 7 m away, a run-up coming in at 2° drops towards the lens by 1 · tan 2° / 7 = 0.29° in the
+    // picture, whichever way the phone is rolled: that, not the phone's roll, is what the floor fit can't tell.
+    for (const rollDeg of [-3, 0, 3]) {
+      for (const seed of [1, 2]) {
+        const { scene, r } = analyse({ seed, curveDeg: 2, rollDeg, markers: null });
+        const result = resultOf(r);
+        expect([rollDeg, seed, result.metrics.angle?.status, misses(scene, result).filter((m) => /^(vz|vx|angle):/.test(m))]).toEqual([rollDeg, seed, 'ok', []]);
+      }
+    }
+  });
+
+  it('no lines, the phone 1.3 m up and rolled 3° either way, a run-up 4–10° off the picture: the take-off still holds the truth', () => {
+    // A higher lens slopes the floor more: the allowance for it is worked out for a lens up to 1.5 m.
+    for (const curveDeg of [4, 10]) {
+      for (const rollDeg of [-3, 3]) {
+        for (const seed of [1, 2]) {
+          const { scene, r } = analyse({ seed, curveDeg, rollDeg, lensM: 1.3, markers: null });
+          expect([curveDeg, rollDeg, seed, misses(scene, resultOf(r)).filter((m) => /^(vz|vx|angle):/.test(m))]).toEqual([curveDeg, rollDeg, seed, []]);
+        }
+      }
+    }
+  });
+
+  it('no lines, the phone held 1.5 m up 5 m away and rolled 3° either way: the floor can’t be turned level, and the take-off still covers the truth in 95 % of clips', () => {
+    // From so high and close the floor fit refuses the turn that would level it, or stops short of level, and what slope
+    // it leaves is not all there is: the fit keeps the floor's lower part, which hides a slope across the band of still
+    // heels and toes. Read as the screen reads it, 20 clips rolled each way.
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (const rollDeg of [-3, 3]) {
+      for (let seed = 11; seed <= 30; seed++) {
+        const scene = poseScene({ seed, lensM: 1.5, distanceM: 5, rollDeg, markers: null });
+        const { frames, target } = readAsTheScreen(scene);
+        const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: null, target }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['vz', 'vx', 'angle'] as const) {
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
+      }
+    }
+    expect(Object.entries(tally).filter(([, c]) => c.n < 40 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 
   it('no lines, the phone rolled 1–3° either way: the floor is levelled as on a level phone', () => {
@@ -497,6 +1032,16 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       const scene = poseScene({ hangAfterS: 0.34, markers: null, seed });
       const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: null }));
       expect([seed, result.events.landing, result.flags.includes('cut-off')]).toEqual([seed, null, true]);
+    }
+  });
+
+  it('no lines, a hand on the rim, the phone rolled 3° against the slope the hanging feet give: the take-off figures still hold the truth', () => {
+    // The feet hanging still from the rim pull the floor fit their way: it can come out nearly level on a rolled phone,
+    // and the turn that follows is too small to say how far off level the picture is.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ hangAfterS: 0.34, rollDeg: -3, markers: null, seed });
+      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: null }));
+      expect([seed, misses(scene, result).filter((m) => /^(vz|vx|angle):/.test(m))]).toEqual([seed, []]);
     }
   });
 
@@ -522,6 +1067,33 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers }));
       expect([seed, misses(scene, result).filter((m) => m.startsWith('step:'))]).toEqual([seed, []]);
     }
+  });
+
+  it('a 4K clip filmed from 10 m, its lines tapped as well as a finger can there: run-up speed, the last step and the take-off still cover the truth in 95 % of clips', () => {
+    // The finger misses by as many screen points whatever the clip: on a 3840-px clip across the portrait page's 360-pt
+    // box, zoomed 4×, a point is 3840 / 360 / 4 = 2.7 px, so the 3 pt that are `TAP_PX` on a 1920-px clip are 8 px here,
+    // and the screen says so with the lines. 120 fps, the most an iPhone films 4K at; the pose model reads a picture
+    // scaled down to its input, so its jitter in the clip's px doubles too. Three ways of tapping each of 40 clips.
+    const tapPx = 8;
+    const finger = normals(38);
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (let draw = 0; draw < 3; draw++) {
+      for (let seed = 11; seed <= 50; seed++) {
+        const scene = poseScene({ seed, width: 3840, height: 2160, focalPx: 2740, fps: 120, noisePx: 3, distanceM: 10, approachSpeed: 4.5 });
+        const { a, b } = scene.markers!;
+        const tap = (p: Pt) => ({ x: p.x + tapPx * finger(), y: p.y + tapPx * finger() });
+        const markers = { a: tap(a), b: tap(b), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx };
+        const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 120, markers }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['vz', 'vx', 'angle', 'approach', 'step'] as const) {
+          if (!result.metrics[k]) continue;
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
+      }
+    }
+    expect(Object.entries(tally).filter(([, c]) => c.n < 120 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 });
 

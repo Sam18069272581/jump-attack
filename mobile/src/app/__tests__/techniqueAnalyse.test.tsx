@@ -9,7 +9,7 @@ import { addTrial, ensureSession, listTrials } from '@/db/repo';
 import { listTechniqueTakes } from '@/db/technique';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { LM, type Pt } from '@/domain/pose';
-import { FLAG_TEXT, PROBLEM_TEXT } from '@/domain/techniqueText';
+import { FLAG_TEXT, flagText, PROBLEM_TEXT } from '@/domain/techniqueText';
 import { asWire, poseScene, type PoseScene } from '@/domain/testing/poseScene';
 
 import TechniqueAnalyse from '../technique/analyse';
@@ -198,6 +198,73 @@ it('measures a slow-motion run-up jump from the athlete and the two floor lines 
   expect(markers.b.x).toBeCloseTo(scene.markers!.b.x, 3);
   expect(markers.a.y).toBeCloseTo(scene.markers!.a.y, 3);
   expect(mockRouter.back).toHaveBeenCalled();
+});
+
+it('asks for each line on the frame the athlete runs over it, tapped on the tape under their body', async () => {
+  // Where along the tape the athlete ran is where the hips cross the line: a guess at it moves the line in the picture.
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0015.MOV', fps: '0', source: 'import', session: 'tt-8' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  expect(texts(r.root)).toContain('点起跳线：拖到运动员跑到这条胶带上的那一帧');
+  const g = geometry(scene);
+  await tapScreen(g.toScreen(scene.markers!.b));
+  expect(texts(r.root)).toContain('放大了：点运动员身体正下方、两脚中间的胶带，别点在脚上。');
+  await tapScreen({ x: g.w / 2, y: g.h / 2 });
+  expect(texts(r.root)).toContain('点 3 米线');
+  expect(texts(r.root)).toContain('同样拖到运动员跑到它上面的那一帧');
+  await tapLine(scene, scene.markers!.a);
+
+  // How far a tap a little off along the tape moves the line depends on where it is in the picture, and its size.
+  await press(r.root, '开始分析');
+  await answerReads();
+  await press(r.root, '保存');
+  const [trial] = await listTrials(mockDb, 'tt-8');
+  expect((trial.detail as { markers: { picture: unknown } }).markers.picture).toEqual({ width: 1920, height: 1080 });
+});
+
+it('asks for the tape under the athlete’s body, between the feet, rather than under the planted foot', async () => {
+  // On the take-off line the planted foot stands on the tape a hand's breadth nearer the camera than the hips' path (the
+  // guide has the take-off foot on the camera's side): tapped there, every take-off line would sit nearer than it is.
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0017.MOV', fps: '0', source: 'import', session: 'tt-11' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  expect(texts(r.root)).toContain('放大后点准身体正下方的胶带');
+  await tapScreen(geometry(scene).toScreen(scene.markers!.b));
+  expect(texts(r.root)).toContain('两脚中间的胶带，别点在脚上');
+});
+
+it.each([
+  ['a 4K clip, whose px are smaller on screen: 8', 3840, 2160, 8, 'tt-9'],
+  ['a 1080p clip: 4', 1920, 1080, 4, 'tt-10'],
+])('sends how well the lines could be tapped, in the clip’s px, %s', async (_, width, height, tapPx, session) => {
+  // The finger misses by as many screen points whatever the clip; across the 360-pt box zoomed 4×, a 3840-px clip
+  // packs twice the px under it that a 1920-px one does.
+  const scene = poseScene({ width, height, focalPx: (1370 * width) / 1920, fps: 120, noisePx: (1.5 * width) / 1920 });
+  await open(scene, { uri: 'file:///picked/IMG_0016.MOV', fps: '0', source: 'import', session });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await tapLine(scene, scene.markers!.b);
+  await tapLine(scene, scene.markers!.a);
+  await press(r.root, '开始分析');
+  await answerReads();
+  await press(r.root, '保存');
+  const [trial] = await listTrials(mockDb, session);
+  expect((trial.detail as { markers: { tapPx?: number } }).markers.tapPx).toBeCloseTo(tapPx, 6);
+});
+
+it('on a run-up that comes at the camera, the lines laid on its path, says its slant puts the two scales apart rather than that the lines are off', async () => {
+  // The 3 m line is nearer the phone than the take-off line: that alone puts the lines' scale apart from gravity's.
+  const scene = poseScene({ curveDeg: 15, seed: 500 });
+  const onPath = (xM: number) => scene.floorPoint(xM, -xM * Math.tan((15 * Math.PI) / 180));
+  await open(scene, { uri: 'file:///picked/IMG_0018.MOV', fps: '0', source: 'import', session: 'tt-12' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await tapLine(scene, onPath(0));
+  await tapLine(scene, onPath(-3));
+  await press(r.root, '开始分析');
+  await answerReads();
+  const shown = texts(r.root);
+  expect(shown).toContain(FLAG_TEXT.curved);
+  expect(shown).toContain(flagText('off-line', ['curved', 'off-line']));
+  expect(shown).not.toContain(FLAG_TEXT['off-line']);
 });
 
 it('measures a take filmed in the app without the floor lines, says what that leaves out, and keeps its video', async () => {

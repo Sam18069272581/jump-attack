@@ -8,6 +8,7 @@ import { addTrial, ensureSession } from '@/db/repo';
 import { addTechniqueTake, listTechniqueTakes } from '@/db/technique';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { analyseTechnique, type TechniqueResult } from '@/domain/technique';
+import { FLAG_TEXT, flagText } from '@/domain/techniqueText';
 import { poseScene } from '@/domain/testing/poseScene';
 import { pruneTakes } from '@/media/takes';
 
@@ -138,6 +139,18 @@ it('lists the takes with the run-up touch of their day, clears films no take kee
   expect(await listTechniqueTakes(mockDb, 1)).toEqual([]);
   expect(texts(r.root)).not.toContain('单脚起跳（右脚）');
   expect(pruneTakes).toHaveBeenLastCalledWith([]);
+});
+
+it('says, for a take whose run-up came at the camera, that its slant put the two scales apart rather than that the lines are off', async () => {
+  mockLib.ready = true;
+  const slanted: TechniqueResult = { ...result, flags: ['curved', 'off-line'] };
+  await addTechniqueTake(mockDb, 1, { sessionId: 'tt-3', result: slanted, captureFps: 240, source: 'import', markers: null });
+  await open();
+  await press('展开第 1 条');
+  expect(texts(r.root)).toContain(flagText('off-line', ['curved', 'off-line']));
+  expect(texts(r.root)).not.toContain(FLAG_TEXT['off-line']);
+  jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => buttons?.find((b) => b.style === 'destructive')?.onPress?.());
+  await press('删除这条记录');
 });
 
 it('still opens, and lets the take be deleted, when a saved figure lost its error', async () => {

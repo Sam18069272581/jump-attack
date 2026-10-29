@@ -149,6 +149,8 @@ export type PoseScene = {
   frames: PoseSceneFrame[];
   /** Where the markers are in the picture, as tapped. */
   markers: { a: Pt; b: Pt; distanceM: number } | null;
+  /** Where a point on the floor is in the picture: `xM` along the run-up from the take-off toe, `nearerM` nearer the lens. */
+  floorPoint: (xM: number, nearerM: number) => Pt;
   truth: PoseSceneTruth;
   /** The athlete's landmarks at time t in the world (m: x along the run-up from the take-off toe, y up from the floor). */
   world: (t: number) => Pt[];
@@ -638,6 +640,7 @@ export function poseScene(over: Partial<PoseSceneOptions> = {}): PoseScene {
     height: Hh,
     frames,
     markers,
+    floorPoint: (xM, nearerM) => project({ x: xM, y: 0 }, nearerM),
     world,
     truth: {
       takeoffFrame,

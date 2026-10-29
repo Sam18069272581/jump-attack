@@ -14,9 +14,9 @@
  * 4. The centre of mass in flight is a free-fall parabola: fitted, it gives the vertical and horizontal take-off
  *    velocity. Its curvature is gravity, which sets the scale at the athlete's own distance from the lens
  *    (pixel-to-metre from gravity, as in Aderinola et al. 2023, arXiv 2302.10749); with markers it doubles as a check
- *    of the markers and the frame rate.
+ *    of the markers and the frame rate, and where the markers alone are off, lengths go by it instead.
  * 5. Run-up speed follows the rule the athlete agreed: two floor markers 3 m apart, and the time the hips take
- *    between them.
+ *    between them (their gap at gravity's scale when the markers are off).
  *
  * Errors come from the fits themselves, from the timing of each event (its own jitter, plus `EVENT_FLOOR_FRAMES`),
  * and for joint angles from the published agreement of markerless pose with marker-based capture
@@ -25,14 +25,19 @@
 import { lowPass } from './barPath';
 import { G } from './jump';
 import { centreOfMass, jointAngle, LM, mid, SIDE, type Pose, type Pt, type Side } from './pose';
+import { LEVEL_DEG } from './poseSetup';
 
 const { abs, atan2, ceil, hypot, max, min, PI, round, sqrt } = Math;
 
 /** One frame's people, as the page found them. `t` is real time, s (a slow-motion clip's file frames over its capture rate). */
 export type PoseFrame = { frame: number; t: number; poses: Pose[] };
 
-/** Two marks on the floor along the run-up, `distanceM` apart, where the athlete tapped them in the picture. */
-export type Markers = { a: Pt; b: Pt; distanceM: number };
+/**
+ * Two marks on the floor along the run-up, `distanceM` apart, where the athlete tapped them in the picture, and the
+ * picture's size (px): where its middle is, and its long side for the lens's angle of view (`LENS_FOV_DEG`). `tapPx`:
+ * how well each could be tapped, px of the clip (1 SD), which grows with the clip's size (`TAP_PT`); `TAP_PX` if not given.
+ */
+export type Markers = { a: Pt; b: Pt; distanceM: number; picture?: { width: number; height: number }; tapPx?: number };
 
 export type TechniqueInput = {
   /** Every frame of the stretch to analyse, in order, at the capture rate. */
@@ -103,10 +108,56 @@ export const MIN_CONTACT_FPS = 200;
 /** How well a floor marker is tapped (px of the clip, 1 SD): on a frame zoomed in to tap it. */
 export const TAP_PX = 4;
 
+/**
+ * The same finger on the screen (pt, 1 SD): `TAP_PX` on a 1920-px clip across the portrait page's 360-pt video box,
+ * zoomed 4×, is 4 × 4 × 360/1920 = 3 pt. The finger misses by as many points whatever the clip, so a 3840-px one packs
+ * twice the px under it: 8. The page sends the clip's px (`Markers.tapPx`), no fewer than `TAP_PX`, so that a smaller
+ * clip or a wider screen is never trusted beyond what this was set to.
+ */
+export const TAP_PT = 3;
+
+/**
+ * How far nearer the lens or further a line is tapped than where the hips crossed it (m, 1 SD): on the tape under the
+ * runner's body, between the feet, which land a hand's breadth either side of the hips' path, as the screen asks. A tap
+ * drawn the same way every time is a lean, not a scatter, and isn't in this figure: leaning 5 cm towards the planted
+ * foot at the take-off line, this alone leaves the run-up speed's error holding the truth in 93.5 % of 1000 clips read
+ * as tools/pose-validation reads them (`tap-lean`), and at both lines in 92.5 %; folding the lean into the scatter
+ * (hypot(8, 5) = 9.4 cm) would still leave 94.8 % and 94.1 %. What holds the rest is the check of the two scales
+ * (`scalesApart`): the taps that throw the run-up speed out also pull the lines' scale off gravity's by more than the
+ * two can explain, and the gap goes into the error. With it the same clips hold the truth in 97.2 % and 97.4 %; with
+ * the share of such a gap that chance could hide added too (`unseen`), both times the slowing through the take-off
+ * line (`k`), in 999 of the 1000 at one line and at both.
+ */
+export const TAP_DEPTH_M = 0.08;
+
+/**
+ * The phone's angle of view across the picture's long side, degrees: the iPhone main camera's 26 mm-equivalent lens
+ * spans 2·atan(18/26) = 69° of a 36 mm frame (Apple's specifications), and video keeps its width. Zoomed in, the phone
+ * sees less, and the errors this sets are wider than need be; through the 0.5× lens it sees more, and they'd be narrow.
+ */
+export const LENS_FOV_DEG = 70;
+
 /** Shortest flight that is a jump rather than a running stride, s. */
 export const MIN_FLIGHT_S = 0.25;
 
-/** Markers and gravity disagree on the scale by more than this share: the athlete wasn't on the markers' line. */
+/**
+ * The body's size changes by more than this share along a run-up a couple of degrees off the picture: too little to
+ * call it curved, but enough to slope the floor. A straight run-up's changes by about 1 % (up to 2 % with twice the
+ * jitter, or at 60 fps, in the synthetic clips of tools/pose-validation).
+ */
+const SLIGHT_CURVE = 0.02;
+
+/**
+ * How high above the floor the lens may be, m: the guide puts it about 1 m up on a tripod; a tripod pulled out, or a
+ * phone held at chest height, is up to half again as high. A run-up that comes at the camera slopes the floor in the
+ * picture in proportion to it (see the take-off's `tilt`), so this is the most it is taken to be.
+ */
+const LENS_HEIGHT_M = 1.5;
+
+/**
+ * Markers and gravity disagree on the scale by more than this share: the lines aren't where the athlete ran, or aren't
+ * 3 m apart. A wrong frame rate is off by twice or more (`SCALE_BROKEN`), so it is the lines, and lengths go by gravity.
+ */
 export const SCALE_MISMATCH = 0.05;
 /** By more than this, the frame rate is wrong (a 120 fps clip read as 240 is off by four times). */
 export const SCALE_BROKEN = 0.3;
@@ -117,15 +168,23 @@ export type QualityFlag =
   | 'low-fps'
   /** No floor markers: no run-up speed, and lengths come from gravity's scale. */
   | 'no-markers'
-  /** The markers' scale and gravity's differ: the take-off wasn't on the markers' line. */
+  /** The markers' scale and gravity's differ: the lines weren't tapped where the athlete ran, or weren't 3 m apart.
+   *  Lengths and the run-up speed go by gravity's scale, unless its fall was cut short (`short-fall`); on a run-up that
+   *  comes at the camera (`curved`) the run-up speed stays on the lines'. */
   | 'off-line'
+  /** They differ, but gravity's fall was cut short (`hang`): its scale rests on the rise alone, and isn't the better
+   *  of the two. Lengths, the run-up speed and the take-off's horizontal velocity stay on the lines' scale, and their
+   *  errors take in the gap, as the vertical velocity's does. */
+  | 'short-fall'
   /** They differ hugely: the frame rate is wrong, or the markers were tapped wrong. */
   | 'scale-broken'
   /** The pose model lost the athlete for a while. */
   | 'gaps'
   /** The take-off foot was the one away from the camera. */
   | 'far-foot'
-  /** The body grows or shrinks over the run-up: it comes at the camera, so speeds along the picture read low. */
+  /** The body grows or shrinks over the run-up: it comes at the camera, and lengths and speeds read in the picture are
+   *  off by about as much (their errors take that in). Its slant alone puts the lines' scale apart from gravity's
+   *  (`off-line`): the run-up speed then stays on the lines' 3 m. */
   | 'curved'
   /** The free fall stops early (a hand on the rim): only the rise is used. */
   | 'hang'
@@ -256,6 +315,9 @@ function flightJitter(ts: number[], ys: number[], fps: number): number {
   const m = median(d2);
   return (1.4826 * median(d2.map((d) => abs(d - m)))) / sqrt(6);
 }
+
+/** Runs of frames where the model lost the athlete up to this long (s) are bridged (`bridge`); longer ones stay empty. */
+const MAX_BRIDGE_S = 0.05;
 
 /** Fills runs of NaN up to `maxGap` long by straight lines between their neighbours. */
 function bridge(xs: number[], maxGap: number): number[] {
@@ -511,7 +573,8 @@ function footTraces(s: Series, fps: number, scale: number): Record<Side, FootTra
  * foot's still points around it (a run-up that comes in at an angle has its floor at another height in the picture
  * than the take-off spot's); `c1` is the slope of the line through all of them.
  */
-type Floor = { c1: number; level: (x: number, side: Side) => number; on: number };
+/** `hidden`: the slope (rad) the fit can't see, across the band of still heels and toes over the run-up (`fitFloor`). */
+type Floor = { c1: number; level: (x: number, side: Side) => number; on: number; hidden: number };
 
 /** Where the heels and toes stood still. */
 function stillPoints(traces: Record<Side, FootTrace>, sides: Side[]): { X: number[]; Y: number[] } {
@@ -534,7 +597,8 @@ function stillPoints(traces: Record<Side, FootTrace>, sides: Side[]): { X: numbe
  * A robust floor. The slope from both feet's still points (their lower part: still points include a heel lifting in
  * push-off), trimmed three times; the height under a spot from that foot's still points within `nearPx` of it, or all
  * of them when there are too few near, leaving out any more than `offPx` off the line (feet held still in the air, as
- * when hanging on the rim).
+ * when hanging on the rim). Keeping the lower part hides a slope across the band the still points make about the line
+ * (heel and toe, the near foot and the far one; 5–95 %): over the run-up's span, that is `hidden`.
  */
 function fitFloor(traces: Record<Side, FootTrace>, nearPx: number, offPx: number): Floor | null {
   const both = stillPoints(traces, ['left', 'right']);
@@ -564,7 +628,10 @@ function fitFloor(traces: Record<Side, FootTrace>, nearPx: number, offPx: number
   const level = (x: number, side: Side): number => (heightNear(side, x) ?? heightNear(side === 'left' ? 'right' : 'left', x) ?? c0) + c1 * x;
   // How many still points it puts on the floor.
   const on = (['left', 'right'] as const).reduce((n, side) => n + own[side].X.filter((x, i) => abs(own[side].Y[i] - level(x, side)) <= offPx).length, 0);
-  return { c1, level, on };
+  const band = both.X.flatMap((x, i) => (abs(both.Y[i] - (c0 + c1 * x)) <= offPx ? [both.Y[i] - (c0 + c1 * x)] : []));
+  const span = max(...both.X) - min(...both.X);
+  const hidden = band.length > 4 && span > 0 ? Math.atan((quantile(band, 0.95) - quantile(band, 0.05)) / span) : 0;
+  return { c1, level, on, hidden };
 }
 
 /**
@@ -661,7 +728,13 @@ function edgeTime(
  * anywhere inside. So its error reaches across a run of two or more lost frames next to it. One lost frame, bridged by
  * its neighbours' mean, stays within the fit's own error.
  */
-function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number, downBefore?: (k: number) => boolean): { t: number; err: number } {
+function acrossGap(
+  e: { t: number; err: number },
+  lost: boolean[],
+  fps: number,
+  downBefore?: (k: number) => boolean,
+  downAfter?: (k: number) => boolean,
+): { t: number; err: number } {
   if (!Number.isFinite(e.err)) return e;
   const reach = max(4, round(0.04 * fps));
   const c = round(e.t);
@@ -680,10 +753,25 @@ function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number, 
     // few to count as one; then the edge is before them.
     let from = k - 1;
     while (downBefore && from > 0 && (lost[from] || downBefore(from))) from--;
-    if (b > k && k - 1 - len <= e.t + e.err && b + 1 + len >= e.t - e.err) err = max(err, hypot(max(e.t - from, b + 1 - e.t), EVENT_FLOOR_FRAMES));
+    // A take-off: frames after the run that show the toe still where it stood may be the contact going on, too few to
+    // count as one (their stillness can't be read next to the run); then the edge is after them.
+    let to = b + 1;
+    while (downAfter && to < lost.length && (lost[to] || downAfter(to))) to++;
+    if (b > k && k - 1 - len <= e.t + e.err && b + 1 + len >= e.t - e.err) {
+      // Across a run too long to bridge, an edge timed before its end was fitted on the frames before it alone: it is
+      // where the foot was last seen still, and with the foot still there after the run, the moment it left wasn't seen
+      // at all. One timed after the run was seen there.
+      if (to > b + 1 && len > round(MAX_BRIDGE_S * fps) && e.t < b + 1) return { t: e.t, err: Infinity };
+      err = max(err, hypot(max(e.t - from, to - e.t), EVENT_FLOOR_FRAMES));
+    }
     k = b;
   }
   return { t: e.t, err };
+}
+
+/** Where a heel or toe stood between two indices: the median of its smoothed height. */
+function standingHeight(pt: PointTrace, from: number, to: number): number {
+  return median(pt.sy.slice(from, to).filter((y) => !Number.isNaN(y)));
 }
 
 /** Two timings of one moment, weighted by their errors; the error is the better one's (their floor is shared). */
@@ -751,11 +839,11 @@ function contactsOf(traces: Record<Side, FootTrace>, s: Series, floor: Floor, fp
         // The heel or the toe, whichever comes down first.
         const atFloor = (k: number) => [heel, toe].some((pt) => pt.sy[k] - floor.level(pt.x[k], side) <= tol);
         const dn = acrossGap(downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 }, s.lost, fps, atFloor);
-        // An up edge that can't be timed is next to frames the model lost: the foot may still be down until they end, and
-        // the frame beside them isn't known to be in the air (its stillness can't be read next to the gap).
-        let seenUp = j;
-        while (seenUp < s.lost.length && (s.lost[seenUp] || s.lost[seenUp + 1])) seenUp++;
-        const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: seenUp - 0.5 }), s.lost, fps);
+        // The toe at the height it stood at in the contact's second half: its own floor, which holds where a floor fitted
+        // through feet hanging from the rim doesn't.
+        const toeY = standingHeight(toe, half, j);
+        const toeDown = (k: number) => abs(toe.sy[k] - toeY) <= tol;
+        const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: j - 0.5 }), s.lost, fps, undefined, toeDown);
         const downAt = frameAt(s, dn.t);
         const upAt = frameAt(s, max(up.t, dn.t + 1));
         // The toe's place: the median over the part of the stance it is planted for, good to 1.25σ/√n (1 SD).
@@ -817,6 +905,18 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   if (markerPx != null && markerPx < legPx) return { ok: false, problem: 'markers' };
   const markerScale = markers && markerPx ? markers.distanceM / markerPx : null;
   const roughScale = markerScale ?? 0.9 / max(1, legPx);
+  // How well each line was tapped, px of this clip (1 SD).
+  const tapPx = markers?.tapPx ?? TAP_PX;
+  // How far a line's tap is off across `dir` (px, 1 SD): the finger, and where along its tape it was tapped
+  // (`TAP_DEPTH_M`). Tapped δ nearer the lens than the hips' path, a point sits further from the picture's middle by δ/d
+  // of its offset there, d = f/k the distance: f the focal length (px), k the lines' px per m.
+  const tapOff = (p: Pt, dir: Pt): number => {
+    if (!markers?.picture || markerPx == null) return tapPx;
+    const { width, height } = markers.picture;
+    const f = max(width, height) / 2 / Math.tan((LENS_FOV_DEG * PI) / 360);
+    const off = abs(dot(sub(p, { x: width / 2, y: height / 2 }), dir));
+    return hypot(tapPx, (off * TAP_DEPTH_M * markerPx) / markers.distanceM / f);
+  };
 
   // Up, then the running direction along the floor, and the side that faces the camera.
   let up = upFrom(picked, markers);
@@ -834,7 +934,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   if (labelledNearSide(athlete) !== near) athlete = athlete.map((p) => (p ? swapSides(p) : null));
 
   let frame: Frame = { origin: markers ? markers.a : { x: 0, y: 0 }, xAxis: runDir, up };
-  const maxGap = round(0.05 * fps);
+  const maxGap = round(MAX_BRIDGE_S * fps);
   let s = seriesOf(athlete, frames, frame, maxGap);
   let traces = footTraces(s, fps, roughScale);
   // The floor under a spot comes from the feet within a metre of it, and is within 10 cm of the line through them all.
@@ -865,6 +965,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   }
   // The floor's whole slope in the picture is in doubt, turned or not.
   const releveled = max(abs(turned), abs(Math.atan(floor0.c1)));
+  // A turn refused, or stopped short, with the floor still sloping (a phone held high and close puts the near and the
+  // far foot apart in the picture, and turning level can take feet off the fitted floor).
+  const slopeLeft = !markers && abs(floor.c1) > 1e-3;
   const contacts = contactsOf(traces, s, floor, fps, roughScale);
   const flight = flightOf(contacts, s, fps);
   if (!flight) return { ok: false, problem: 'no-jump' };
@@ -882,11 +985,26 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     otherOff && lastOff.upAt - otherOff.upAt <= hypot(lastOff.upErr, otherOff.upErr)
       ? together({ t: lastOff.upAt, err: lastOff.upErr }, { t: otherOff.upAt, err: otherOff.upErr })
       : { t: lastOff.upAt, err: lastOff.upErr };
-  const takeoffAt = off.t;
+  // The plant toes, each with the height it stood at in its contact's second half.
+  const tol = FLOOR_TOL_M / roughScale;
+  const toes = plant.map((c) => ({
+    toe: traces[c.foot].toe,
+    y: standingHeight(traces[c.foot].toe, s.frame.findIndex((f) => f >= (c.downAt + c.upAt) / 2), s.frame.findIndex((f) => f >= c.upAt)),
+  }));
+  // A take-off whose moment wasn't seen has its contact end before the frames the model lost there, which keeps a
+  // two-foot take-off's feet together in the plant (moved past them, a foot would fall out of it). The take-off itself
+  // is later when a toe is seen still where it stood after them: the foot left after the last frame it is seen so.
+  let takeoffAt = off.t;
+  if (!Number.isFinite(off.err)) {
+    for (let k = s.frame.findIndex((f) => f > off.t); k >= 0 && k < s.frame.length && (s.lost[k] || toes.some(({ toe, y }) => abs(toe.sy[k] - y) <= tol)); k++) {
+      if (!s.lost[k]) takeoffAt = frameAt(s, k + 0.5);
+    }
+  }
   const takeoff = ceil(takeoffAt - 1e-6);
   const sides = new Set(plant.map((c) => c.foot));
   const style = { kind: sides.size === 2 ? ('two' as const) : ('one' as const), foot: sides.size === 2 ? null : plant[0].foot };
-  const firstPlant = plant.reduce((a, b) => (b.downAt < a.downAt ? b : a));
+  // Two feet put down at the same moment (both timed after the same lost frames): the less sure one may have been first.
+  const firstPlant = plant.reduce((a, b) => (b.downAt < a.downAt || (b.downAt === a.downAt && b.downErr > a.downErr) ? b : a));
   const plantDownAt = firstPlant.downAt;
   const plantDown = firstPlant.down;
   // The step before the plant is the other foot's; the same foot again means the model lost a contact in between.
@@ -895,16 +1013,40 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   if (style.kind === 'one' && style.foot !== near) flags.push('far-foot');
   if (fps < MIN_CONTACT_FPS) flags.push('low-fps');
 
-  // A run-up that comes at the camera: the body's size in the picture changes along it, and so does the scale.
-  const sizes = athlete.flatMap((p, i) => (p && s.frame[i] < plantDownAt ? [bodySize(p)] : []));
+  // A run-up that comes at the camera: the body's size in the picture changes along it, and so does the scale. It changes
+  // over the stretch between the middles of the run-up's first and last thirds (`sizeSpanPx`, along the floor).
+  const run = athlete.flatMap((p, i) => (p && s.frame[i] < plantDownAt ? [{ size: bodySize(p), x: s.hip.x[i] }] : []));
   let sizeChange = 0;
-  if (sizes.length > 10) {
-    const third = max(2, Math.floor(sizes.length / 3));
-    sizeChange = abs(median(sizes.slice(-third)) / median(sizes.slice(0, third)) - 1);
+  let sizeSpanPx = 0;
+  if (run.length > 10) {
+    const third = max(2, Math.floor(run.length / 3));
+    const [first, last] = [run.slice(0, third), run.slice(-third)];
+    sizeChange = abs(median(last.map((r) => r.size)) / median(first.map((r) => r.size)) - 1);
+    sizeSpanPx = abs(median(last.map((r) => r.x)) - median(first.map((r) => r.x)));
     if (sizeChange > 0.06) flags.push('curved');
   }
 
   // --- Flight parabola, on the raw centre of mass (the fit does the smoothing; a filter would bend the take-off).
+  // A take-off that can't be timed is next to frames the model lost: the foot may still be down until they end. One
+  // timed next to such frames, its error reaching across them (`acrossGap`), may be later than timed too. Either way
+  // the free fall is fitted from where every plant toe is seen leaving, after those frames: above the height it stood at
+  // and rising (the path guessed across a gap can hold a toe that is still down above that height, sinking back). Not
+  // from the frame beside them, which isn't known to be in the air: its stillness can't be read next to the gap, and its
+  // smoothed height, bent by the gap, can read above where the toe stood while the foot is still down. Looked for up to
+  // the take-off plus the error width of the foot that left last: two feet timed together have the surer foot's error,
+  // which can end before the toe that leaves last has risen clear of where it stood. No frame up to the first one past
+  // that end shows every toe leaving, and the frames either side of the end are seen: the moment it left wasn't seen
+  // (lost there, they say nothing).
+  let freeFrom = takeoffAt;
+  if (!Number.isFinite(off.err) || s.frame.some((f, k) => abs(f - takeoffAt) <= off.err && s.lost[k] && s.lost[k + 1])) {
+    const leaving = (q: number) => !s.lost[q] && !s.lost[q + 1] && toes.every(({ toe, y }) => toe.sy[q] - y > tol && toe.sy[q + 1] > toe.sy[q]);
+    const lookTo = takeoffAt + max(off.err, lastOff.upErr);
+    let k = s.frame.findIndex((f) => f > takeoffAt);
+    while (k >= 0 && k < s.frame.length && s.frame[k] < lookTo && !leaving(k)) k++;
+    if (k >= 0) freeFrom = max(takeoffAt, frameAt(s, k - 0.5));
+    const last = k - 1;
+    if (k >= 0 && !(k < s.frame.length && leaving(k)) && s.frame[last] > takeoffAt && !s.lost[last] && !s.lost[last + 1]) off.err = Infinity;
+  }
   // Time runs from take-off, s.
   const fitRange = (toFrame: number) => {
     const ts: number[] = [];
@@ -912,7 +1054,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const xs: number[] = [];
     athlete.forEach((p, i) => {
       const f = s.frame[i];
-      if (!p || f <= takeoffAt || f >= toFrame) return;
+      if (!p || f <= freeFrom || f >= toFrame) return;
       const c = toWorld(frame, centreOfMass(p));
       ts.push((f - takeoffAt) / fps);
       ys.push(c.y);
@@ -962,8 +1104,44 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   if (markerScale != null) {
     const r = gravityScale / markerScale;
     if (abs(r - 1) > SCALE_BROKEN) flags.push('scale-broken');
-    else if (abs(r - 1) > SCALE_MISMATCH) flags.push('off-line');
+    else if (abs(r - 1) > SCALE_MISMATCH) {
+      flags.push('off-line');
+      // Gravity's parabola stopped early (a hand on the rim, or jitter taken for one): fitted on the rise alone, its
+      // scale is no check of the lines'. In the synthetic clips where it came out this far off lines laid where the
+      // athlete ran (16 of 100 at 60 fps with a hand on the rim, 24 of 2650 filmed as the guide asks), lengths and speeds
+      // moved onto it read four to six times as far off as on the lines'.
+      if (flags.includes('hang')) flags.push('short-fall');
+    }
   } else flags.push('no-markers');
+  // A figure read on gravity's scale is 1/r of it on the lines' (r: gravity's over the lines'): the two answers are 1/r − 1
+  // of it apart, more than r − 1 where gravity's is the smaller (r = 0.83 puts them 20 % apart, not 17 %).
+  const scaleRatio = markerScale != null ? gravityScale / markerScale : 1;
+  const gap = max(abs(scaleRatio - 1), abs(1 / scaleRatio - 1));
+  // How far a line's tap is off along the run (px, 1 SD).
+  const tapAlong = (p: Pt): number => tapOff(p, frame.xAxis);
+  // Lengths along the floor: on the lines' scale, or on gravity's where the lines are off (`SCALE_MISMATCH`). Gravity's is
+  // right then only if its parabola is: bent by twice the usual jitter, it can be off by as much as the two disagree, and
+  // which of them is right can't be told. A figure on gravity's scale is then either as read or off by that gap, so its
+  // error is its own plus the whole gap, added outright: the gap is one of two answers, not a scatter that the others may
+  // cancel. A parabola cut short at a hang (`short-fall`) is no better a reading than the lines: lengths stay on theirs,
+  // with the same gap in their errors.
+  const linesScale = flags.includes('off-line') && !flags.includes('short-fall') ? null : markerScale;
+  const floorScale = linesScale ?? gravityScale;
+  // The lines' scale (95 %, share): they are laid to 1 %, and each is tapped to `tapAlong`, a share of the gap between
+  // them that grows with the distance.
+  const linesRel = linesScale != null ? hypot(0.01, (1.96 * hypot(tapAlong(markers!.a), tapAlong(markers!.b))) / markerPx!) : 0;
+  // Lines a little off (the 3 m tape laid at 2.9 m, or a few tenths of a metre nearer or further than the athlete ran) put
+  // the scales 2–5 % apart, short of `SCALE_MISMATCH`. Each scale has its own error (1 SD: gravity's fit, the lines'
+  // laying and taps), and two right scales are within 1.96 of their combined SD in 95 % of clips: further apart, one of
+  // them is off and which can't be told, so the figures on the lines' scale take in the whole gap too, as off the line.
+  const chanceSd = hypot(gravityScaleRel, linesRel / 1.96);
+  const scalesDisagree = linesScale != null && (flags.includes('short-fall') || abs(scaleRatio - 1) > 1.96 * chanceSd);
+  const scalesApart = markerScale != null && (linesScale == null || scalesDisagree) ? gap : 0;
+  // Within chance isn't proof the lines are right: laid 0.1–0.2 m nearer or further than the athlete ran (2–3 %), they
+  // pass the check about as often as right ones. Read on their scale alone, the run-up speed then takes in the most a
+  // gap can be and still pass (`unseen`), added outright like a gap that is seen: it bounds a fixed offset, not a
+  // scatter. Without it, lines 0.15–0.2 m further than the athlete ran had it cover the truth in 88–90 of 100 clips.
+  const unseen = linesScale != null && !scalesDisagree ? 1.96 * chanceSd : 0;
 
   // Velocities at take-off. vz = g·(time from take-off to the top), so it rests on the take-off's timing, plus the
   // fit's own uncertainty about the top.
@@ -972,20 +1150,81 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const seApex = sqrt((fy.se[1] / curvature) ** 2 + ((fy.c[1] * 2 * fy.se[2]) / (curvature * curvature)) ** 2);
   const span = pts.ts[pts.ts.length - 1] - pts.ts[0];
   const drift = COM_DRIFT_M / span;
-  const vx = fx.c[1] * gravityScale;
-  // Which way is up, to 1 SD (rad). Two lines each tapped to `TAP_PX`: one a little high or low tilts it. Without lines,
-  // a run-up that comes at the camera makes the floor drop towards the lens, and still feet hanging from the rim sit
-  // above it: either way the floor fit can't be told from a tilted phone, so its whole turn is in doubt.
-  const tilt = markerPx != null ? (sqrt(2) * TAP_PX) / markerPx : flags.includes('curved') || flags.includes('hang') ? releveled : 0;
+  // The horizontal velocity on gravity's scale, or on the lines' where a short fall leaves gravity's the worse reading,
+  // as for the lengths: then braking's two speeds are both on theirs.
+  const vxScale = flags.includes('short-fall') ? markerScale! : gravityScale;
+  const vx = fx.c[1] * vxScale;
+  // On gravity's scale, as the vertical velocity always is: the pair the take-off's direction is read from (below).
+  const vxG = fx.c[1] * gravityScale;
+  // Which way is up, to 1 SD (rad). Two lines each tapped a little high or low tilt it: the finger, and where along its
+  // tape each was tapped, which moves it up or down as well as along (`tapOff`, across the floor). Without lines, the
+  // floor fit is turned level, and a floor that isn't straight in the picture leaves up off by its false slope.
+  // Still feet hanging from the rim sit above the floor by any amount: the turn is then the phone's roll plus a false
+  // slope nothing bounds, and a phone rolled the other way hides the slope, so the whole turn is in doubt, and the roll
+  // too, at most `LEVEL_DEG` (what the camera's level check lets through). Hanging feet can also outnumber those on the
+  // floor and pull the fit their way: on a rolled phone it can come out nearly level and stop turning short. The floor
+  // under the feet up to take-off alone says how far off level that left. A run-up that comes at the camera at an angle
+  // c drops towards the lens instead: from a lens h up and d away, by h·tan(c)/d in the picture, while the body's size
+  // changes by L·tan(c)/d over L along it, so the false slope is h/L of that change, whatever the roll. Up is off by at
+  // most that, with h at its highest (`LENS_HEIGHT_M`), plus what slope the fit has left: a bound, which is taken as the
+  // 95 % error, as the feet's 3 cm and the foreshortening are below. Lines laid where such a run-up went drop the same
+  // way, the 3 m line nearer the lens than the take-off line: up between them is off by that false slope too, on top of
+  // the taps. Without it, lines laid on a run-up 10–20° to the picture had the vertical take-off velocity cover the
+  // truth in 2 of 40 clips.
+  const runUpTilt = () => {
+    const k0 = s.frame.findIndex((f) => f >= takeoffAt);
+    const upTo = (pt: PointTrace): PointTrace => ({ x: pt.x.slice(0, k0), y: pt.y.slice(0, k0), sy: pt.sy.slice(0, k0), still: pt.still.slice(0, k0) });
+    const runUp = k0 > 0 ? fitFloor({ left: { heel: upTo(traces.left.heel), toe: upTo(traces.left.toe) }, right: { heel: upTo(traces.right.heel), toe: upTo(traces.right.toe) } }, nearPx, offPx) : null;
+    return runUp ? abs(Math.atan(runUp.c1)) : 0;
+  };
+  const runupSlope = (LENS_HEIGHT_M * sizeChange) / max(1e-3, sizeSpanPx * gravityScale);
+  const tilt =
+    markerPx != null
+      ? hypot(tapOff(markers!.a, frame.up), tapOff(markers!.b, frame.up)) / markerPx + (sizeChange > SLIGHT_CURVE ? runupSlope / 1.96 : 0)
+      : flags.includes('hang')
+        ? max(releveled + (LEVEL_DEG * PI) / 180, runUpTilt())
+        : sizeChange > SLIGHT_CURVE
+          ? (abs(Math.atan(floor.c1)) + runupSlope) / 1.96
+          : 0;
+  // A straight run-up whose floor couldn't be turned level: up is off by the slope left, which the fit sees short by
+  // about what it hides (`Floor.hidden`: within it in 397 of 403 such synthetic clips, a phone 1–1.5 m up, 5–10 m away
+  // and rolled up to 3°, and never by more than 1.06 times it). That bounds a fixed offset, not a scatter, so it is added
+  // outright: in quadrature with the fit's own errors it falls short wherever it is tight, as when a refused turn leaves
+  // 2.5° seen of a 3° roll. The bounds above (a curved run-up's, at the highest lens) have room to spare.
+  const unlevelled = markerPx == null && !flags.includes('hang') && sizeChange <= SLIGHT_CURVE && slopeLeft ? abs(Math.atan(floor.c1)) + floor.hidden : 0;
   // A tilt θ adds θ·vx to the vertical take-off velocity, and θ·(vz − g·t̄) to the horizontal one, t̄ the middle of the
   // fitted stretch: nothing over a whole flight, whose rise and fall cancel, but not so when the fit stops at a hang.
   const tMid = (pts.ts[0] + pts.ts[pts.ts.length - 1]) / 2;
-  const vzErr = sqrt((G * off.err) ** 2 / fps ** 2 + (G * 1.96 * seApex) ** 2 + drift ** 2 + (1.96 * tilt * vx) ** 2);
-  const vxErr = sqrt((1.96 * fx.se[1] * gravityScale) ** 2 + (vx * 1.96 * gravityScaleRel) ** 2 + drift ** 2 + (1.96 * tilt * (vz - G * tMid)) ** 2);
-  const angle = (atan2(vz, vx) * 180) / PI;
-  // The two velocities' errors added outright, not in quadrature: both lean on the same fit, and a take-off timed early
-  // pulls them the same way.
-  const angleErr = (((vx * vzErr + vz * vxErr) / (vx * vx + vz * vz)) * 180) / PI;
+  const vzOwnErr = sqrt((G * off.err) ** 2 / fps ** 2 + (G * 1.96 * seApex) ** 2 + drift ** 2 + (1.96 * tilt * vx) ** 2) + unlevelled * abs(vx);
+  // Off the line the vertical velocity, g times the time to the top, rests on the parabola's curvature as gravity's scale
+  // does: the gap says that may be off, and which scale is right can't be told, so it takes in the whole gap, added
+  // outright as for the horizontal one. After a short fall the top is one the fit never saw: lines where the athlete
+  // ran, at 60 fps with a hand on the rim at 0.25 s, had it 0.27–0.44 m/s low with 0.27–0.30 stated, covering the truth
+  // in 63 of 77 such clips.
+  const vzErr = vzOwnErr + (flags.includes('off-line') ? abs(vz) * gap : 0);
+  // The horizontal velocity's own error on a scale whose share error is `rel` (95 %).
+  const vxOwnErrOn = (scale: number, rel: number) =>
+    sqrt((1.96 * fx.se[1] * scale) ** 2 + (fx.c[1] * scale * rel) ** 2 + drift ** 2 + (1.96 * tilt * (vz - G * tMid)) ** 2) + unlevelled * abs(vz - G * tMid);
+  const vxGErr = vxOwnErrOn(gravityScale, 1.96 * gravityScaleRel);
+  const vxOwnErr = vxScale === gravityScale ? vxGErr : vxOwnErrOn(vxScale, linesRel);
+  // Where the two scales are apart by more than `SCALE_MISMATCH`, which of them is right can't be told: on either, the
+  // horizontal velocity may be off by the whole gap, added outright as for the lengths. With gravity's 13 % off lines laid
+  // where the athlete ran (its parabola bent by twice the usual jitter), it read 0.39 m/s off with 0.09 stated.
+  const vxErr = vxOwnErr + (flags.includes('off-line') ? abs(vx) * gap : 0);
+  // The take-off's direction is the rise over the run, both in the picture's own units: read from the fit's own pair on
+  // one scale, which cancels, it doesn't move with whichever scale is right. With the run on the lines' scale and the
+  // rise on gravity's after a short fall, it moved by the gap between them: lines where the athlete ran, at 60 fps with
+  // a hand on the rim at 0.25 s, had it 2.3° off the truth (median), 0.8° on one scale. The gap can still say the
+  // parabola is bent, which moves the rise in the picture and not the run. Over a whole flight jitter bends it beyond
+  // what its fit says (13 % in a clip of the probes', with 1.2 % stated), and the angle on it was 3° off: which of the
+  // two is right can't be told, and its error takes in the gap as the horizontal velocity's does (once: the vertical
+  // velocity's share of it is the same bend). After a short fall the rise alone sets the parabola, and the fit's own
+  // errors, wide over so short a stretch, already take in how loosely: read on one scale with no gap added, the angle
+  // held the truth in 616 of 619 such clips of the probes'. The two velocities' errors are added outright, not in
+  // quadrature: both lean on the same fit, and a take-off timed early pulls them the same way.
+  const vxGAngleErr = vxGErr + (flags.includes('off-line') && !flags.includes('short-fall') ? abs(vxG) * gap : 0);
+  const angle = (atan2(vz, vxG) * 180) / PI;
+  const angleErr = (((vxG * vzOwnErr + vz * vxGAngleErr) / (vxG * vxG + vz * vz)) * 180) / PI;
   const metrics: Partial<Record<MetricKey, Measured>> = {
     vz: measured('vz', vz, vzErr),
     vx: measured('vx', vx, vxErr),
@@ -999,15 +1238,13 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const [a, b] = [...plant].sort((x, y) => x.downAt - y.downAt);
     metrics.gap = measured('gap', ms(b.downAt - a.downAt), ms(hypot(a.downErr, b.downErr)));
   }
-  const floorScale = markerScale ?? gravityScale;
   if (penultimate) {
     const step = abs(firstPlant.toeX - penultimate.toeX) * floorScale;
     // Each toe's place (a median over its stance); the feet stand a hand's breadth either side of the line the scale
-    // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself: the lines
-    // are laid to 1 %, and each is tapped to `TAP_PX`, a share of the gap between them that grows with the distance.
-    const scaleRel = markerScale != null ? hypot(0.01, (1.96 * sqrt(2) * TAP_PX) / markerPx!) : 1.96 * gravityScaleRel;
+    // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself.
+    const scaleRel = linesScale != null ? linesRel : 1.96 * gravityScaleRel;
     const toes = hypot(firstPlant.toeErr, penultimate.toeErr) * floorScale;
-    metrics.step = measured('step', step, sqrt(toes ** 2 + 0.03 ** 2 + (step * (scaleRel + sizeChange)) ** 2));
+    metrics.step = measured('step', step, sqrt(toes ** 2 + 0.03 ** 2 + (step * (scaleRel + sizeChange)) ** 2) + step * scalesApart);
   }
 
   // --- Run-up speed: the time the hips take between the markers.
@@ -1024,19 +1261,42 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       }
       return null;
     };
-    const ca = crossing(toWorld(frame, markers.a).x);
-    const cb = crossing(toWorld(frame, markers.b).x);
+    const xa = toWorld(frame, markers.a).x;
+    const xb = toWorld(frame, markers.b).x;
+    const ca = crossing(xa);
+    const cb = crossing(xb);
     if (ca && cb && cb.t !== ca.t) {
       const dt = abs(cb.t - ca.t);
-      const v = markers.distanceM / dt;
+      // The hips cross the lines where they are in the picture: 3 m apart, or where the lines are off, as far apart as
+      // gravity's scale makes them along the athlete's path. Not so on a run-up that comes at the camera (`curved`): its
+      // slant alone puts the two scales apart, the 3 m line nearer the lens than the take-off line, and lines laid on its
+      // path are 3 m apart along it. Moved onto gravity's scale, the run-up speed read 0.56 m/s high at 15° and 0.81 at
+      // 20° (medians of 100 clips of the probes'), 0.05 and 0.09 on the 3 m. It stays on the lines', with their errors
+      // and the gap between the scales, as for lines a little off.
+      const onLines = linesScale != null || flags.includes('curved');
+      const v = (onLines ? markers.distanceM : abs(xb - xa) * gravityScale) / dt;
       // Each crossing's place: the jitter a 10 Hz filter leaves (white noise keeps 2·10/fps of its variance), and the
-      // tap (`TAP_PX`). Its time: that over the hips' speed there, which at the take-off line is the plant's, about
+      // tap (`tapAlong`). Its time: that over the hips' speed there, which at the take-off line is the plant's, about
       // half the run-up's.
       const jitter = median(s.hip.x.flatMap((x, i) => (Number.isNaN(x) || Number.isNaN(hx[i]) ? [] : [abs(x - hx[i])]))) * 1.4826;
-      const sdPx = hypot(jitter * sqrt((2 * 10) / fps), TAP_PX);
-      const rel = hypot(sdPx / max(1, ca.speed), sdPx / max(1, cb.speed)) / dt;
+      const sdPx = (p: Pt) => hypot(jitter * sqrt((2 * 10) / fps), tapAlong(p));
+      const rel = hypot(sdPx(markers.a) / max(1, ca.speed), sdPx(markers.b) / max(1, cb.speed)) / dt;
       // A run-up at an angle to the picture is foreshortened, by about as much as the body's size changes along it.
-      metrics.approach = measured('approach', v, v * hypot(1.96 * rel, sizeChange));
+      // Where the lines are off, gravity's scale has its own error, and the stretch between the crossings isn't the
+      // lines': it is as much longer or shorter as the scales disagree, about the picture's middle, so each end moves
+      // along the run-up, the take-off line's through the plant's braking. With the take-off line within 3 m of the
+      // middle, that moves the mean speed by up to the same share (`scalesApart`, added outright as for the lengths).
+      // On the lines' scale, the gap seen, or with none seen the most that could pass unseen (`unseen`), moves the time
+      // between the crossings, not the 3 m: lines a share off where the athlete ran put each crossing that share of its
+      // distance from the picture's middle (`xm`) along the run-up, and the hips take that over their speed there. The
+      // take-off line is crossed in the plant at about half the run-up's speed, so the run-up speed is off by `k` times
+      // the gap: each crossing's distance from the middle over its speed, summed, over the time between them. That is 1
+      // at an even speed with the middle halfway, and 1.5–1.7 in the synthetic clips: without it, lines 0.3 m nearer than
+      // the athlete ran, with a hand on the rim, had the run-up speed cover the truth in 83 of 100.
+      const gravityRel = onLines ? 0 : 1.96 * gravityScaleRel;
+      const xm = markers.picture ? toWorld(frame, { x: markers.picture.width / 2, y: markers.picture.height / 2 }).x : (xa + xb) / 2;
+      const k = onLines ? max(1, (abs(xa - xm) / max(1, ca.speed) + abs(xb - xm) / max(1, cb.speed)) / dt) : 1;
+      metrics.approach = measured('approach', v, v * (hypot(1.96 * rel, sizeChange, gravityRel) + k * (scalesApart + unseen)));
     }
   }
 
@@ -1054,9 +1314,12 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     if (ts.length >= 4) {
       const fin = polyFit(ts, xs, 1);
       const vin = fin.c[1] * floorScale;
-      // The fit, the segment model's drift over this short stretch, and a run-up that comes at the camera.
-      const vinErr = sqrt((1.96 * fin.se[1] * floorScale) ** 2 + (COM_DRIFT_M / (ts[ts.length - 1] - ts[0])) ** 2 + (vin * sizeChange) ** 2);
-      metrics.brake = measured('brake', vin - vx, hypot(vinErr, vxErr));
+      // The fit, the segment model's drift over this short stretch, a run-up that comes at the camera, and the lines'
+      // scale where it is on theirs (the take-off speed is on gravity's, but for after a short fall). Both speeds on one
+      // scale, where it may be as far off as the scales are apart, move the braking by that share of it; the run-in speed
+      // alone on the lines'. The take-off speed's own share of the gap is in that, not in its error here.
+      const vinErr = sqrt((1.96 * fin.se[1] * floorScale) ** 2 + (COM_DRIFT_M / (ts[ts.length - 1] - ts[0])) ** 2 + (vin * sizeChange) ** 2 + (vin * linesRel) ** 2);
+      metrics.brake = measured('brake', vin - vx, hypot(vinErr, vxOwnErr) + abs(vxScale === floorScale ? vin - vx : vin) * scalesApart);
     }
   }
 

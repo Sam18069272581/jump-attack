@@ -17,9 +17,9 @@ import { toISODate } from '@/domain/dates';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
 import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { Pt } from '@/domain/pose';
-import { analyseTechnique, type Markers, type TechniqueProblem, type TechniqueResult } from '@/domain/technique';
+import { analyseTechnique, TAP_PT, TAP_PX, type Markers, type TechniqueProblem, type TechniqueResult } from '@/domain/technique';
 import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, planWindow, TAP_REACH_S, windowOf } from '@/domain/techniqueRead';
-import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT } from '@/domain/techniqueText';
+import { flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT, shownFlags } from '@/domain/techniqueText';
 import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
@@ -111,8 +111,6 @@ export default function TechniqueAnalyse() {
   const total = frameCount(duration || clip?.duration || 0, fileFps);
   const looksSlowMo = !camera && detectedFps != null && detectedFps < 100;
   const fpsChoices = detectedFps == null ? FPS_CHOICES : [fileFps, ...FPS_CHOICES.filter((f) => f > fileFps)];
-  const markers: Markers | null = !skipLines && lines.takeoff && lines.back ? { a: lines.back, b: lines.takeoff, distanceM: MARKER_GAP_M } : null;
-  const linesDone = skipLines || markers != null;
 
   function show(f: number) {
     setFrame(f);
@@ -124,6 +122,13 @@ export default function TechniqueAnalyse() {
   const ox = clip ? (view.w - clip.width * fit) / 2 : 0;
   const oy = clip ? (view.h - clip.height * fit) / 2 : 0;
   const onScreen = (p: Pt) => ({ x: ox + p.x * fit, y: oy + p.y * fit });
+
+  // The lines, with the finger's miss on the zoomed picture in the clip's px (`TAP_PT`).
+  const markers: Markers | null =
+    !skipLines && clip && fit > 0 && lines.takeoff && lines.back
+      ? { a: lines.back, b: lines.takeoff, distanceM: MARKER_GAP_M, picture: { width: clip.width, height: clip.height }, tapPx: Math.max(TAP_PX, TAP_PT / (ZOOM * fit)) }
+      : null;
+  const linesDone = skipLines || markers != null;
 
   const nextStep = (a: typeof athlete, l: typeof lines, skip: boolean): Step | null =>
     !a ? 'athlete' : skip ? null : !l.takeoff ? 'takeoff' : !l.back ? 'back' : null;
@@ -295,13 +300,13 @@ export default function TechniqueAnalyse() {
             </View>
             <Text style={styles.lead}>
               {zoom
-                ? tr('放大了：点准胶带上运动员跑过的那一点。')
+                ? tr('放大了：点运动员身体正下方、两脚中间的胶带，别点在脚上。')
                 : step === 'athlete'
                   ? tr('拖动进度条到起跳前后，点一下运动员。')
                   : step === 'takeoff'
-                    ? tr('点起跳线：先点胶带大概的位置，放大后再点准运动员跑过的那一点。')
+                    ? tr('点起跳线：拖到运动员跑到这条胶带上的那一帧，先点个大概，放大后点准身体正下方的胶带。')
                     : step === 'back'
-                      ? tr('点 3 米线（起跳线往回 3 米的那条），一样点两下。')
+                      ? tr('点 3 米线（起跳线往回 3 米那条）：同样拖到运动员跑到它上面的那一帧，点两下。')
                       : skipLines
                         ? tr('没点地上的线：不测助跑速度，长度按重力换算。')
                         : tr('都点好了。分析要读几百帧，大约半分钟到一分钟。')}
@@ -359,9 +364,9 @@ export default function TechniqueAnalyse() {
                 <Chip key={e.name} label={`${e.name} #${e.f}`} selected={frame === e.f} onPress={() => show(e.f)} />
               ))}
             </View>
-            {result.flags.map((f) => (
+            {shownFlags(result.flags).map((f) => (
               <Text key={f} style={styles.warn}>
-                {FLAG_TEXT[f]}
+                {flagText(f, result.flags)}
               </Text>
             ))}
           </>
