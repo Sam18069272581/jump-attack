@@ -882,7 +882,8 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const takeoff = ceil(takeoffAt - 1e-6);
   const sides = new Set(plant.map((c) => c.foot));
   const style = { kind: sides.size === 2 ? ('two' as const) : ('one' as const), foot: sides.size === 2 ? null : plant[0].foot };
-  const firstPlant = plant.reduce((a, b) => (b.downAt < a.downAt ? b : a));
+  // Two feet put down at the same moment (both timed after the same lost frames): the less sure one may have been first.
+  const firstPlant = plant.reduce((a, b) => (b.downAt < a.downAt || (b.downAt === a.downAt && b.downErr > a.downErr) ? b : a));
   const plantDownAt = firstPlant.downAt;
   const plantDown = firstPlant.down;
   // The step before the plant is the other foot's; the same foot again means the model lost a contact in between.

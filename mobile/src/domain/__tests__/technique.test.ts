@@ -353,6 +353,17 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('a two-foot plant with frames lost just after the first foot down: the contact time is taken from the foot that may have been first', () => {
+    // Both feet are seen down only after the gap, so both are timed there, and the foot that really landed later has the
+    // narrower error: the contact time has to start at the one whose error reaches back across the gap.
+    for (const seed of [1, 2, 3, 4]) {
+      const scene = poseScene({ style: 'two', fps: 120, seed });
+      const td = touchDownOf(scene);
+      const result = resultOf(analyseTechnique({ frames: lose(scene, td + 2, td + 8), captureFps: 120, markers: scene.markers }));
+      expect([seed, misses(scene, result).filter((m) => m.startsWith('plant:'))]).toEqual([seed, []]);
+    }
+  });
+
   it('at 60 fps with the take-off inside 8 lost frames: the free fall isn’t fitted on a frame with the foot still down', () => {
     // The frame next to the gap has no stillness to read, so it isn't counted as down: the unknown take-off goes after
     // the lost frames, not before that frame.
