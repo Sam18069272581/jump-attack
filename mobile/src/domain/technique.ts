@@ -983,7 +983,15 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // Which way is up, to 1 SD (rad). Two lines each tapped to `TAP_PX`: one a little high or low tilts it. Without lines,
   // a run-up that comes at the camera makes the floor drop towards the lens, and still feet hanging from the rim sit
   // above it: either way the floor fit can't be told from a tilted phone, so its whole turn is in doubt.
-  const tilt = markerPx != null ? (sqrt(2) * TAP_PX) / markerPx : flags.includes('curved') || flags.includes('hang') ? releveled : 0;
+  // Hanging feet can also outnumber those on the floor and pull the fit their way: on a rolled phone it can come out
+  // nearly level and stop turning short. The floor under the feet up to take-off alone says how far off level that left.
+  const runUpTilt = () => {
+    const k0 = s.frame.findIndex((f) => f >= takeoffAt);
+    const upTo = (pt: PointTrace): PointTrace => ({ x: pt.x.slice(0, k0), y: pt.y.slice(0, k0), sy: pt.sy.slice(0, k0), still: pt.still.slice(0, k0) });
+    const runUp = k0 > 0 ? fitFloor({ left: { heel: upTo(traces.left.heel), toe: upTo(traces.left.toe) }, right: { heel: upTo(traces.right.heel), toe: upTo(traces.right.toe) } }, nearPx, offPx) : null;
+    return runUp ? abs(Math.atan(runUp.c1)) : 0;
+  };
+  const tilt = markerPx != null ? (sqrt(2) * TAP_PX) / markerPx : flags.includes('hang') ? max(releveled, runUpTilt()) : flags.includes('curved') ? releveled : 0;
   // A tilt θ adds θ·vx to the vertical take-off velocity, and θ·(vz − g·t̄) to the horizontal one, t̄ the middle of the
   // fitted stretch: nothing over a whole flight, whose rise and fall cancel, but not so when the fit stops at a hang.
   const tMid = (pts.ts[0] + pts.ts[pts.ts.length - 1]) / 2;

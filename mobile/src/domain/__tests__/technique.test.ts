@@ -522,6 +522,16 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     }
   });
 
+  it('no lines, a hand on the rim, the phone rolled 3° against the slope the hanging feet give: the take-off figures still hold the truth', () => {
+    // The feet hanging still from the rim pull the floor fit their way: it can come out nearly level on a rolled phone,
+    // and the turn that follows is too small to say how far off level the picture is.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ hangAfterS: 0.34, rollDeg: -3, markers: null, seed });
+      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: null }));
+      expect([seed, misses(scene, result).filter((m) => /^(vz|vx|angle):/.test(m))]).toEqual([seed, []]);
+    }
+  });
+
   it('no lines, a run-up that comes in at 18–25° to the picture on a level phone: the plant is the plant, and no figure misses', () => {
     // Such a floor bends in the picture; turned for as if it were a tilt, the plant's feet leave it.
     for (const curveDeg of [18, 20, 25]) {
