@@ -73,7 +73,8 @@ const CHECKS = {
       { key: 'JH.te', name: 'JH typical error, same set re-noised (cm)', better: 'lower', tol: 0.05, value: r.repeat.find((x) => x.metric === '跳高 JH')?.te ?? null },
     ],
   },
-  // Take-off technique from the pose: 16 ways of filming × 40 clips (no video, so the full set is quick).
+  // Take-off technique from the pose: every way of filming in tools/pose-validation/validate.js × 40 clips (no video, so
+  // the full set is quick).
   pose: {
     command: (out) => ['node', [path.join(REPO, 'tools/pose-validation/validate.js'), '--seeds', '40', '--out', out]],
     report: 'report.json',
