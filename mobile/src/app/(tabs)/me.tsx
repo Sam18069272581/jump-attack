@@ -15,10 +15,11 @@ import { CLEARANCE_CM, dunkLine, RIM_CM } from '@/domain/dunk';
 import { toISODate } from '@/domain/dates';
 import { pushOff } from '@/domain/fvp';
 import { parseGoalDate } from '@/domain/goal';
-import { tr } from '@/i18n';
+import { LANGS, tr } from '@/i18n';
 import { deleteSavedVideos, savedVideos } from '@/media/videos';
 import { pickBackupText, shareAthleteFile } from '@/sync/files';
 import { useAthlete } from '@/state/athlete';
+import { useLang, type LangChoice } from '@/state/lang';
 import { colors, radius, text } from '@/theme';
 
 function toNumber(s: string): number | null {
@@ -40,6 +41,8 @@ export default function Me() {
           {/* Keyed on the whole row so the form starts fresh when switching athlete or when an import replaces the profile. */}
           {current && <ProfileForm key={JSON.stringify(current)} athlete={current} onSaved={reload} />}
 
+          <LanguagePicker />
+
           <Pressable accessibilityRole="button" onPress={() => router.push('/backup')} style={styles.athlete}>
             <Icon name="cloud" size={18} color={colors.textMuted} />
             <Text style={styles.athleteName}>{tr('数据备份与同步')}</Text>
@@ -55,6 +58,27 @@ export default function Me() {
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
+  );
+}
+
+/** The app's language: the phone's, or one picked here. Picking redraws the whole app. */
+function LanguagePicker() {
+  const { choice, choose } = useLang();
+  const options: { key: LangChoice; label: string }[] = [{ key: 'system', label: tr('跟随手机') }, ...LANGS.map((l) => ({ key: l.code, label: l.name }))];
+  return (
+    <View style={{ gap: 10 }}>
+      <Text style={text.section}>{tr('语言')}</Text>
+      <View style={styles.langRow}>
+        {options.map((o) => {
+          const selected = o.key === choice;
+          return (
+            <Pressable key={o.key} accessibilityRole="radio" accessibilityState={{ selected }} onPress={() => choose(o.key)} style={[styles.lang, selected && styles.athleteSelected]}>
+              <Text style={[styles.langName, selected && { color: colors.accent }]}>{o.label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
   );
 }
 
@@ -281,6 +305,9 @@ const styles = StyleSheet.create({
   athleteSelected: { borderColor: colors.accent },
   athleteName: { flex: 1, color: colors.text, fontSize: 15 },
   addRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  langRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  lang: { height: 40, borderRadius: radius.row, backgroundColor: colors.surface, paddingHorizontal: 14, justifyContent: 'center', borderWidth: 1, borderColor: 'transparent' },
+  langName: { color: colors.text, fontSize: 14 },
   field: { gap: 6 },
   fieldLabel: { color: colors.textMuted, fontSize: 12 },
   input: { height: 48, borderRadius: 12, backgroundColor: colors.surface, color: colors.text, paddingHorizontal: 14, fontSize: 15 },
