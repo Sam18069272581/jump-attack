@@ -1,4 +1,5 @@
 import { PASS_LINE } from '../technique';
+import { setLang } from '@/i18n';
 import { FLAG_TEXT, flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, shownFlags } from '../techniqueText';
 
 describe('formatMeasured', () => {
@@ -96,4 +97,16 @@ it('after a hand on the rim, says the take-off rests on the rise before it, and 
   expect(FLAG_TEXT['short-fall']).not.toMatch(/一小段下落/);
   expect(FLAG_TEXT['short-fall']).not.toMatch(/仍/);
   expect(FLAG_TEXT['short-fall']).toMatch(/起跳水平速度都按两条线/);
+});
+
+it('says every flag in the app’s language, the slanted run-up’s line too', () => {
+  setLang('en');
+  try {
+    const curvedOff = flagText('off-line', ['curved', 'off-line']);
+    expect(curvedOff).not.toMatch(/[\u3400-\u9fff]/);
+    expect(curvedOff).not.toBe(flagText('off-line', ['off-line']));
+    for (const f of ['off-line', 'short-fall', 'curved', 'hang'] as const) expect(FLAG_TEXT[f]).not.toMatch(/[\u3400-\u9fff]/);
+  } finally {
+    setLang('zh');
+  }
 });

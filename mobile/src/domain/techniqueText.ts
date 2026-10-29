@@ -61,7 +61,7 @@ const OFF_LINE_CURVED_TEXT =
 
 /** What a flag shown says, given all the clip's flags. */
 export function flagText(flag: QualityFlag, flags: QualityFlag[]): string {
-  return flag === 'off-line' && flags.includes('curved') ? OFF_LINE_CURVED_TEXT : FLAG_TEXT[flag];
+  return flag === 'off-line' && flags.includes('curved') ? tr(OFF_LINE_CURVED_TEXT) : FLAG_TEXT[flag];
 }
 
 /**
