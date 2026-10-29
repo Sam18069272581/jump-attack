@@ -173,7 +173,7 @@ export type QualityFlag =
   | 'off-line'
   /** They differ, but gravity's fall was cut short (`hang`): its scale rests on the rise alone, and isn't the better
    *  of the two. Lengths, the run-up speed and the take-off's horizontal velocity stay on the lines' scale, and their
-   *  errors take in the gap. */
+   *  errors take in the gap, as the vertical velocity's does. */
   | 'short-fall'
   /** They differ hugely: the frame rate is wrong, or the markers were tapped wrong. */
   | 'scale-broken'
@@ -1192,7 +1192,13 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // A tilt θ adds θ·vx to the vertical take-off velocity, and θ·(vz − g·t̄) to the horizontal one, t̄ the middle of the
   // fitted stretch: nothing over a whole flight, whose rise and fall cancel, but not so when the fit stops at a hang.
   const tMid = (pts.ts[0] + pts.ts[pts.ts.length - 1]) / 2;
-  const vzErr = sqrt((G * off.err) ** 2 / fps ** 2 + (G * 1.96 * seApex) ** 2 + drift ** 2 + (1.96 * tilt * vx) ** 2) + unlevelled * abs(vx);
+  const vzOwnErr = sqrt((G * off.err) ** 2 / fps ** 2 + (G * 1.96 * seApex) ** 2 + drift ** 2 + (1.96 * tilt * vx) ** 2) + unlevelled * abs(vx);
+  // Off the line the vertical velocity, g times the time to the top, rests on the parabola's curvature as gravity's scale
+  // does: the gap says that may be off, and which scale is right can't be told, so it takes in the whole gap, added
+  // outright as for the horizontal one. After a short fall the top is one the fit never saw: lines where the athlete
+  // ran, at 60 fps with a hand on the rim at 0.25 s, had it 0.27–0.44 m/s low with 0.27–0.30 stated, covering the truth
+  // in 63 of 77 such clips.
+  const vzErr = vzOwnErr + (flags.includes('off-line') ? abs(vz) * gap : 0);
   // The horizontal velocity's own error on a scale whose share error is `rel` (95 %).
   const vxOwnErrOn = (scale: number, rel: number) =>
     sqrt((1.96 * fx.se[1] * scale) ** 2 + (fx.c[1] * scale * rel) ** 2 + drift ** 2 + (1.96 * tilt * (vz - G * tMid)) ** 2) + unlevelled * abs(vz - G * tMid);
@@ -1208,14 +1214,14 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // a hand on the rim at 0.25 s, had it 2.3° off the truth (median), 0.8° on one scale. The gap can still say the
   // parabola is bent, which moves the rise in the picture and not the run. Over a whole flight jitter bends it beyond
   // what its fit says (13 % in a clip of the probes', with 1.2 % stated), and the angle on it was 3° off: which of the
-  // two is right can't be told, and its error takes in the gap as the horizontal velocity's does. After a short fall
-  // the rise alone sets the parabola, and the fit's own errors, wide over so short a stretch, already take in how
-  // loosely: read on one scale with no gap added, the angle held the truth in 616 of 619 such clips of the probes'.
-  // The two velocities' errors are added outright, not in quadrature: both lean on the same fit, and a take-off timed
-  // early pulls them the same way.
+  // two is right can't be told, and its error takes in the gap as the horizontal velocity's does (once: the vertical
+  // velocity's share of it is the same bend). After a short fall the rise alone sets the parabola, and the fit's own
+  // errors, wide over so short a stretch, already take in how loosely: read on one scale with no gap added, the angle
+  // held the truth in 616 of 619 such clips of the probes'. The two velocities' errors are added outright, not in
+  // quadrature: both lean on the same fit, and a take-off timed early pulls them the same way.
   const vxGAngleErr = vxGErr + (flags.includes('off-line') && !flags.includes('short-fall') ? abs(vxG) * gap : 0);
   const angle = (atan2(vz, vxG) * 180) / PI;
-  const angleErr = (((vxG * vzErr + vz * vxGAngleErr) / (vxG * vxG + vz * vz)) * 180) / PI;
+  const angleErr = (((vxG * vzOwnErr + vz * vxGAngleErr) / (vxG * vxG + vz * vz)) * 180) / PI;
   const metrics: Partial<Record<MetricKey, Measured>> = {
     vz: measured('vz', vz, vzErr),
     vx: measured('vx', vx, vxErr),

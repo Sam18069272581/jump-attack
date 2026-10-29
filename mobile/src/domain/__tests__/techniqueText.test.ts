@@ -56,6 +56,12 @@ it('off the line, says the take-off angle is less sure too, but not after a hand
   expect(FLAG_TEXT['short-fall']).not.toMatch(/角度/);
 });
 
+it('when the scales disagree, says the vertical take-off velocity is less sure too', () => {
+  // It rests on the parabola's curvature as gravity's scale does, off the line and after a short fall alike.
+  expect(FLAG_TEXT['off-line']).toMatch(/垂直速度.*误差/);
+  expect(FLAG_TEXT['short-fall']).toMatch(/垂直速度.*误差/);
+});
+
 it('when a hand on the rim cut the fall short, says so rather than that the lines are off, and that the lengths stay on the lines', () => {
   // Gravity's scale then rests on the rise alone: apart from the lines', it is no sign they were laid or tapped wrong.
   expect(FLAG_TEXT['short-fall']).toMatch(/挂筐|篮筐/);

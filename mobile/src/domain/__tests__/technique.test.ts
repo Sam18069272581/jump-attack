@@ -680,6 +680,19 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     }
   });
 
+  it('lines where the athlete ran, tapped at their feet, at 60 fps with a hand on the rim just before the top: the vertical take-off velocity, timed to a top the fit never saw, still holds the truth', () => {
+    // Clips of the probes', read and tapped as tools/pose-validation does. On the rise alone gravity's scale came out
+    // 12–21 % off the lines', and the vertical velocity, g times the time to that top, read 0.27–0.44 m/s low with 0.27–0.30
+    // stated: it rests on the parabola's curvature as gravity's scale does, and which scale is right can't be told. Of 77
+    // such clips it covered the truth in 63.
+    for (const seed of [123006, 123026, 123071]) {
+      const scene = poseScene({ fps: 60, hangAfterS: 0.25, seed });
+      const { frames, target } = readAsTheScreen(scene);
+      const result = resultOf(analyseTechnique({ frames, captureFps: 60, markers: tappedAtTheFeet(scene, 0.08), target }));
+      expect([seed, result.flags.includes('short-fall'), misses(scene, result).filter((x) => /^vz:/.test(x))]).toEqual([seed, true, []]);
+    }
+  });
+
   it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
     const scene = poseScene();
     const b = scene.markers!.b;
