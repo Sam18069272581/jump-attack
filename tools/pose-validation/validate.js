@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * How far to trust the take-off technique figures (mobile/src/app/technique/analyse.tsx) before any real footage: each
- * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed twenty-five ways. Everything runs the
+ * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed twenty-six ways. Everything runs the
  * app's own code: domain/testing/poseScene.ts builds a run-up jump with known take-off velocity, contacts, step and
  * knee angle and gives its landmarks the pose model's jitter, swaps and misses; domain/techniqueRead.ts reads it the way
  * the screen does (a coarse pass around a tap near the take-off, the jump's window, every frame in it), with the floor
@@ -46,7 +46,8 @@ const ALL_WAYS = [
   { key: 'slight-roll-bare', name: '没贴线、助跑偏了 2°、手机歪了 3°', over: { curveDeg: 2, rollDeg: 3, markers: null } },
   { key: 'lines-near', name: '两条线点得比运动员跑的地方近 0.5 米', over: { markers: { aM: -3, bM: 0, nearerM: 0.5 } } },
   { key: 'lines-short', name: '3 米线其实贴在 2.6 米', over: { markers: { aM: -2.6, bM: 0, nearerM: 0 } } },
-  { key: 'tap-depth', name: '点线时点在脚下，比髋部跑的线近或远 8 厘米', over: {}, tapDepthM: 0.08 },
+  { key: 'tap-depth', name: '点线时点在身体下方，比髋部跑的线近或远 8 厘米', over: {}, tapDepthM: 0.08 },
+  { key: 'tap-lean', name: '点起跳线时偏向踩线的起跳脚 5 厘米，两条线再近或远 8 厘米', over: {}, tapDepthM: 0.08, tapLeanM: 0.05 },
   { key: 'bystander', name: '旁边站着一个人', over: { bystanderM: 2 } },
   { key: 'dropout', name: '5% 的帧没认出人，起跳前左右腿认反几帧', over: { dropout: 0.05, swaps: [[200, 208]] } },
   { key: 'far', name: '离得远（10 米）、助跑慢（4.5 m/s）', over: { distanceM: 10, approachSpeed: 4.5 } },
@@ -96,19 +97,20 @@ function fingerPx(T, scene) {
 
 /**
  * The floor lines as a finger taps them on the zoomed picture: each off by `fingerPx` (1 SD) either way, and with
- * `depthM`, on its tape that much (1 SD) nearer the lens or further than where the athlete ran. The screen takes them to
- * be `MARKER_GAP_M` apart, wherever they really are, and sends the picture's size and the finger's miss with them.
+ * `depthM`, on its tape that much (1 SD) nearer the lens or further than where the athlete ran; with `leanM`, the
+ * take-off line that much nearer the lens on top, towards the planted foot on the camera's side. The screen takes them
+ * to be `MARKER_GAP_M` apart, wherever they really are, and sends the picture's size and the finger's miss with them.
  */
-function tapped(T, R, scene, depthM) {
+function tapped(T, R, scene, depthM, leanM = 0) {
   const m = scene.markers;
   if (!m) return null;
   const normal = normals(scene.options.seed * 7919);
   const depth = normals(scene.options.seed * 7919 + 1);
   const { aM, bM, nearerM } = scene.options.markers;
   const tapPx = fingerPx(T, scene);
-  const at = (xM, p) => (depthM ? scene.floorPoint(xM, nearerM + depthM * depth()) : p);
+  const at = (xM, p, lean) => (depthM || lean ? scene.floorPoint(xM, nearerM + lean + (depthM ? depthM * depth() : 0)) : p);
   const tap = (p) => ({ x: p.x + tapPx * normal(), y: p.y + tapPx * normal() });
-  return { a: tap(at(aM, m.a)), b: tap(at(bM, m.b)), distanceM: R.MARKER_GAP_M, picture: { width: scene.width, height: scene.height }, tapPx };
+  return { a: tap(at(aM, m.a, 0)), b: tap(at(bM, m.b, leanM)), distanceM: R.MARKER_GAP_M, picture: { width: scene.width, height: scene.height }, tapPx };
 }
 
 /** Reads a scene the way the technique screen does, from a tap a quarter second before the take-off, and measures it. */
@@ -129,7 +131,7 @@ function measure(S, R, T, LM, scene, way) {
   if (!plan.ok) return { ok: false, problem: plan.problem };
   const dense = R.denseFrames(plan.win, total, coarse.map((f) => f.frame));
   const frames = R.windowOf(R.framesFromWire([...coarseWire, ...read(dense)], scene.width, scene.height, fps), plan.win);
-  return T.analyseTechnique({ frames, captureFps: fps, markers: tapped(T, R, scene, way.tapDepthM), target: plan.win.target });
+  return T.analyseTechnique({ frames, captureFps: fps, markers: tapped(T, R, scene, way.tapDepthM, way.tapLeanM), target: plan.win.target });
 }
 
 function stats(rows) {

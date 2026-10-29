@@ -139,7 +139,7 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
 });
 
 describe('stated errors', () => {
-  // The full check is tools/pose-validation (25 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
+  // The full check is tools/pose-validation (26 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
   const WAYS: [string, Partial<PoseSceneOptions>][] = [
     ['as the guide asks', {}],
     ['twice the jitter', { noisePx: 3 }],

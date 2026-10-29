@@ -117,8 +117,9 @@ export const TAP_PX = 4;
 export const TAP_PT = 3;
 
 /**
- * How far nearer the lens or further a line is tapped than where the hips crossed it (m, 1 SD): on the tape at the
- * runner's feet, which land a hand's breadth either side of the hips' path.
+ * How far nearer the lens or further a line is tapped than where the hips crossed it (m, 1 SD): on the tape under the
+ * runner's body, between the feet, which land a hand's breadth either side of the hips' path. Leaning 5 cm towards the
+ * planted foot at the take-off line, as an eye drawn to it might, stays within it (tools/pose-validation, `tap-lean`).
  */
 export const TAP_DEPTH_M = 0.08;
 

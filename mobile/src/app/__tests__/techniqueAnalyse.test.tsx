@@ -222,6 +222,17 @@ it('asks for each line on the frame the athlete runs over it, tapped right at th
   expect((trial.detail as { markers: { picture: unknown } }).markers.picture).toEqual({ width: 1920, height: 1080 });
 });
 
+it('asks for the tape under the athlete’s body, between the feet, rather than under the planted foot', async () => {
+  // On the take-off line the planted foot stands on the tape a hand's breadth nearer the camera than the hips' path (the
+  // guide has the take-off foot on the camera's side): tapped there, every take-off line would sit nearer than it is.
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0017.MOV', fps: '0', source: 'import', session: 'tt-11' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  expect(texts(r.root)).toContain('放大后点准身体正下方的胶带');
+  await tapScreen(geometry(scene).toScreen(scene.markers!.b));
+  expect(texts(r.root)).toContain('对准身体正下方、两脚中间，别点在脚上。');
+});
+
 it.each([
   ['a 4K clip, whose px are smaller on screen: 8', 3840, 2160, 8, 'tt-9'],
   ['a 1080p clip: 4', 1920, 1080, 4, 'tt-10'],
