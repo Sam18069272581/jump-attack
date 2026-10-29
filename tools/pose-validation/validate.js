@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * How far to trust the take-off technique figures (mobile/src/app/technique/analyse.tsx) before any real footage: each
- * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed twenty-six ways. Everything runs the
+ * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed twenty-eight ways. Everything runs the
  * app's own code: domain/testing/poseScene.ts builds a run-up jump with known take-off velocity, contacts, step and
  * knee angle and gives its landmarks the pose model's jitter, swaps and misses; domain/techniqueRead.ts reads it the way
  * the screen does (a coarse pass around a tap near the take-off, the jump's window, every frame in it), with the floor
@@ -44,6 +44,9 @@ const ALL_WAYS = [
   { key: 'hang-roll-bare', name: '挂了一下，没贴线，手机反向歪 3°', over: { hangAfterS: 0.34, rollDeg: -3, markers: null } },
   { key: 'slight-bare', name: '没贴线、助跑偏了 4°（不到算斜跑的程度）', over: { curveDeg: 4, markers: null } },
   { key: 'slight-roll-bare', name: '没贴线、助跑偏了 2°、手机歪了 3°', over: { curveDeg: 2, rollDeg: 3, markers: null } },
+  // Held high and close, the floor can't be turned level: the take-off's errors take in the slope left.
+  { key: 'close-roll-bare', name: '没贴线、手机举高（离地 1.5 米）在 5 米外、歪了 3°', over: { lensM: 1.5, distanceM: 5, rollDeg: 3, markers: null } },
+  { key: 'close-roll-back-bare', name: '没贴线、手机举高（离地 1.5 米）在 5 米外、往另一边歪了 3°', over: { lensM: 1.5, distanceM: 5, rollDeg: -3, markers: null } },
   { key: 'lines-near', name: '两条线点得比运动员跑的地方近 0.5 米', over: { markers: { aM: -3, bM: 0, nearerM: 0.5 } } },
   { key: 'lines-short', name: '3 米线其实贴在 2.6 米', over: { markers: { aM: -2.6, bM: 0, nearerM: 0 } } },
   { key: 'tap-depth', name: '点线时点在身体下方，比髋部跑的线近或远 8 厘米', over: {}, tapDepthM: 0.08 },

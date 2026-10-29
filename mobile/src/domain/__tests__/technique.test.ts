@@ -803,6 +803,27 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     }
   });
 
+  it('no lines, the phone held 1.5 m up 5 m away and rolled 3° either way: the floor can’t be turned level, and the take-off still covers the truth in 95 % of clips', () => {
+    // From so high and close the floor fit refuses the turn that would level it, or stops short of level, and what slope
+    // it leaves is not all there is: the fit keeps the floor's lower part, which hides a slope across the band of still
+    // heels and toes. Read as the screen reads it, 20 clips rolled each way.
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (const rollDeg of [-3, 3]) {
+      for (let seed = 11; seed <= 30; seed++) {
+        const scene = poseScene({ seed, lensM: 1.5, distanceM: 5, rollDeg, markers: null });
+        const { frames, target } = readAsTheScreen(scene);
+        const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: null, target }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['vz', 'vx', 'angle'] as const) {
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
+      }
+    }
+    expect(Object.entries(tally).filter(([, c]) => c.n < 40 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
+  });
+
   it('no lines, the phone rolled 1–3° either way: the floor is levelled as on a level phone', () => {
     // The floor fit keeps the lower part of a sloping floor's points, which trims one end of the run-up more than the
     // other: one turn falls short of level, and what is left of it leaks the run-up's speed into the take-off's.

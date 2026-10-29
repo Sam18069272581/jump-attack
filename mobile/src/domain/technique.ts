@@ -562,7 +562,8 @@ function footTraces(s: Series, fps: number, scale: number): Record<Side, FootTra
  * foot's still points around it (a run-up that comes in at an angle has its floor at another height in the picture
  * than the take-off spot's); `c1` is the slope of the line through all of them.
  */
-type Floor = { c1: number; level: (x: number, side: Side) => number; on: number };
+/** `hidden`: the slope (rad) the fit can't see, across the band of still heels and toes over the run-up (`fitFloor`). */
+type Floor = { c1: number; level: (x: number, side: Side) => number; on: number; hidden: number };
 
 /** Where the heels and toes stood still. */
 function stillPoints(traces: Record<Side, FootTrace>, sides: Side[]): { X: number[]; Y: number[] } {
@@ -585,7 +586,8 @@ function stillPoints(traces: Record<Side, FootTrace>, sides: Side[]): { X: numbe
  * A robust floor. The slope from both feet's still points (their lower part: still points include a heel lifting in
  * push-off), trimmed three times; the height under a spot from that foot's still points within `nearPx` of it, or all
  * of them when there are too few near, leaving out any more than `offPx` off the line (feet held still in the air, as
- * when hanging on the rim).
+ * when hanging on the rim). Keeping the lower part hides a slope across the band the still points make about the line
+ * (heel and toe, the near foot and the far one; 5–95 %): over the run-up's span, that is `hidden`.
  */
 function fitFloor(traces: Record<Side, FootTrace>, nearPx: number, offPx: number): Floor | null {
   const both = stillPoints(traces, ['left', 'right']);
@@ -615,7 +617,10 @@ function fitFloor(traces: Record<Side, FootTrace>, nearPx: number, offPx: number
   const level = (x: number, side: Side): number => (heightNear(side, x) ?? heightNear(side === 'left' ? 'right' : 'left', x) ?? c0) + c1 * x;
   // How many still points it puts on the floor.
   const on = (['left', 'right'] as const).reduce((n, side) => n + own[side].X.filter((x, i) => abs(own[side].Y[i] - level(x, side)) <= offPx).length, 0);
-  return { c1, level, on };
+  const band = both.X.flatMap((x, i) => (abs(both.Y[i] - (c0 + c1 * x)) <= offPx ? [both.Y[i] - (c0 + c1 * x)] : []));
+  const span = max(...both.X) - min(...both.X);
+  const hidden = band.length > 4 && span > 0 ? Math.atan((quantile(band, 0.95) - quantile(band, 0.05)) / span) : 0;
+  return { c1, level, on, hidden };
 }
 
 /**
@@ -949,6 +954,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   }
   // The floor's whole slope in the picture is in doubt, turned or not.
   const releveled = max(abs(turned), abs(Math.atan(floor0.c1)));
+  // A turn refused, or stopped short, with the floor still sloping (a phone held high and close puts the near and the
+  // far foot apart in the picture, and turning level can take feet off the fitted floor).
+  const slopeLeft = !markers && abs(floor.c1) > 1e-3;
   const contacts = contactsOf(traces, s, floor, fps, roughScale);
   const flight = flightOf(contacts, s, fps);
   if (!flight) return { ok: false, problem: 'no-jump' };
@@ -1123,11 +1131,17 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
         : sizeChange > SLIGHT_CURVE
           ? (abs(Math.atan(floor.c1)) + runupSlope) / 1.96
           : 0;
+  // A straight run-up whose floor couldn't be turned level: up is off by the slope left, which the fit sees short by
+  // about what it hides (`Floor.hidden`: within it in 397 of 403 such synthetic clips, a phone 1–1.5 m up, 5–10 m away
+  // and rolled up to 3°, and never by more than 1.06 times it). That bounds a fixed offset, not a scatter, so it is added
+  // outright: in quadrature with the fit's own errors it falls short wherever it is tight, as when a refused turn leaves
+  // 2.5° seen of a 3° roll. The bounds above (a curved run-up's, at the highest lens) have room to spare.
+  const unlevelled = markerPx == null && !flags.includes('hang') && sizeChange <= SLIGHT_CURVE && slopeLeft ? abs(Math.atan(floor.c1)) + floor.hidden : 0;
   // A tilt θ adds θ·vx to the vertical take-off velocity, and θ·(vz − g·t̄) to the horizontal one, t̄ the middle of the
   // fitted stretch: nothing over a whole flight, whose rise and fall cancel, but not so when the fit stops at a hang.
   const tMid = (pts.ts[0] + pts.ts[pts.ts.length - 1]) / 2;
-  const vzErr = sqrt((G * off.err) ** 2 / fps ** 2 + (G * 1.96 * seApex) ** 2 + drift ** 2 + (1.96 * tilt * vx) ** 2);
-  const vxErr = sqrt((1.96 * fx.se[1] * gravityScale) ** 2 + (vx * 1.96 * gravityScaleRel) ** 2 + drift ** 2 + (1.96 * tilt * (vz - G * tMid)) ** 2);
+  const vzErr = sqrt((G * off.err) ** 2 / fps ** 2 + (G * 1.96 * seApex) ** 2 + drift ** 2 + (1.96 * tilt * vx) ** 2) + unlevelled * abs(vx);
+  const vxErr = sqrt((1.96 * fx.se[1] * gravityScale) ** 2 + (vx * 1.96 * gravityScaleRel) ** 2 + drift ** 2 + (1.96 * tilt * (vz - G * tMid)) ** 2) + unlevelled * abs(vz - G * tMid);
   const angle = (atan2(vz, vx) * 180) / PI;
   // The two velocities' errors added outright, not in quadrature: both lean on the same fit, and a take-off timed early
   // pulls them the same way.
