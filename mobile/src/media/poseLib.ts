@@ -28,6 +28,8 @@ export const POSE_CDN = { bundle: POSE_FILES[0].url, loader: POSE_FILES[1].url, 
 
 /** The library as a classic script, made by the app from the ES module the release ships. */
 export const CLASSIC_BUNDLE = 'vision.js';
+/** Written once the classic script is whole: one cut by the app being closed while it was written has none. */
+const CLASSIC_DONE = 'vision.js.done';
 
 /**
  * The ES module as a classic script that a page can load from a file (module scripts from `file:` URLs are refused):
@@ -56,7 +58,7 @@ export const LIB_FROM_PAGE = `../lib/${MEDIAPIPE_VERSION}`;
 /** Whether every file is on the phone, whole. */
 export function poseLibReady(): boolean {
   const dir = libDir();
-  if (!dir.exists || !new File(dir, CLASSIC_BUNDLE).exists) return false;
+  if (!dir.exists || !new File(dir, CLASSIC_BUNDLE).exists || !new File(dir, CLASSIC_DONE).exists) return false;
   return POSE_FILES.every((f) => {
     const file = new File(dir, f.name);
     return file.exists && file.size === f.bytes;
@@ -91,12 +93,15 @@ export async function downloadPoseLib(onProgress?: (share: number) => void, sign
   }
   // Written in place: one that fails part-way (the phone full) would leave a cut script that passes for whole.
   const vision = new File(dir, CLASSIC_BUNDLE);
+  const whole = new File(dir, CLASSIC_DONE);
+  if (whole.exists) whole.delete();
   try {
     await vision.write(classicBundle(await new File(dir, 'vision_bundle.mjs').text()));
   } catch (e) {
     if (vision.exists) vision.delete();
     throw e;
   }
+  await whole.write('');
   onProgress?.(1);
 }
 

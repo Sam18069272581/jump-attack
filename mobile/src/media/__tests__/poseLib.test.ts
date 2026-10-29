@@ -4,8 +4,11 @@ import { classicBundle, clearPoseRuns, downloadPoseLib, MEDIAPIPE_VERSION, POSE_
 // server that answers each download with the bytes `mockServed` says (the release's own size unless a test cuts it).
 const mockServed = new Map<string, number>();
 const mockDownloads: string[] = [];
-/** A write to a file ending so fails part-way, as iOS's in-place write does when the phone is full. */
-const mockCut: { name: string | null } = { name: null };
+/**
+ * A write to a file ending so fails part-way, as iOS's in-place write does when the phone is full; or, `killed`, the
+ * app is closed part-way through it.
+ */
+const mockCut: { name: string | null; killed?: boolean } = { name: null };
 jest.mock('expo-file-system', () => {
   const files = new Map<string, string>();
   const sizes = new Map<string, number>();
@@ -32,6 +35,12 @@ jest.mock('expo-file-system', () => {
     // As in SDK 58: the write is done on another thread, and the promise settles once it is.
     async write(content: string) {
       await new Promise((r) => setTimeout(r, 1));
+      if (mockCut.killed && mockCut.name && this.uri.endsWith(mockCut.name)) {
+        // The file holds what got written, and nothing settles.
+        files.set(this.uri, content.slice(0, 7));
+        sizes.delete(this.uri);
+        return new Promise<void>(() => {});
+      }
       if (mockCut.name && this.uri.endsWith(mockCut.name)) {
         files.set(this.uri, content.slice(0, Math.floor(content.length / 3)));
         sizes.delete(this.uri);
@@ -98,6 +107,7 @@ beforeEach(() => {
   files.clear();
   mockDownloads.length = 0;
   mockCut.name = null;
+  mockCut.killed = false;
   for (const f of POSE_FILES) mockServed.set(f.url, f.bytes);
 });
 
@@ -165,6 +175,20 @@ describe('downloadPoseLib', () => {
     await expect(downloadPoseLib()).rejects.toThrow('enough space');
     expect(files.has(`file:///app/Documents/pose/lib/${MEDIAPIPE_VERSION}/vision.js`)).toBe(false);
     expect(poseLibReady()).toBe(false);
+    mockCut.name = null;
+    await downloadPoseLib();
+    expect(poseLibReady()).toBe(true);
+  });
+
+  it('doesn’t take a classic script cut by the app being closed while writing it for whole', async () => {
+    mockCut.name = '/vision.js';
+    mockCut.killed = true;
+    void downloadPoseLib();
+    for (let k = 0; k < 20; k++) await new Promise((r) => setTimeout(r, 2));
+    // The next launch: a cut script would load without defining the library, on every try.
+    expect(files.get(`file:///app/Documents/pose/lib/${MEDIAPIPE_VERSION}/vision.js`)).toHaveLength(7);
+    expect(poseLibReady()).toBe(false);
+    mockCut.killed = false;
     mockCut.name = null;
     await downloadPoseLib();
     expect(poseLibReady()).toBe(true);
