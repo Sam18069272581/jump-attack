@@ -140,6 +140,13 @@ export const MIN_FLIGHT_S = 0.25;
 const SLIGHT_CURVE = 0.02;
 
 /**
+ * How high above the floor the lens may be, m: the guide puts it about 1 m up on a tripod; a tripod pulled out, or a
+ * phone held at chest height, is up to half again as high. A run-up that comes at the camera slopes the floor in the
+ * picture in proportion to it (see the take-off's `tilt`), so this is the most it is taken to be.
+ */
+const LENS_HEIGHT_M = 1.5;
+
+/**
  * Markers and gravity disagree on the scale by more than this share: the lines aren't where the athlete ran, or aren't
  * 3 m apart. A wrong frame rate is off by twice or more (`SCALE_BROKEN`), so it is the lines, and lengths go by gravity.
  */
@@ -973,12 +980,16 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   if (style.kind === 'one' && style.foot !== near) flags.push('far-foot');
   if (fps < MIN_CONTACT_FPS) flags.push('low-fps');
 
-  // A run-up that comes at the camera: the body's size in the picture changes along it, and so does the scale.
-  const sizes = athlete.flatMap((p, i) => (p && s.frame[i] < plantDownAt ? [bodySize(p)] : []));
+  // A run-up that comes at the camera: the body's size in the picture changes along it, and so does the scale. It changes
+  // over the stretch between the middles of the run-up's first and last thirds (`sizeSpanPx`, along the floor).
+  const run = athlete.flatMap((p, i) => (p && s.frame[i] < plantDownAt ? [{ size: bodySize(p), x: s.hip.x[i] }] : []));
   let sizeChange = 0;
-  if (sizes.length > 10) {
-    const third = max(2, Math.floor(sizes.length / 3));
-    sizeChange = abs(median(sizes.slice(-third)) / median(sizes.slice(0, third)) - 1);
+  let sizeSpanPx = 0;
+  if (run.length > 10) {
+    const third = max(2, Math.floor(run.length / 3));
+    const [first, last] = [run.slice(0, third), run.slice(-third)];
+    sizeChange = abs(median(last.map((r) => r.size)) / median(first.map((r) => r.size)) - 1);
+    sizeSpanPx = abs(median(last.map((r) => r.x)) - median(first.map((r) => r.x)));
     if (sizeChange > 0.06) flags.push('curved');
   }
 
@@ -1072,21 +1083,31 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const drift = COM_DRIFT_M / span;
   const vx = fx.c[1] * gravityScale;
   // Which way is up, to 1 SD (rad). Two lines each tapped to `tapPx`: one a little high or low tilts it. Without lines,
-  // a run-up that comes at the camera makes the floor drop towards the lens, and still feet hanging from the rim sit
-  // above it: either way the floor fit can't be told from a tilted phone. Its turn is then the phone's roll plus that
-  // false slope, and a phone rolled the other way hides the slope, so the turn alone doesn't bound it: the roll is at
-  // most `LEVEL_DEG` (what the camera's level check lets through), and the slope at most the turn and that.
-  // Hanging feet can also outnumber those on the floor and pull the fit their way: on a rolled phone it can come out
-  // nearly level and stop turning short. The floor under the feet up to take-off alone says how far off level that left.
+  // the floor fit is turned level, and a floor that isn't straight in the picture leaves up off by its false slope.
+  // Still feet hanging from the rim sit above the floor by any amount: the turn is then the phone's roll plus a false
+  // slope nothing bounds, and a phone rolled the other way hides the slope, so the whole turn is in doubt, and the roll
+  // too, at most `LEVEL_DEG` (what the camera's level check lets through). Hanging feet can also outnumber those on the
+  // floor and pull the fit their way: on a rolled phone it can come out nearly level and stop turning short. The floor
+  // under the feet up to take-off alone says how far off level that left. A run-up that comes at the camera at an angle
+  // c drops towards the lens instead: from a lens h up and d away, by h·tan(c)/d in the picture, while the body's size
+  // changes by L·tan(c)/d over L along it, so the false slope is h/L of that change, whatever the roll. Up is off by at
+  // most that, with h at its highest (`LENS_HEIGHT_M`), plus what slope the fit has left: a bound, which is taken as the
+  // 95 % error, as the feet's 3 cm and the foreshortening are below.
   const runUpTilt = () => {
     const k0 = s.frame.findIndex((f) => f >= takeoffAt);
     const upTo = (pt: PointTrace): PointTrace => ({ x: pt.x.slice(0, k0), y: pt.y.slice(0, k0), sy: pt.sy.slice(0, k0), still: pt.still.slice(0, k0) });
     const runUp = k0 > 0 ? fitFloor({ left: { heel: upTo(traces.left.heel), toe: upTo(traces.left.toe) }, right: { heel: upTo(traces.right.heel), toe: upTo(traces.right.toe) } }, nearPx, offPx) : null;
     return runUp ? abs(Math.atan(runUp.c1)) : 0;
   };
-  const doubtful = sizeChange > SLIGHT_CURVE || flags.includes('curved') || flags.includes('hang');
+  const runupSlope = (LENS_HEIGHT_M * sizeChange) / max(1e-3, sizeSpanPx * gravityScale);
   const tilt =
-    markerPx != null ? (sqrt(2) * tapPx) / markerPx : doubtful ? max(releveled + (LEVEL_DEG * PI) / 180, flags.includes('hang') ? runUpTilt() : 0) : 0;
+    markerPx != null
+      ? (sqrt(2) * tapPx) / markerPx
+      : flags.includes('hang')
+        ? max(releveled + (LEVEL_DEG * PI) / 180, runUpTilt())
+        : sizeChange > SLIGHT_CURVE
+          ? (abs(Math.atan(floor.c1)) + runupSlope) / 1.96
+          : 0;
   // A tilt θ adds θ·vx to the vertical take-off velocity, and θ·(vz − g·t̄) to the horizontal one, t̄ the middle of the
   // fitted stretch: nothing over a whole flight, whose rise and fall cancel, but not so when the fit stops at a hang.
   const tMid = (pts.ts[0] + pts.ts[pts.ts.length - 1]) / 2;

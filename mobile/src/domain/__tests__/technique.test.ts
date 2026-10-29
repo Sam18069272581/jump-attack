@@ -139,7 +139,7 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
 });
 
 describe('stated errors', () => {
-  // The full check is tools/pose-validation (24 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
+  // The full check is tools/pose-validation (25 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
   const WAYS: [string, Partial<PoseSceneOptions>][] = [
     ['as the guide asks', {}],
     ['twice the jitter', { noisePx: 3 }],
@@ -707,6 +707,30 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       }
     }
     expect(Object.entries(tally).filter(([, c]) => c.n < 80 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
+  });
+
+  it('no lines, a run-up 2° off the picture and the phone rolled up to 3° either way: the floor slopes by a fraction of a degree, and the take-off angle is still a figure to trust', () => {
+    // From a lens 1 m up and 7 m away, a run-up coming in at 2° drops towards the lens by 1 · tan 2° / 7 = 0.29° in the
+    // picture, whichever way the phone is rolled: that, not the phone's roll, is what the floor fit can't tell.
+    for (const rollDeg of [-3, 0, 3]) {
+      for (const seed of [1, 2]) {
+        const { scene, r } = analyse({ seed, curveDeg: 2, rollDeg, markers: null });
+        const result = resultOf(r);
+        expect([rollDeg, seed, result.metrics.angle?.status, misses(scene, result).filter((m) => /^(vz|vx|angle):/.test(m))]).toEqual([rollDeg, seed, 'ok', []]);
+      }
+    }
+  });
+
+  it('no lines, the phone 1.3 m up and rolled 3° either way, a run-up 4–10° off the picture: the take-off still holds the truth', () => {
+    // A higher lens slopes the floor more: the allowance for it is worked out for a lens up to 1.5 m.
+    for (const curveDeg of [4, 10]) {
+      for (const rollDeg of [-3, 3]) {
+        for (const seed of [1, 2]) {
+          const { scene, r } = analyse({ seed, curveDeg, rollDeg, lensM: 1.3, markers: null });
+          expect([curveDeg, rollDeg, seed, misses(scene, resultOf(r)).filter((m) => /^(vz|vx|angle):/.test(m))]).toEqual([curveDeg, rollDeg, seed, []]);
+        }
+      }
+    }
   });
 
   it('no lines, the phone rolled 1–3° either way: the floor is levelled as on a level phone', () => {
