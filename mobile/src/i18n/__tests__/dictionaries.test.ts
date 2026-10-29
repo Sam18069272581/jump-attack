@@ -2,7 +2,7 @@
  * Every Chinese text in the app has an English and a German translation, and nothing else is in the dictionaries.
  * The texts are found in the source: string literals with Chinese in them (tr() keys and module-level data that is
  * translated where it is shown), and the Chinese of the WebView pages (media/*Html.ts). A line marked
- * `i18n-ignore`, or the line after such a comment, is left out.
+ * `i18n-ignore`, or the line after such a comment, is left out, and so are the migrations: their SQL is data.
  */
 import fs from 'fs';
 import path from 'path';
@@ -19,7 +19,7 @@ function sourceFiles(dir: string): string[] {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) return ['__tests__', 'testing', 'i18n'].includes(e.name) ? [] : sourceFiles(p);
-    return /\.tsx?$/.test(e.name) ? [p] : [];
+    return /\.tsx?$/.test(e.name) && p !== path.join(SRC, 'db/migrations.ts') ? [p] : [];
   });
 }
 
@@ -61,7 +61,7 @@ function scan(): Found {
 }
 
 const found = scan();
-const placeholders = (s: string) => [...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
+const placeholders = (s: string) => [...new Set([...s.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort();
 
 describe.each([
   ['English', en],
