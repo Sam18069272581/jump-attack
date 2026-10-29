@@ -1,5 +1,7 @@
 <div align="center">
 
+<sub><b>中文</b> · <a href="README.en.md">English</a> · <a href="README.de.md">Deutsch</a></sub>
+
 <img src="docs/assets/banner.png" alt="Jump Attack · 弹跳训练：测出离扣篮线差多少，找到短板，练回来" width="880">
 
 <p>
