@@ -732,7 +732,14 @@ function contactsOf(traces: Record<Side, FootTrace>, s: Series, floor: Floor, fp
         // stand: a clip that starts inside the contact shows the foot down from its first frame, even where the model
         // missed that frame or the filter's start reads its jitter as motion.
         const stand = { heel: at(heel, i, half), toe: at(toe, i, half) };
-        const seenInAir = down.slice(0, i).some((_, k) => !s.lost[k] && heel.sy[k] - stand.heel.y > tol && toe.sy[k] - stand.toe.y > tol);
+        // For as long as the shortest contact: one frame above it can be jitter that a stretch's first frame keeps
+        // unsmoothed, with the toe still coming down after a heel strike.
+        let airRun = 0;
+        let seenInAir = false;
+        for (let k = 0; k < i && !seenInAir; k++) {
+          airRun = !s.lost[k] && heel.sy[k] - stand.heel.y > tol && toe.sy[k] - stand.toe.y > tol ? airRun + 1 : 0;
+          seenInAir = airRun >= minLen;
+        }
         const downs = seenInAir ? [heel, toe].flatMap((pt) => edgeTime(pt, i, 'down', fps, [i, j], pt === heel ? stand.heel : stand.toe, scale) ?? []) : [];
         // The heel or the toe, whichever comes down first.
         const dn = acrossGap(downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 }, s.lost, fps);

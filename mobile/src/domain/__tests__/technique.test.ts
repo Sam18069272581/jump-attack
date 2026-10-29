@@ -250,6 +250,26 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('a clip that starts just after a heel strike, the toe still coming down: one jittery first frame isn’t the foot in the air', () => {
+    // The filter keeps a stretch's first frame as it is: a heel 1.6 SD high there, with the toe really still lowering
+    // after the strike, passed for the foot seen in the air before the contact.
+    const cases: [Partial<PoseSceneOptions>, number, number][] = [
+      [{ seed: 6, noisePx: 3 }, 4, 0], // options, frames into the plant, first frames missed
+      [{ seed: 3, foot: 'left' }, 6, 0],
+      [{ seed: 7, foot: 'left', fps: 60 }, 0, 0],
+      [{ seed: 1, foot: 'left', distanceM: 10 }, 18, 2],
+    ];
+    for (const [over, into, missed] of cases) {
+      const scene = poseScene(over);
+      const fps = scene.options.fps;
+      const cut = Math.ceil(scene.truth.plantDownS * fps) + into;
+      const frames = scene.frames.slice(cut).map((f, k) => ({ ...f, frame: k, t: k / fps, poses: k < missed ? [] : f.poses }));
+      const result = resultOf(analyseTechnique({ frames, captureFps: fps, markers: scene.markers }));
+      expect([over, result.metrics.plant, result.metrics.trunk]).toEqual([over, undefined, undefined]);
+      expect(result.flags).toContain('unseen');
+    }
+  });
+
   it('a clip that starts inside the plant: no touch-down frame is named for it', () => {
     const scene = poseScene();
     const cut = Math.ceil(scene.truth.plantDownS * 240) + 12;
