@@ -436,7 +436,7 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
-  it('two feet leaving together, frames lost across the take-off: its figures are given, and hold the truth', () => {
+  it('two feet leaving together, frames lost across the take-off: the vertical take-off speed, angle and contact time are given, and hold the truth', () => {
     // Timed together, the take-off's error is the surer foot's and can end inside the lost frames: no toe is seen there,
     // leaving or not, so nothing says the error is too narrow.
     const cases: [Partial<PoseSceneOptions>, number, number, number][] = [
