@@ -337,6 +337,22 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('frames lost just after the touch-down, more than can be bridged: the contact time’s error still holds the truth', () => {
+    // The frames between the touch-down and the gap show the foot at the floor but too few to be a contact of their
+    // own: the touch-down is before them, not at the gap.
+    const cases: [number, number, number, number][] = [
+      [120, 1, 5, 12], // fps, seed, first and last frame lost after the touch-down
+      [120, 1, 1, 8],
+      [240, 2, 2, 17],
+    ];
+    for (const [fps, seed, a, b] of cases) {
+      const scene = poseScene({ fps, seed });
+      const td = touchDownOf(scene);
+      const result = resultOf(analyseTechnique({ frames: lose(scene, td + a, td + b), captureFps: fps, markers: scene.markers }));
+      expect([fps, seed, a, misses(scene, result).filter((m) => m.startsWith('plant:'))]).toEqual([fps, seed, a, []]);
+    }
+  });
+
   it('at 60 fps with the take-off inside 8 lost frames: the free fall isn’t fitted on a frame with the foot still down', () => {
     // The frame next to the gap has no stillness to read, so it isn't counted as down: the unknown take-off goes after
     // the lost frames, not before that frame.

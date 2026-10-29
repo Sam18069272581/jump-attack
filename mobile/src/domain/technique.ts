@@ -659,7 +659,7 @@ function edgeTime(
  * anywhere inside. So its error reaches across a run of two or more lost frames next to it. One lost frame, bridged by
  * its neighbours' mean, stays within the fit's own error.
  */
-function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number): { t: number; err: number } {
+function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number, downBefore?: (k: number) => boolean): { t: number; err: number } {
   if (!Number.isFinite(e.err)) return e;
   const reach = max(4, round(0.04 * fps));
   const c = round(e.t);
@@ -674,7 +674,11 @@ function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number):
     // run can pull the fit off its end by about the run's length, but no further: a run further from the edge than
     // that and the edge's own error, with frames seen in between, can't hold it.
     const len = b - k + 1;
-    if (b > k && k - 1 - len <= e.t + e.err && b + 1 + len >= e.t - e.err) err = max(err, hypot(max(e.t - (k - 1), b + 1 - e.t), EVENT_FLOOR_FRAMES));
+    // A touch-down: frames before the run that show the foot at the floor's height may be the contact already, too
+    // few to count as one; then the edge is before them.
+    let from = k - 1;
+    while (downBefore && from > 0 && (lost[from] || downBefore(from))) from--;
+    if (b > k && k - 1 - len <= e.t + e.err && b + 1 + len >= e.t - e.err) err = max(err, hypot(max(e.t - from, b + 1 - e.t), EVENT_FLOOR_FRAMES));
     k = b;
   }
   return { t: e.t, err };
@@ -743,7 +747,8 @@ function contactsOf(traces: Record<Side, FootTrace>, s: Series, floor: Floor, fp
         }
         const downs = seenInAir ? [heel, toe].flatMap((pt) => edgeTime(pt, i, 'down', fps, [i, j], pt === heel ? stand.heel : stand.toe, scale) ?? []) : [];
         // The heel or the toe, whichever comes down first.
-        const dn = acrossGap(downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 }, s.lost, fps);
+        const atFloor = (k: number) => [heel, toe].some((pt) => pt.sy[k] - floor.level(pt.x[k], side) <= tol);
+        const dn = acrossGap(downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 }, s.lost, fps, atFloor);
         // An up edge that can't be timed is next to frames the model lost: the foot may still be down until they end, and
         // the frame beside them isn't known to be in the air (its stillness can't be read next to the gap).
         let seenUp = j;
