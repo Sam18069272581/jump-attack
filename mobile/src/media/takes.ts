@@ -5,10 +5,15 @@ import { Directory, File, Paths } from 'expo-file-system';
  * keeps it here, in the documents folder, for as long as the take is kept; one that isn't is dropped.
  */
 const takesDir = () => new Directory(Paths.document, 'technique');
+/**
+ * Takes filmed for a test (jumps, VBT): needed only until the clip is measured (a VBT set saves its own copy), so they
+ * live in the cache, apart from the technique takes, and each filming drops the ones before it.
+ */
+const testTakesDir = () => new Directory(Paths.cache, 'test-takes');
 
 /** A new, empty file for a take. */
-export function newTakeFile(ext: string): File {
-  const dir = takesDir();
+export function newTakeFile(ext: string, kind: 'technique' | 'test' = 'technique'): File {
+  const dir = kind === 'test' ? testTakesDir() : takesDir();
   dir.create({ intermediates: true, idempotent: true });
   const file = new File(dir, `take-${Date.now()}.${ext}`);
   file.create({ overwrite: true });
@@ -33,4 +38,11 @@ export function pruneTakes(keep: Iterable<string>) {
   if (!dir.exists) return;
   const kept = new Set([...keep].map((uri) => uri.split('/').pop()));
   for (const entry of dir.list()) if (entry instanceof File && !kept.has(entry.name)) dropTake(entry.uri);
+}
+
+/** Drops the takes filmed for tests before this one. */
+export function dropTestTakes() {
+  const dir = testTakesDir();
+  if (!dir.exists) return;
+  for (const entry of dir.list()) if (entry instanceof File) dropTake(entry.uri);
 }

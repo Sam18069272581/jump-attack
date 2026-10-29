@@ -121,6 +121,20 @@ it('keeps picking one clip at a time for the box ladder, which needs a new box h
   expect(jest.mocked(ImagePicker.launchImageLibraryAsync).mock.calls[0][0]).not.toHaveProperty('allowsMultipleSelection');
 });
 
+it('films a test in the app as well, handing the take to the analysis, or to marking for a jump logged one at a time', async () => {
+  mockParams = { metric: 'cmj', session: 'cmj-today', from: 'testday' };
+  let r = await render(<Capture />);
+  // Both ways in: the app's own camera, and slow motion from the photo library.
+  expect(pressable(r.root, '从相册导入视频')).toBeTruthy();
+  await act(async () => pressable(r.root, 'App 里直接拍').props.onPress());
+  expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/measure/camera', params: { metric: 'cmj', session: 'cmj-today', from: 'testday', to: '/measure/analyse' } });
+
+  mockParams = { metric: 'fvp_sj', session: 'fv-2', from: 'fvp', load: '37.5' };
+  r = await render(<Capture />);
+  await act(async () => pressable(r.root, 'App 里直接拍').props.onPress());
+  expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/measure/camera', params: { metric: 'fvp_sj', session: 'fv-2', from: 'fvp', load: '37.5', to: '/measure/mark' } });
+});
+
 it('goes back to the wizard when a test is done', async () => {
   await record('cmj-today', 'cmj', [40.2, 41.5, 39.8]);
   mockParams = { metric: 'cmj', session: 'cmj-today', from: 'testday' };

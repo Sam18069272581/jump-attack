@@ -14,6 +14,8 @@ const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn() };
 const mockWeb: { props: Record<string, any> | null; inject: jest.Mock } = { props: null, inject: jest.fn() };
 /** Frame rate the next picked clip reports. */
 const mockClip = { fps: 60 };
+const SET = { lift: 'vbt_squat', session: 'set-1', load: '120' };
+let mockParams: Record<string, string> = SET;
 
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
 jest.mock('@/state/athlete', () => ({ useAthlete: () => ({ current: { id: 1, name: '我自己' } }) }));
@@ -23,7 +25,7 @@ jest.mock('expo-router', () => ({
   get router() {
     return mockRouter;
   },
-  useLocalSearchParams: () => ({ lift: 'vbt_squat', session: 'set-1', load: '120' }),
+  useLocalSearchParams: () => mockParams,
   Stack: { Screen: () => null },
 }));
 let mockPicked = 0;
@@ -62,6 +64,7 @@ beforeAll(async () => {
 });
 
 beforeEach(() => {
+  mockParams = SET;
   mockClip.fps = 60;
   mockWeb.inject.mockClear();
 });
@@ -230,5 +233,31 @@ it('keeps the screen still while the circle is being placed, and scrolls the res
   expect(r.root.findByType(ScrollView).props.scrollEnabled).toBe(false);
   await send({ type: 'done', samples: squatClip([0.7, 0.9, 1.2]), diameter: 200, lost: false });
   expect(r.root.findByType(ScrollView).props.scrollEnabled).toBe(true);
+  await act(async () => r.unmount());
+});
+
+it('films the set in the app instead, in this screen’s place', async () => {
+  let r!: ReactTestRenderer;
+  await act(async () => {
+    r = create(<TrackSet />);
+  });
+  await press(r.root, 'App 里直接拍');
+  expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/measure/camera', params: { to: '/vbt/track', lift: 'vbt_squat', session: 'set-1', load: '120' } });
+  await act(async () => r.unmount());
+});
+
+it('tracks a set filmed in the app straight away, at the camera’s frame rate when the file doesn’t say', async () => {
+  // The app's recordings report no frame rate of their own, and are never slow motion.
+  mockClip.fps = 0;
+  mockParams = { ...SET, uri: 'file:///app/Caches/test-takes/take-1.mp4', fps: '30' };
+  let r!: ReactTestRenderer;
+  await act(async () => {
+    r = create(<TrackSet />);
+  });
+  expect(mockWeb.props).toMatchObject({ source: { uri: 'file:///cache/bar-track/track.html' } });
+  await send({ type: 'ready', duration: 9, width: 720, height: 1280 });
+  expect(texts(r.root)).not.toContain('用慢动作拍的选拍摄帧率');
+  await press(r.root, '开始分析');
+  expect(mockWeb.inject).toHaveBeenCalledWith('window.startTrack(30); true;');
   await act(async () => r.unmount());
 });

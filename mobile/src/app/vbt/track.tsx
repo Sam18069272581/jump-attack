@@ -18,6 +18,7 @@ import { roundTo } from '@/domain/interval';
 import { getCategory, getMetric } from '@/domain/metrics';
 import { STOP_LOSS, zoneOf } from '@/domain/vbt';
 import { barTrackerHtml } from '@/media/barTrackerHtml';
+import { isWeb } from '@/media/runtime';
 import { persistVideo, stageForTracking } from '@/media/videos';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
@@ -40,14 +41,18 @@ type Message =
  * the page in the WebView follows the plate through every frame, and the app finds each rep and its mean velocity.
  */
 export default function TrackSet() {
-  const { lift, session, load } = useLocalSearchParams<{ lift: string; session: string; load: string }>();
+  // `uri` and `fps`: a set filmed in the app (measure/camera.tsx), whose recording reports no frame rate of its own.
+  const params = useLocalSearchParams<{ lift: string; session: string; load: string; uri?: string; fps?: string }>();
+  const { lift, session, load } = params;
   const def = getMetric(lift);
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const web = useRef<Web>(null);
   const { height: screenH } = useWindowDimensions();
 
-  const [uri, setUri] = useState<string | null>(null);
+  const [uri, setUri] = useState<string | null>(params.uri ?? null);
+  const filmed = uri != null && uri === params.uri;
+  const filmedFps = filmed ? Number(params.fps) || 0 : 0;
   const [detectedFps, setDetectedFps] = useState<number | null>(null);
   const [stage, setStage] = useState<{ page: string; dir: string } | null>(null);
   const [ready, setReady] = useState(false);
@@ -64,14 +69,14 @@ export default function TrackSet() {
   });
   useEventListener(player, 'sourceLoad', ({ availableVideoTracks }) => {
     const rate = availableVideoTracks[0]?.frameRate;
-    setDetectedFps(rate && rate > 0 ? Math.round(rate) : 0);
+    setDetectedFps(rate && rate > 0 ? Math.round(rate) : filmedFps);
   });
 
   // Stage the clip and page once the frame rate is known (or not reported within a couple of seconds).
   useEffect(() => {
     if (!uri) return;
     let gone = false;
-    const timer = setTimeout(() => setDetectedFps((f) => f ?? 0), 2500);
+    const timer = setTimeout(() => setDetectedFps((f) => f ?? filmedFps), 2500);
     if (detectedFps != null && !stage) {
       stageForTracking(uri, (video) =>
         barTrackerHtml({ video, fps: detectedFps, accent: COLOR, bg: colors.bg, text: colors.text, muted: colors.textMuted }),
@@ -83,7 +88,7 @@ export default function TrackSet() {
       gone = true;
       clearTimeout(timer);
     };
-  }, [uri, detectedFps, stage]);
+  }, [uri, detectedFps, stage, filmedFps]);
 
   if (!def) return <Empty title="找不到这个动作" />;
 
@@ -118,6 +123,11 @@ export default function TrackSet() {
     setSlowMo(null);
     setDetectedFps(null);
     setUri(res.assets[0].uri);
+  }
+
+  /** The camera opens in this screen's place and hands the take back to a fresh one. */
+  function film() {
+    router.replace({ pathname: '/measure/camera', params: { to: '/vbt/track', lift, session, load } });
   }
 
   function onMessage(e: WebViewMessageEvent) {
@@ -183,7 +193,7 @@ export default function TrackSet() {
       <SafeAreaView style={styles.screen} edges={['bottom']}>
         <Stack.Screen options={{ title }} />
         <ScrollView contentContainerStyle={styles.content}>
-          <Text style={text.muted}>拍一整组，导入后圈一下杠铃片，App 自动跟踪杠铃、分出每一次，算出平均速度。不用逐帧标记。</Text>
+          <Text style={text.muted}>拍一整组（在 App 里直接拍，或从相册导入），再圈一下杠铃片，App 自动跟踪杠铃、分出每一次，算出平均速度。不用逐帧标记。</Text>
           {LIFT_SETUP.map((s, i) => (
             <View key={s.title} style={styles.step}>
               <Text style={styles.stepNo}>{i + 1}</Text>
@@ -195,7 +205,9 @@ export default function TrackSet() {
           ))}
         </ScrollView>
         <View style={styles.footer}>
-          <Button label="从相册选这一组的视频" onPress={pick} />
+          {/* The app's camera is a web page in a WebView, which the web version has none of. */}
+          {!isWeb && <Button label="App 里直接拍" onPress={film} />}
+          <Button label="从相册选这一组的视频" variant={isWeb ? 'primary' : 'secondary'} onPress={pick} />
         </View>
       </SafeAreaView>
     );
@@ -234,7 +246,7 @@ export default function TrackSet() {
           )}
         </View>
 
-        {detectedFps != null && detectedFps > 0 && detectedFps <= 30 && (
+        {!filmed && detectedFps != null && detectedFps > 0 && detectedFps <= 30 && (
           <View style={styles.fpsRow}>
             <Text style={text.caption}>视频 {detectedFps} fps，用慢动作拍的选拍摄帧率</Text>
             <View style={{ flexDirection: 'row', gap: 6 }}>

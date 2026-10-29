@@ -77,6 +77,7 @@ export default function RootLayout() {
             <Stack.Screen name="vbt/[lift]" options={{ title: '' }} />
             <Stack.Screen name="vbt/track" options={{ title: '录像测速' }} />
             <Stack.Screen name="measure/capture" options={{ headerShown: false }} />
+            <Stack.Screen name="measure/camera" options={{ headerShown: false, gestureEnabled: false }} />
             <Stack.Screen name="measure/analyse" options={{ title: '自动分析' }} />
             <Stack.Screen name="measure/replay" options={{ title: '回放' }} />
             <Stack.Screen name="measure/mark" options={{ title: '逐帧标记' }} />

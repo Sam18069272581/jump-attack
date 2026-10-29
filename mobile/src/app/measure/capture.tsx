@@ -31,6 +31,10 @@ export default function Capture() {
   // A logger needs new settings (load, box) for every jump, so it takes one clip at a time.
   const several = !returnsToLogger(extra.from);
 
+  // Jump clips are analysed automatically where a WebView can read their frames (not on the web, not for loaded jumps
+  // logged one at a time).
+  const auto = def != null && analysisKindFor(def) != null && !isWeb && extra.from !== 'fvp';
+
   async function importVideo() {
     const res = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['videos'],
@@ -40,15 +44,15 @@ export default function Capture() {
       ...(several ? { allowsMultipleSelection: true, selectionLimit: IMPORT_LIMIT, orderedSelection: true } : {}),
     });
     if (res.canceled) return;
-    // Jump clips are analysed automatically where a WebView can read their frames (not on the web, not for loaded jumps
-    // logged one at a time).
-    const auto = def != null && analysisKindFor(def) != null && !isWeb && extra.from !== 'fvp';
     const route = firstClip(
       res.assets.map((a) => ({ uri: a.uri, ...(a.assetId ? { asset: a.assetId } : {}) })),
       auto ? 'analyse' : 'mark',
     );
     if (route) router.push({ pathname: route.pathname, params: { ...pass, ...route.params } });
   }
+
+  // The app's camera is a web page in a WebView, which the web version has none of.
+  const film = isWeb ? undefined : () => router.push({ pathname: '/measure/camera', params: { ...pass, to: auto ? '/measure/analyse' : '/measure/mark' } });
 
   const close = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const manual = def?.capture.includes('manual') && !returnsToLogger(extra.from) ? () => router.push({ pathname: '/measure/entry', params: pass }) : undefined;
@@ -60,6 +64,7 @@ export default function Capture() {
       guide={captureGuide(def?.category ?? 'jump', def?.code)}
       onClose={close}
       onImport={importVideo}
+      onFilm={film}
       onManual={manual}
     />
   );
