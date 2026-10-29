@@ -1062,12 +1062,28 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     ['the phone 1.3 m up and rolled 3°, a run-up at 15°', { curveDeg: 15, rollDeg: -3, lensM: 1.3 }, [35000]],
   ])('no lines, %s: a stride of the run-up isn’t measured as the jump, and it says the jump couldn’t be told from the run-up', (_, over, seeds) => {
     // The floor read wrong, a stride before the plant passes for the flight. Its fall is far too slow for the athlete's
-    // size: on the scale it gives, the hips would stand 1.2–6 times as far above the ankles as a 0.9 m leg. With no lines
-    // nothing else checks that scale, and every figure would rest on it.
+    // size: on the scale it gives, the hips would stand further above the ankles than a 0.9 m leg, and they leave the
+    // floor nearly flat, not on a jump's steep path. With no lines nothing else checks that scale, and every figure would
+    // rest on it.
     for (const seed of seeds) {
       const scene = poseScene({ ...over, markers: null, seed });
       const r = analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: null });
       expect([seed, r.ok ? `take-off at ${r.result.events.takeoff}, truth ${scene.truth.takeoffFrame}` : r.problem]).toEqual([seed, 'unclear-jump']);
+    }
+  });
+
+  it.each([
+    ['a 2.25 m athlete, a run-up at 17.5° and a hand on the rim', { heightM: 2.25, curveDeg: 17.5, hangAfterS: 0.34 }, [1, 2, 3]],
+    ['at 60 fps, a 2.25 m athlete, a run-up at 15° and a hand on the rim', { fps: 60, heightM: 2.25, curveDeg: 15, hangAfterS: 0.34 }, [2, 3, 6]],
+    ['at 60 fps, a 2.25 m athlete, a run-up at 17.5° and a hand on the rim', { fps: 60, heightM: 2.25, curveDeg: 17.5, hangAfterS: 0.34 }, [1, 2, 3]],
+  ])('no lines, %s: the jump is still measured, not taken for a stride of the run-up', (_, over, seeds) => {
+    // A tall athlete's bent legs and a fall cut short by the hang put the hips up to about 1.05 times a 0.9 m leg above
+    // the ankles on gravity's scale, past where a stride's drop starts. The hips' path tells them apart, whatever the
+    // scale: it leaves the floor at 31–46° in a jump and at under 22° in a stride taken for one.
+    for (const seed of seeds) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const r = analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: null });
+      expect([seed, r.ok ? Math.abs(r.result.events.takeoff - scene.truth.takeoffFrame) <= 1 : r.problem]).toEqual([seed, true]);
     }
   });
 

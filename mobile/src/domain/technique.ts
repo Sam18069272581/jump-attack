@@ -144,6 +144,13 @@ export const LENS_FOV_DEG = 70;
 export const MIN_FLIGHT_S = 0.25;
 
 /**
+ * With no lines, a flight whose fall is too slow for the athlete is taken for a run-up stride only if the hips leave
+ * the floor flatter than this, degrees above level in the picture: a jump's rise at 31–48°, a stride's at under 22° in
+ * the synthetic clips of tools/pose-validation (see `analyseTechnique`'s `unclear-jump`).
+ */
+const STRIDE_RISE_DEG = 25;
+
+/**
  * The body's size changes by more than this share along a run-up a couple of degrees off the picture: too little to
  * call it curved, but enough to slope the floor. A straight run-up's changes by about 1 % (up to 2 % with twice the
  * jitter, or at 60 fps, in the synthetic clips of tools/pose-validation).
@@ -1102,12 +1109,14 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const curvature = -2 * fy.c[2];
   if (!(curvature > 0)) return { ok: false, problem: 'no-jump' };
   const gravityScale = G / curvature;
-  // Without lines nothing else checks gravity's scale. On it, the hips can't stand further above the ankles than the
-  // 0.9 m `roughScale` takes them to: a jump's fall puts them at 0.6–0.8 of that in the synthetic clips of
-  // tools/pose-validation, a 2 m athlete's at about 0.86. A fall that makes them longer is far too slow for this
-  // athlete, the drop of a run-up stride taken for the jump (1.2–6 times in the clips where that happens), and every
-  // figure would rest on it.
-  if (!markers && gravityScale > roughScale) return { ok: false, problem: 'unclear-jump' };
+  // Without lines nothing else checks gravity's scale. On it, a jump's fall puts the hips 0.49–0.95 m above the ankles in
+  // the synthetic clips of tools/pose-validation, the most for a 2.25 m athlete with bent legs on a curved run-up whose
+  // fall a hand on the rim cuts short. A run-up stride taken for the jump (a floor read wrong) mostly falls far too slowly
+  // for the athlete: past the 0.9 m leg `roughScale` takes, some to tens of metres. There the path the hips leave the floor
+  // on tells the two apart, whatever the scale: a jump's rises at 31–48°, a stride's at under 22°. Every figure would rest
+  // on such a stride.
+  const riseDeg = (atan2(fy.c[1], abs(fx.c[1])) * 180) / PI;
+  if (!markers && gravityScale * max(1, legPx) > 0.9 && riseDeg < STRIDE_RISE_DEG) return { ok: false, problem: 'unclear-jump' };
   const gravityScaleRel = (2 * fy.se[2]) / curvature;
   const gWithMarkers = markerScale != null ? curvature * markerScale : null;
   if (markerScale != null) {
