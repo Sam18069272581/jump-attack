@@ -15,7 +15,7 @@ import { MISSING_TEXT, type DunkDiagnosis } from '@/domain/dunk';
 import { standingTouches } from '@/domain/dunkSummary';
 import { APPROACH_TOUCH, CATEGORIES, METRICS, formatValue, getMetric, metricColor, resultNote, type MetricDef } from '@/domain/metrics';
 import type { Timing } from '@/domain/timing';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
@@ -82,14 +82,14 @@ export default function History() {
               <Text style={text.muted}>{tr('摸高')}</Text>
               {diagnosis.gapCm != null && (
                 <Text style={{ fontSize: 12, color: diagnosis.gapCm > 0 ? colors.textSoft : colors.good }}>
-                  {diagnosis.gapCm > 0 ? tr('离扣篮线还差 {gapCm} cm', { gapCm: diagnosis.gapCm.toFixed(1) }) : tr('已过扣篮线')}
+                  {diagnosis.gapCm > 0 ? tr('离扣篮线还差 {gapCm} cm', { gapCm: decimal(diagnosis.gapCm, 1) }) : tr('已过扣篮线')}
                 </Text>
               )}
             </View>
             {diagnosis.touch.value != null ? (
               <>
                 <Text style={styles.featuredValue}>
-                  {diagnosis.touch.value.toFixed(1)} <Text style={styles.featuredUnit}>cm</Text>
+                  {decimal(diagnosis.touch.value, 1)} <Text style={styles.featuredUnit}>cm</Text>
                 </Text>
                 <TouchChart approach={approach} standing={standing} line={diagnosis.line} />
                 <View style={styles.legend}>
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
   featuredTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   featuredValue: { color: APPROACH_TOUCH.color, fontFamily: fonts.numericBold, fontSize: 56, lineHeight: 60 },
   featuredUnit: { color: colors.textMuted, fontSize: 18 },
-  legend: { flexDirection: 'row', gap: 14 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   row: { backgroundColor: colors.surface, borderRadius: radius.row, height: 68, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
