@@ -118,8 +118,11 @@ export const TAP_PT = 3;
 
 /**
  * How far nearer the lens or further a line is tapped than where the hips crossed it (m, 1 SD): on the tape under the
- * runner's body, between the feet, which land a hand's breadth either side of the hips' path. Leaning 5 cm towards the
- * planted foot at the take-off line, as an eye drawn to it might, stays within it (tools/pose-validation, `tap-lean`).
+ * runner's body, between the feet, which land a hand's breadth either side of the hips' path, as the screen asks. A tap
+ * drawn the same way every time is a lean, not a scatter, and isn't allowed for: leaning 5 cm towards the planted foot
+ * at the take-off line leaves the run-up speed's error holding the truth in 93.5 % of 1000 clips read as
+ * tools/pose-validation reads them (`tap-lean`), and at both lines in 92.5 %. Folding the lean into the scatter
+ * (hypot(8, 5) = 9.4 cm) would still leave 94.8 % and 94.1 %.
  */
 export const TAP_DEPTH_M = 0.08;
 
