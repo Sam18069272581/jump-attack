@@ -104,9 +104,10 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
     if (m.type === 'frame') return h.onFrame({ width: m.width, height: m.height, luma: m.luma, lumas: m.lumas, poses: m.poses, crowd: m.crowd });
     if (m.type === 'error') return fail(m.stage, m.stage === 'record' ? `录像出错：${m.message}` : m.message, m.name);
     if (m.type === 'recording') {
+      // A take whose start comes after a failure belongs to it: the page was told to stop it, and the failure stays said.
+      if (broken.current) return;
       if (take.current) dropTake(take.current.uri);
       take.current = null;
-      broken.current = false;
       return h.onRecording();
     }
     if (m.type === 'chunk') {

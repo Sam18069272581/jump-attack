@@ -307,3 +307,34 @@ it('keeps a filmed take when the camera page goes afterwards, and films again on
   expect(dropTake).toHaveBeenCalledWith(expect.stringMatching(/technique\/take-\d+\.mp4$/));
   expect(mockStaged.mock.calls.length).toBe(staged + 1);
 });
+
+it('keeps saying what went wrong when it fails as a take starts, whatever the page then says of that take', async () => {
+  await open();
+  await press('不检查直接拍');
+  await press('开始录像');
+  await post({ type: 'error', stage: 'camera', name: '', message: '相机断开了' });
+  expect(mockWeb.inject).toHaveBeenLastCalledWith('window.stopRecording(); true;');
+  // The recorder had already started: it still says so, then hands over what it had before it stopped.
+  await post({ type: 'recording', mime: 'video/mp4' });
+  await post({ type: 'chunk', seq: 0, data: Buffer.alloc(300, 1).toString('base64') });
+  expect(mockWeb.inject).toHaveBeenLastCalledWith('window.ack(0); true;');
+  await post({ type: 'recorded', chunks: 1, size: 300, mime: 'video/mp4', seconds: 0.2 });
+  let shown = texts(r.root);
+  expect(shown).toContain('相机断开了');
+  expect(shown).not.toContain('录好了');
+  const staged = mockStaged.mock.calls.length;
+  await press('重试');
+  await act(async () => {});
+  expect(mockStaged.mock.calls.length).toBe(staged + 1);
+
+  // Nothing recorded after a failure as the take starts: the failure still stands.
+  await open();
+  await press('不检查直接拍');
+  await press('开始录像');
+  await post({ type: 'error', stage: 'model', name: '', message: 'boom' });
+  await post({ type: 'recording', mime: 'video/mp4' });
+  await post({ type: 'recorded', chunks: 0, size: 0, mime: 'video/mp4', seconds: 0 });
+  shown = texts(r.root);
+  expect(shown).toContain('骨架识别启动不了');
+  expect(shown).not.toContain('没录到画面');
+});
