@@ -452,6 +452,31 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('at 240 fps, two feet leaving together, a few frames lost just before or across the take-off: the vertical take-off speed, angle and contact time are given, and hold the truth', () => {
+    // Timed together, the take-off's error is the surer foot's, under 3 frames here; the toe that leaves last is 2.5 cm
+    // above where it stood only 3–4 frames after it leaves. Looked for within that error alone, no frame shows every toe
+    // leaving, as if the moment it left wasn't seen.
+    const cases: [Partial<PoseSceneOptions>, number, number, number][] = [
+      [{ twoFootGapS: 0.08 }, 97001, -2, -1], // options, seed, first and last frame lost around the take-off
+      [{ twoFootGapS: 0.08 }, 97001, -3, -1],
+      [{}, 97008, -1, 1],
+      [{ foot: 'left' }, 97008, -2, 1],
+    ];
+    for (const [over, seed, from, to] of cases) {
+      const scene = poseScene({ ...over, fps: 240, style: 'two', seed });
+      const t = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, t + from, t + to), captureFps: 240, markers: scene.markers }));
+      const given = (['vz', 'angle', 'plant'] as const).filter((k) => result.metrics[k]);
+      expect([seed, from, result.flags.includes('unseen'), given, misses(scene, result).filter((m) => /^(vz|angle|plant):/.test(m))]).toEqual([
+        seed,
+        from,
+        false,
+        ['vz', 'angle', 'plant'],
+        [],
+      ]);
+    }
+  });
+
   it('at 60 fps, frames lost late in the plant and the take-off not timed: the take-off frame shown is where the foot left', () => {
     // The toe is seen still where it stood after the gap: the foot left after that, not where its frames down ended
     // before the gap.

@@ -949,14 +949,17 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // the free fall is fitted from where every plant toe is seen leaving, after those frames: above the height it stood at
   // and rising (the path guessed across a gap can hold a toe that is still down above that height, sinking back). Not
   // from the frame beside them, which isn't known to be in the air: its stillness can't be read next to the gap, and its
-  // smoothed height, bent by the gap, can read above where the toe stood while the foot is still down. The toes seen on
-  // the last frame within the take-off's error, and none of them leaving: the moment it left wasn't seen (an error that
-  // ends inside lost frames says nothing).
+  // smoothed height, bent by the gap, can read above where the toe stood while the foot is still down. Looked for up to
+  // the take-off plus the error width of the foot that left last: two feet timed together have the surer foot's error,
+  // which can end before the toe that leaves last has risen clear of where it stood. No frame up to the first one past
+  // that end shows every toe leaving, and the frames either side of the end are seen: the moment it left wasn't seen
+  // (lost there, they say nothing).
   let freeFrom = takeoffAt;
   if (!Number.isFinite(off.err) || s.frame.some((f, k) => abs(f - takeoffAt) <= off.err && s.lost[k] && s.lost[k + 1])) {
     const leaving = (q: number) => !s.lost[q] && !s.lost[q + 1] && toes.every(({ toe, y }) => toe.sy[q] - y > tol && toe.sy[q + 1] > toe.sy[q]);
+    const lookTo = takeoffAt + max(off.err, lastOff.upErr);
     let k = s.frame.findIndex((f) => f > takeoffAt);
-    while (k >= 0 && k < s.frame.length && s.frame[k] < takeoffAt + off.err && !leaving(k)) k++;
+    while (k >= 0 && k < s.frame.length && s.frame[k] < lookTo && !leaving(k)) k++;
     if (k >= 0) freeFrom = max(takeoffAt, frameAt(s, k - 0.5));
     const last = k - 1;
     if (k >= 0 && !(k < s.frame.length && leaving(k)) && s.frame[last] > takeoffAt && !s.lost[last] && !s.lost[last + 1]) off.err = Infinity;
