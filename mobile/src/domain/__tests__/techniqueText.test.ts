@@ -40,6 +40,15 @@ it('says which figures go by gravity’s scale when it and the lines’ differ, 
   expect(FLAG_TEXT['off-line']).toMatch(/误差/);
 });
 
+it('says the lines are off in words a player knows, and that the take-off’s horizontal velocity is less sure too', () => {
+  // A scale isn't something to set against gravity, and "进板速度" is no term of the game. Off the line, the horizontal
+  // take-off velocity's error takes in the gap as well.
+  expect(FLAG_TEXT['off-line']).not.toMatch(/进板速度|比例和重力/);
+  expect(FLAG_TEXT['off-line']).toMatch(/起跳水平速度.*误差|误差.*起跳水平速度/);
+  // A hand on the rim: what was cut short, in the words of the court.
+  expect(FLAG_TEXT['short-fall']).not.toMatch(/截短|比例/);
+});
+
 it('when a hand on the rim cut the fall short, says so rather than that the lines are off, and that the lengths stay on the lines', () => {
   // Gravity's scale then rests on the rise alone: apart from the lines', it is no sign they were laid or tapped wrong.
   expect(FLAG_TEXT['short-fall']).toMatch(/挂筐|篮筐/);
