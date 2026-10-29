@@ -887,6 +887,16 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const roughScale = markerScale ?? 0.9 / max(1, legPx);
   // How well each line was tapped, px of this clip (1 SD).
   const tapPx = markers?.tapPx ?? TAP_PX;
+  // How far a line's tap is off across `dir` (px, 1 SD): the finger, and where along its tape it was tapped
+  // (`TAP_DEPTH_M`). Tapped δ nearer the lens than the hips' path, a point sits further from the picture's middle by δ/d
+  // of its offset there, d = f/k the distance: f the focal length (px), k the lines' px per m.
+  const tapOff = (p: Pt, dir: Pt): number => {
+    if (!markers?.picture || markerPx == null) return tapPx;
+    const { width, height } = markers.picture;
+    const f = max(width, height) / 2 / Math.tan((LENS_FOV_DEG * PI) / 360);
+    const off = abs(dot(sub(p, { x: width / 2, y: height / 2 }), dir));
+    return hypot(tapPx, (off * TAP_DEPTH_M * markerPx) / markers.distanceM / f);
+  };
 
   // Up, then the running direction along the floor, and the side that faces the camera.
   let up = upFrom(picked, markers);
@@ -1082,8 +1092,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const span = pts.ts[pts.ts.length - 1] - pts.ts[0];
   const drift = COM_DRIFT_M / span;
   const vx = fx.c[1] * gravityScale;
-  // Which way is up, to 1 SD (rad). Two lines each tapped to `tapPx`: one a little high or low tilts it. Without lines,
-  // the floor fit is turned level, and a floor that isn't straight in the picture leaves up off by its false slope.
+  // Which way is up, to 1 SD (rad). Two lines each tapped a little high or low tilt it: the finger, and where along its
+  // tape each was tapped, which moves it up or down as well as along (`tapOff`, across the floor). Without lines, the
+  // floor fit is turned level, and a floor that isn't straight in the picture leaves up off by its false slope.
   // Still feet hanging from the rim sit above the floor by any amount: the turn is then the phone's roll plus a false
   // slope nothing bounds, and a phone rolled the other way hides the slope, so the whole turn is in doubt, and the roll
   // too, at most `LEVEL_DEG` (what the camera's level check lets through). Hanging feet can also outnumber those on the
@@ -1102,7 +1113,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const runupSlope = (LENS_HEIGHT_M * sizeChange) / max(1e-3, sizeSpanPx * gravityScale);
   const tilt =
     markerPx != null
-      ? (sqrt(2) * tapPx) / markerPx
+      ? hypot(tapOff(markers!.a, frame.up), tapOff(markers!.b, frame.up)) / markerPx
       : flags.includes('hang')
         ? max(releveled + (LEVEL_DEG * PI) / 180, runUpTilt())
         : sizeChange > SLIGHT_CURVE
@@ -1130,28 +1141,22 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const [a, b] = [...plant].sort((x, y) => x.downAt - y.downAt);
     metrics.gap = measured('gap', ms(b.downAt - a.downAt), ms(hypot(a.downErr, b.downErr)));
   }
-  // How far a line's tap is off along the run (px, 1 SD): the finger, and where along its tape it was tapped
-  // (`TAP_DEPTH_M`). Tapped δ nearer the lens than the hips' path, a point sits further from the picture's middle by δ/d
-  // of its offset there, d = f/k the distance: f the focal length (px), k the lines' px per m.
-  const tapAlong = (p: Pt): number => {
-    if (!markers?.picture || markerPx == null) return tapPx;
-    const { width, height } = markers.picture;
-    const f = max(width, height) / 2 / Math.tan((LENS_FOV_DEG * PI) / 360);
-    const off = abs(dot(sub(p, { x: width / 2, y: height / 2 }), frame.xAxis));
-    return hypot(tapPx, (off * TAP_DEPTH_M * markerPx) / markers.distanceM / f);
-  };
+  // How far a line's tap is off along the run (px, 1 SD).
+  const tapAlong = (p: Pt): number => tapOff(p, frame.xAxis);
   // Lengths along the floor: on the lines' scale, or on gravity's where the lines are off (`SCALE_MISMATCH`). Gravity's is
   // right then only if its parabola is: one cut short at a hang (or what looked like one) can bend by as much as the two
   // disagree, and which of them is right can't be told, so its error takes in the whole gap between them.
   const linesScale = flags.includes('off-line') ? null : markerScale;
   const floorScale = linesScale ?? gravityScale;
   const scalesApart = linesScale == null && markerScale != null && flags.includes('hang') ? abs(gravityScale / markerScale - 1) : 0;
+  // The lines' scale (95 %, share): they are laid to 1 %, and each is tapped to `tapAlong`, a share of the gap between
+  // them that grows with the distance.
+  const linesRel = linesScale != null ? hypot(0.01, (1.96 * hypot(tapAlong(markers!.a), tapAlong(markers!.b))) / markerPx!) : 0;
   if (penultimate) {
     const step = abs(firstPlant.toeX - penultimate.toeX) * floorScale;
     // Each toe's place (a median over its stance); the feet stand a hand's breadth either side of the line the scale
-    // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself: the lines
-    // are laid to 1 %, and each is tapped to `tapAlong`, a share of the gap between them that grows with the distance.
-    const scaleRel = linesScale != null ? hypot(0.01, (1.96 * hypot(tapAlong(markers!.a), tapAlong(markers!.b))) / markerPx!) : hypot(1.96 * gravityScaleRel, scalesApart);
+    // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself.
+    const scaleRel = linesScale != null ? linesRel : hypot(1.96 * gravityScaleRel, scalesApart);
     const toes = hypot(firstPlant.toeErr, penultimate.toeErr) * floorScale;
     metrics.step = measured('step', step, sqrt(toes ** 2 + 0.03 ** 2 + (step * (scaleRel + sizeChange)) ** 2));
   }
@@ -1209,9 +1214,10 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     if (ts.length >= 4) {
       const fin = polyFit(ts, xs, 1);
       const vin = fin.c[1] * floorScale;
-      // The fit, the segment model's drift over this short stretch, and a run-up that comes at the camera. Both speeds on
-      // gravity's scale, where it may be as far off as the scales are apart, move the braking by that share of it.
-      const vinErr = sqrt((1.96 * fin.se[1] * floorScale) ** 2 + (COM_DRIFT_M / (ts[ts.length - 1] - ts[0])) ** 2 + (vin * sizeChange) ** 2);
+      // The fit, the segment model's drift over this short stretch, a run-up that comes at the camera, and the lines'
+      // scale where it is on theirs (the take-off speed is on gravity's). Both speeds on gravity's scale, where it may be
+      // as far off as the scales are apart, move the braking by that share of it.
+      const vinErr = sqrt((1.96 * fin.se[1] * floorScale) ** 2 + (COM_DRIFT_M / (ts[ts.length - 1] - ts[0])) ** 2 + (vin * sizeChange) ** 2 + (vin * linesRel) ** 2);
       metrics.brake = measured('brake', vin - vx, hypot(vinErr, vxErr, (vin - vx) * scalesApart));
     }
   }

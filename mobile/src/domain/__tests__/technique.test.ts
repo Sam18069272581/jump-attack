@@ -1,5 +1,5 @@
 import { LM, type Pt } from '../pose';
-import { analyseTechnique, findJumpWindow, PASS_LINE, polyFit, TAP_PX, type MetricKey, type PoseFrame, type TechniqueInput, type TechniqueResult } from '../technique';
+import { analyseTechnique, findJumpWindow, PASS_LINE, polyFit, TAP_PX, type Markers, type MetricKey, type PoseFrame, type TechniqueInput, type TechniqueResult } from '../technique';
 import { coarseFrames, coarseStep, denseFrames, framesFromWire, planWindow, TAP_REACH_S, windowOf, type WireFrame } from '../techniqueRead';
 import { asWire, poseScene, type PoseScene, type PoseSceneOptions } from '../testing/poseScene';
 
@@ -679,6 +679,17 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       }
     }
     expect(Object.entries(tally).filter(([k, c]) => (k !== 'brake' && c.n < 240) || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
+  });
+
+  it('lines tapped along their tapes: braking’s run-in speed is as unsure as their scale, and where along the tapes they were tapped tilts up', () => {
+    // The run-in speed is measured on the lines' scale, which is only as good as their taps: tapped less well, the
+    // braking is less sure. And a line tapped nearer the lens than the hips' path sits lower in the picture too (further
+    // from its middle by the depth over the distance): two such lines tilt up, which the picture's size lets it allow for.
+    const scene = poseScene({ seed: 1 });
+    const lines = { ...scene.markers!, distanceM: 3 };
+    const metricsOf = (markers: Markers) => resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers })).metrics;
+    expect(metricsOf({ ...lines, tapPx: 12 }).brake!.error).toBeGreaterThan(metricsOf({ ...lines, tapPx: 4 }).brake!.error + 0.05);
+    expect(metricsOf({ ...lines, picture: { width: scene.width, height: scene.height } }).vz!.error).toBeGreaterThan(metricsOf(lines).vz!.error);
   });
 
   it.each([
