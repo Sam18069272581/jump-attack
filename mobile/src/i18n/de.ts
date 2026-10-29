@@ -472,6 +472,14 @@ export const de: Record<string, string> = {
   '还没有一次测多跳的记录，测量噪声先按历史波动估。': 'Noch kein Test mit mehreren Sprüngen, das Messrauschen wird aus dem Verlauf geschätzt.',
   '测量噪声（同一次测多跳的波动）{te}{u}，单次重测要差 {mdc}{u} 以上才不是噪声。': 'Messrauschen (Streuung der Sprünge in einem Test) {te}{u}; ein einzelner Retest muss um mehr als {mdc}{u} abweichen, um mehr als Rauschen zu sein.',
 
+  // app/measure/camera.tsx
+  '这台手机的系统不能在 App 里用网页相机（要 iOS 14.3 以上）。可以用相机 App 拍，再导入。': 'Das System dieses Handys kann die Web-Kamera in der App nicht nutzen (iOS 14.3 oder neuer nötig). Mit der Kamera-App filmen und dann importieren.',
+  '这台手机的网页相机只有 {fps} 帧，测得会粗；用相机 App 拍了再导入更准。': 'Die Web-Kamera dieses Handys schafft nur {fps} fps, die Messung wird grob; mit der Kamera-App filmen und importieren ist genauer.',
+  'App 里拍是 60 帧，测杠铃速度够用。': 'In der App wird mit 60 fps gefilmt, das reicht für die Hantelgeschwindigkeit.',
+  'App 里最多 60 帧：起跳或落地差一帧，跳高差约 2–3 cm、触地时间差 17 ms。要测准，用 iPhone 慢动作（240 帧）拍了再导入。': 'Die App filmt mit höchstens 60 fps: Ein Bild daneben bei Absprung oder Landung macht etwa 2–3 cm Sprunghöhe oder 17 ms Bodenkontakt aus. Für Genauigkeit in iPhone-Zeitlupe (240 fps) filmen und importieren.',
+  '录像中：{hint}（最长 {maxSeconds} 秒）': 'Aufnahme läuft: {hint} (höchstens {maxSeconds} s)',
+  '用这一段': 'Diese Aufnahme nehmen',
+
   // app/measure/capture.tsx
   '录制 · {name}': 'Aufnahme · {name}',
   '第 {attempt} 次': 'Versuch {attempt}',
@@ -811,7 +819,7 @@ export const de: Record<string, string> = {
   '视频准备失败': 'Video konnte nicht vorbereitet werden',
   '中途跟丢了杠铃片，后面的次数没有算进去。': 'Die Scheibe ging unterwegs verloren; die späteren Wiederholungen sind nicht gezählt.',
   '分析不了这段视频': 'Dieses Video kann nicht analysiert werden',
-  '拍一整组，导入后圈一下杠铃片，App 自动跟踪杠铃、分出每一次，算出平均速度。不用逐帧标记。': 'Einen ganzen Satz filmen, nach dem Import die Scheibe einkreisen, und die App verfolgt die Hantel, trennt die Wiederholungen und berechnet die mittlere Geschwindigkeit. Keine Bild-für-Bild-Markierung.',
+  '拍一整组（在 App 里直接拍，或从相册导入），再圈一下杠铃片，App 自动跟踪杠铃、分出每一次，算出平均速度。不用逐帧标记。': 'Filme einen ganzen Satz (direkt in der App oder aus Fotos importiert), kreise dann die Scheibe ein, und die App verfolgt die Stange, trennt die Wiederholungen und berechnet die mittlere Geschwindigkeit. Kein Markieren Bild für Bild.',
   '从相册选这一组的视频': 'Video dieses Satzes aus der Mediathek wählen',
   '可以点某一次把它去掉（比如起杠、放杠被误算）。': 'Tippe auf eine Wiederholung, um sie zu entfernen (z. B. versehentlich gezähltes Aus- oder Einhängen).',
   '拖动圆圈套住外侧那片 45 cm 杠铃片，双指缩放，松手后会自动贴合杠铃片边缘。下面的进度条拖到这一组开始前。': 'Den Kreis über die äußere 45-cm-Scheibe ziehen und mit zwei Fingern anpassen; beim Loslassen rastet er am Scheibenrand ein. Den Fortschrittsbalken unten kurz vor den Satzbeginn ziehen.',
@@ -1006,6 +1014,8 @@ export const de: Record<string, string> = {
   '按原计划': 'Beim Plan bleiben',
 
   // components/capture/SlowMoImport.tsx
+  '可以在 App 里直接拍（最多 60 帧，省事），也可以用 iPhone 自带相机的慢动作（240 帧，更准）拍了再导入。下面是慢动作的拍法，在 App 里拍时手机的摆法一样。': 'Direkt in der App filmen (bis 60 fps, schneller) oder mit der Zeitlupe der iPhone-Kamera (240 fps, genauer) filmen und importieren. Unten steht, wie man in Zeitlupe filmt; beim Filmen in der App das Handy genauso aufstellen.',
+  'App 里直接拍': 'In der App filmen',
   '用 iPhone 自带相机的慢动作拍，再导入这里测量。': 'Filme mit der Zeitlupe der iPhone-Kamera und importiere das Video dann hier zum Messen.',
   '网页版导入后会先播放几帧测出视频帧率；慢动作视频在逐帧页把「拍摄帧率」选成 240。浏览器逐帧定位不如 App 精确，正式测试建议用 Expo Go 版。': 'Nach dem Import spielt die Web-Version ein paar Bilder ab, um die Bildrate zu messen. Bei Zeitlupenvideos auf der Bildseite „Aufnahme-Bildrate“ auf 240 stellen. Der Browser springt ungenauer von Bild zu Bild als die App, für echte Tests besser die Expo-Go-Version nehmen.',
   '慢动作导出后每一帧仍是 1/240 秒。标记页如果显示视频只有 30 fps，把「拍摄帧率」选成 240。': 'Auch exportierte Zeitlupe hat 1/240 s pro Bild. Zeigt die Markierungsseite nur 30 fps, „Aufnahme-Bildrate“ auf 240 stellen.',

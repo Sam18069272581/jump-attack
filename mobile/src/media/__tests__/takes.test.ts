@@ -1,4 +1,4 @@
-import { dropTake, newTakeFile, pruneTakes } from '../takes';
+import { dropTake, dropTestTakes, newTakeFile, pruneTakes } from '../takes';
 
 // The slice of expo-file-system the takes folder uses, in memory.
 jest.mock('expo-file-system', () => {
@@ -38,7 +38,7 @@ jest.mock('expo-file-system', () => {
       return [...files].filter((f) => f.startsWith(`${this.uri}/`) && !f.slice(this.uri.length + 1).includes('/')).map((f) => new File(f));
     }
   }
-  return { File, Directory, Paths: { document: 'file:///app/Documents' } };
+  return { File, Directory, Paths: { document: 'file:///app/Documents', cache: 'file:///app/Caches' } };
 });
 
 let now = 1_000;
@@ -62,4 +62,17 @@ it('keeps the saved takes’ files and drops the rest: a take never saved, or on
   pruneTakes([saved.uri.replace('file:///app/', 'file:///moved/app/')]);
   expect(saved.exists).toBe(true);
   expect(left.exists).toBe(false);
+});
+
+it('keeps takes filmed for a test (jumps, VBT) apart, in the cache, where the technique list never prunes them', () => {
+  const kept = newTakeFile('mp4');
+  const test = newTakeFile('mp4', 'test');
+  expect(test.uri).toMatch(/^file:\/\/\/app\/Caches\/test-takes\/take-\d+\.mp4$/);
+  pruneTakes([kept.uri]);
+  expect(test.exists).toBe(true);
+  // The next filming drops the takes before it: each one was only needed until its clip was measured (VBT keeps its own
+  // copy when the set is saved).
+  dropTestTakes();
+  expect(test.exists).toBe(false);
+  expect(kept.exists).toBe(true);
 });

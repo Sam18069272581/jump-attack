@@ -472,6 +472,14 @@ export const en: Record<string, string> = {
   '还没有一次测多跳的记录，测量噪声先按历史波动估。': 'No test with several jumps yet, so measurement noise is estimated from the history.',
   '测量噪声（同一次测多跳的波动）{te}{u}，单次重测要差 {mdc}{u} 以上才不是噪声。': 'Measurement noise (spread of jumps in one test) {te}{u}; a single retest must differ by more than {mdc}{u} to be more than noise.',
 
+  // app/measure/camera.tsx
+  '这台手机的系统不能在 App 里用网页相机（要 iOS 14.3 以上）。可以用相机 App 拍，再导入。': 'This phone’s system can’t use the web camera inside the app (iOS 14.3 or later is needed). Film with the Camera app and import instead.',
+  '这台手机的网页相机只有 {fps} 帧，测得会粗；用相机 App 拍了再导入更准。': 'This phone’s web camera only does {fps} fps, so the measurement is rough; filming with the Camera app and importing is more accurate.',
+  'App 里拍是 60 帧，测杠铃速度够用。': 'Filming in the app is 60 fps, which is enough for bar velocity.',
+  'App 里最多 60 帧：起跳或落地差一帧，跳高差约 2–3 cm、触地时间差 17 ms。要测准，用 iPhone 慢动作（240 帧）拍了再导入。': 'The app films at most 60 fps: one frame off at take-off or landing is about 2–3 cm of jump height or 17 ms of contact time. For accuracy, film in iPhone slow motion (240 fps) and import.',
+  '录像中：{hint}（最长 {maxSeconds} 秒）': 'Recording: {hint} (up to {maxSeconds} s)',
+  '用这一段': 'Use this take',
+
   // app/measure/capture.tsx
   '录制 · {name}': 'Recording · {name}',
   '第 {attempt} 次': 'Attempt {attempt}',
@@ -811,7 +819,7 @@ export const en: Record<string, string> = {
   '视频准备失败': 'Couldn’t prepare the video',
   '中途跟丢了杠铃片，后面的次数没有算进去。': 'Lost the plate partway through; the later reps aren’t counted.',
   '分析不了这段视频': 'Can’t analyse this video',
-  '拍一整组，导入后圈一下杠铃片，App 自动跟踪杠铃、分出每一次，算出平均速度。不用逐帧标记。': 'Film a whole set, circle the plate after importing, and the app tracks the bar, splits the reps and works out the mean velocity. No frame-by-frame marking.',
+  '拍一整组（在 App 里直接拍，或从相册导入），再圈一下杠铃片，App 自动跟踪杠铃、分出每一次，算出平均速度。不用逐帧标记。': 'Film a whole set (in the app, or import it from Photos), then circle the plate, and the app tracks the bar, splits the reps and works out the mean velocity. No frame-by-frame marking.',
   '从相册选这一组的视频': 'Pick this set’s video from Photos',
   '可以点某一次把它去掉（比如起杠、放杠被误算）。': 'Tap a rep to remove it (e.g. unracking or racking counted by mistake).',
   '拖动圆圈套住外侧那片 45 cm 杠铃片，双指缩放，松手后会自动贴合杠铃片边缘。下面的进度条拖到这一组开始前。': 'Drag the circle over the outer 45 cm plate and pinch to size it; it snaps to the plate’s edge when you let go. Drag the progress bar below to just before the set starts.',
@@ -1006,6 +1014,8 @@ export const en: Record<string, string> = {
   '按原计划': 'Stick to the plan',
 
   // components/capture/SlowMoImport.tsx
+  '可以在 App 里直接拍（最多 60 帧，省事），也可以用 iPhone 自带相机的慢动作（240 帧，更准）拍了再导入。下面是慢动作的拍法，在 App 里拍时手机的摆法一样。': 'Film right in the app (up to 60 fps, quicker), or film in slow motion with the iPhone Camera app (240 fps, more accurate) and import. Below is how to film in slow motion; place the phone the same way when filming in the app.',
+  'App 里直接拍': 'Film in the app',
   '用 iPhone 自带相机的慢动作拍，再导入这里测量。': 'Film with the slow-motion mode of the iPhone camera, then import the video here to measure.',
   '网页版导入后会先播放几帧测出视频帧率；慢动作视频在逐帧页把「拍摄帧率」选成 240。浏览器逐帧定位不如 App 精确，正式测试建议用 Expo Go 版。': 'After import, the web version plays a few frames to measure the frame rate. For slow-motion videos, set “Capture frame rate” to 240 on the frame page. Browsers step frames less precisely than the app, so use the Expo Go version for real tests.',
   '慢动作导出后每一帧仍是 1/240 秒。标记页如果显示视频只有 30 fps，把「拍摄帧率」选成 240。': 'A slow-motion export still has 1/240 s per frame. If the marking page says the video is only 30 fps, set “Capture frame rate” to 240.',

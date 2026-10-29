@@ -15,7 +15,7 @@ type Web = WebView<Record<never, never>>;
 /** Room kept free while filming: about two takes (20 s at 60 fps is some 25 MB), so the phone isn't filled to the brim. */
 const RESERVE_BYTES = 50e6;
 /** A whole take at the page's bit rate: 20 s × 1.25 MB/s = 25 MB. */
-const TAKE_BYTES = (MAX_TAKE_S * CAMERA_BITRATE) / 8;
+const takeBytes = (seconds: number) => (seconds * CAMERA_BITRATE) / 8;
 
 export type CameraInfo = { label: string; physical: boolean; fps: number | null; maxFps: number | null; width: number; height: number };
 /** One picture the page read: its people (132 numbers each), brightness, and the count of the latest whole-picture search. */
@@ -40,8 +40,12 @@ export type PoseCameraHandle = {
 };
 
 type Props = {
+  /** Without the pose model (default with): a test that only needs the take (jumps, VBT), whose takes are kept apart. */
+  pose?: boolean;
+  /** The longest take, s. */
+  maxSeconds?: number;
   onCamera: (info: CameraInfo) => void;
-  onFrame: (frame: CameraFrame) => void;
+  onFrame?: (frame: CameraFrame) => void;
   onRecording: () => void;
   onRecorded: (r: Recorded) => void;
   onError: (stage: CameraErrorStage, message: string, name: string) => void;
@@ -51,9 +55,9 @@ type Props = {
 /**
  * The phone's camera with the pose model on it (media/poseCameraHtml.ts in a WebView): its picture and skeletons, a
  * report of each picture read for the setup checks, and the takes it records, written to a file of their own piece by
- * piece as the page sends them (media/takes.ts).
+ * piece as the page sends them (media/takes.ts). With `pose={false}` it is the camera and the recorder only.
  */
-export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamera({ style, ...props }, ref) {
+export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamera({ style, pose = true, maxSeconds = MAX_TAKE_S, ...props }, ref) {
   const web = useRef<Web>(null);
   const [stage, setStage] = useState<{ page: string; dir: string; root: string } | null>(null);
   const take = useRef<File | null>(null);
@@ -67,7 +71,7 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
   useEffect(() => {
     let gone = false;
     let dir: string | null = null;
-    stagePosePage(() => poseCameraHtml({ bg: colors.text, accent: colors.rim }))
+    stagePosePage(() => poseCameraHtml({ bg: colors.text, accent: colors.rim, pose, maxSeconds }))
       .then((s) => {
         if (gone) return unstagePosePage(s.dir);
         dir = s.dir;
@@ -80,6 +84,8 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
       // A take still being written when the screen goes is no take.
       if (take.current) dropTake(take.current.uri);
     };
+    // The page is made once: what it is (with the model or not, how long a take) doesn't change while it's open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const call = (js: string) => web.current?.injectJavaScript(`${js}; true;`);
@@ -87,7 +93,7 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
     startRecording: () => {
       // A take the phone can't hold to the end isn't started: the athlete would run up for nothing.
       const free = Paths.availableDiskSpace;
-      if (free != null && free < TAKE_BYTES + RESERVE_BYTES) return fail('record', tr('录像存不下来：手机存储空间不够了，清理一些再拍'));
+      if (free != null && free < takeBytes(maxSeconds) + RESERVE_BYTES) return fail('record', tr('录像存不下来：手机存储空间不够了，清理一些再拍'));
       call('window.startRecording()');
     },
     stopRecording: () => call('window.stopRecording()'),
@@ -112,7 +118,7 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
     }
     const h = handlers.current;
     if (m.type === 'camera') return h.onCamera({ label: m.label, physical: m.physical, fps: m.fps, maxFps: m.maxFps, width: m.width, height: m.height });
-    if (m.type === 'frame') return h.onFrame({ width: m.width, height: m.height, luma: m.luma, lumas: m.lumas, poses: m.poses, crowd: m.crowd });
+    if (m.type === 'frame') return h.onFrame?.({ width: m.width, height: m.height, luma: m.luma, lumas: m.lumas, poses: m.poses, crowd: m.crowd });
     if (m.type === 'error') return fail(m.stage, m.stage === 'record' ? tr('录像出错：{message}', { message: m.message }) : m.message, m.name);
     if (m.type === 'recording') {
       // A take whose start comes after a failure belongs to it: the page was told to stop it, and the failure stays said.
@@ -125,7 +131,7 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
       if (!broken.current) {
         try {
           // Each piece is written before the page sends the next: base64 to bytes, with no copy of the whole take in memory.
-          take.current ??= newTakeFile('mp4');
+          take.current ??= newTakeFile('mp4', pose ? 'technique' : 'test');
           // iOS's append can't say the phone is full (it raises, and the app is closed), so the room is checked first,
           // with enough left over for the camera's own copy of the take and for the phone itself.
           const free = Paths.availableDiskSpace;
