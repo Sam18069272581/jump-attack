@@ -12,6 +12,7 @@ import { shortDate, toISODate } from '@/domain/dates';
 import { RIM_CM } from '@/domain/dunk';
 import { attemptSummary, BALL_NAME, firstDunk, OUTCOME_NAME, rimProblem, type Ball, type DunkAttempt, type Outcome } from '@/domain/dunkAttempts';
 import { parseNumber } from '@/domain/entry';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { todayISO } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
@@ -58,7 +59,7 @@ export default function Attempts() {
       await addDunkAttempt(db, current.id, { rimCm, ball: ballNow, outcome });
       await load();
     } catch (e) {
-      Alert.alert('没记上', String(e));
+      Alert.alert(tr('没记上'), String(e));
     }
   }
 
@@ -76,30 +77,26 @@ export default function Attempts() {
           </Text>
           {summary ? (
             <>
-              <Text style={styles.headline}>
-                最近 {summary.total} 次扣进 {summary.made} 次
-              </Text>
-              <Text style={text.muted}>
-                碰框没进 {summary.rim} · 没够到 {summary.short}
-              </Text>
+              <Text style={styles.headline}>{tr('最近 {total} 次扣进 {made} 次', { total: summary.total, made: summary.made })}</Text>
+              <Text style={text.muted}>{tr('碰框没进 {rim} · 没够到 {short}', { rim: summary.rim, short: summary.short })}</Text>
             </>
           ) : (
-            <Text style={styles.headline}>还没记录</Text>
+            <Text style={styles.headline}>{tr('还没记录')}</Text>
           )}
           <Text style={text.muted}>
-            {first ? `第一次扣进：${shortDate(toISODate(new Date(first.at)))}，${first.rimCm} cm 篮球` : `还没在 ${goalRim} cm 用篮球扣进过。降低篮筐或换排球练的，单独计数。`}
+            {first ? tr('第一次扣进：{p}，{rimCm} cm 篮球', { p: shortDate(toISODate(new Date(first.at))), rimCm: first.rimCm }) : tr('还没在 {goalRim} cm 用篮球扣进过。降低篮筐或换排球练的，单独计数。', { goalRim })}
           </Text>
         </Card>
 
         <Card style={{ gap: 12 }}>
           <View style={styles.field}>
-            <Text style={styles.fieldName}>篮筐高度</Text>
+            <Text style={styles.fieldName}>{tr('篮筐高度')}</Text>
             <TextInput
               value={rimInput}
               onChangeText={setRimText}
               keyboardType="decimal-pad"
               style={styles.input}
-              accessibilityLabel="篮筐高度（cm）"
+              accessibilityLabel={tr('篮筐高度（cm）')}
             />
             <Text style={styles.unit}>cm</Text>
           </View>
@@ -133,11 +130,11 @@ export default function Attempts() {
             </PressScale>
           ))}
         </View>
-        <Text style={[text.caption, { textAlign: 'center' }]}>每试一次点一下，记错了在下面删掉。</Text>
+        <Text style={[text.caption, { textAlign: 'center' }]}>{tr('每试一次点一下，记错了在下面删掉。')}</Text>
 
         {todays.length > 0 && (
           <Card style={{ gap: 4 }}>
-            <Text style={text.section}>今天</Text>
+            <Text style={text.section}>{tr('今天')}</Text>
             {todays.map((a) => (
               <View key={a.id} style={styles.row}>
                 <Text style={styles.rowTime}>{timeOf(a.at)}</Text>
@@ -145,8 +142,8 @@ export default function Attempts() {
                   {a.rimCm} cm · {BALL_NAME[a.ball]}
                 </Text>
                 <Text style={[styles.rowOutcome, { color: OUTCOME_COLOR[a.outcome] }]}>{OUTCOME_NAME[a.outcome]}</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel="删除这次" hitSlop={8} onPress={() => remove(a.id)}>
-                  <Text style={styles.delete}>删除</Text>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr('删除这次')} hitSlop={8} onPress={() => remove(a.id)}>
+                  <Text style={styles.delete}>{tr('删除')}</Text>
                 </Pressable>
               </View>
             ))}

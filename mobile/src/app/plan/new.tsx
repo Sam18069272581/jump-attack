@@ -8,10 +8,11 @@ import { Button, Chip } from '@/components/ui';
 import { loadDiagnosis } from '@/db/dunk';
 import { getActivePlan, startPlan } from '@/db/training';
 import { firstBlock } from '@/domain/blocks';
-import { addDays, mondayOf, shortDate, WEEKDAY_NAMES, type ISODate } from '@/domain/dates';
+import { addDays, mondayOf, shortDate, weekdayNames, type ISODate } from '@/domain/dates';
 import { BLOCKS, MISSING_TEXT, type BlockType, type DunkDiagnosis } from '@/domain/dunk';
 import { planDay, planWeeks, weekDays, type PlanSettings, type PlanTemplate } from '@/domain/plan';
 import { defaultWeekdays, getTemplate, TEMPLATES } from '@/domain/templates';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { todayISO } from '@/state/training';
 import { colors, radius, text } from '@/theme';
@@ -65,14 +66,14 @@ export default function NewPlan() {
         await startPlan(db, current.id, settings);
         router.back();
       } catch (e) {
-        Alert.alert('保存失败', String(e));
+        Alert.alert(tr('保存失败'), String(e));
         setSaving(false);
       }
     };
     if (existing) {
-      Alert.alert('更换计划？', `会结束现在的「${getTemplate(existing.templateCode)?.name ?? '计划'}」，已有的训练记录会保留。`, [
-        { text: '取消', style: 'cancel' },
-        { text: '更换', style: 'destructive', onPress: go },
+      Alert.alert(tr('更换计划？'), tr('会结束现在的「{name}」，已有的训练记录会保留。', { name: getTemplate(existing.templateCode)?.name ?? tr('计划') }), [
+        { text: tr('取消'), style: 'cancel' },
+        { text: tr('更换'), style: 'destructive', onPress: go },
       ]);
     } else {
       await go();
@@ -87,7 +88,7 @@ export default function NewPlan() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.label}>模板</Text>
+        <Text style={styles.label}>{tr('模板')}</Text>
         {TEMPLATES.map((t) => {
           const selected = t.code === code;
           const weeks = planWeeks(t);
@@ -100,9 +101,7 @@ export default function NewPlan() {
               style={[styles.template, selected && { borderColor: colors.accent }]}
             >
               <Text style={text.section}>{t.name}</Text>
-              <Text style={styles.meta}>
-                每周 {t.sessions.length} 练 · {weeks ? `共 ${weeks} 周` : `${t.weeks.length} 周一循环`}
-              </Text>
+              <Text style={styles.meta}>{tr('每周 {length} 练 · {p}', { length: t.sessions.length, p: weeks ? tr('共 {weeks} 周', { weeks }) : tr('{length} 周一循环', { length: t.weeks.length }) })}</Text>
               <Text style={text.muted}>{t.summary}</Text>
             </Pressable>
           );
@@ -110,36 +109,36 @@ export default function NewPlan() {
 
         {block && (
           <>
-            <Text style={styles.label}>第一块</Text>
+            <Text style={styles.label}>{tr('第一块')}</Text>
             <View style={styles.days}>
               {(Object.keys(BLOCKS) as BlockType[]).map((b) => (
-                <Chip key={b} label={`${BLOCKS[b].name}${diagnosis?.limiter === b ? '（诊断）' : ''}`} selected={block.type === b} onPress={() => setPicked(b)} />
+                <Chip key={b} label={`${BLOCKS[b].name}${diagnosis?.limiter === b ? tr('（诊断）') : ''}`} selected={block.type === b} onPress={() => setPicked(b)} />
               ))}
             </View>
             <View style={styles.preview}>
               <Text style={text.body}>{block.reason}</Text>
               <Text style={text.muted}>{BLOCKS[block.type].focus}</Text>
-              {diagnosis && diagnosis.missing.length > 0 && <Text style={text.caption}>诊断还缺：{diagnosis.missing.map((m) => MISSING_TEXT[m]).join('；')}</Text>}
+              {diagnosis && diagnosis.missing.length > 0 && <Text style={text.caption}>{tr('诊断还缺：{p}', { p: diagnosis.missing.map((m) => MISSING_TEXT[m]).join(tr('；')) })}</Text>}
             </View>
           </>
         )}
 
-        <Text style={styles.label}>训练日（选 {needed} 天，最好隔天）</Text>
+        <Text style={styles.label}>{tr('训练日（选 {needed} 天，最好隔天）', { needed })}</Text>
         <View style={styles.days}>
-          {WEEKDAY_NAMES.map((n, i) => (
-            <Chip key={n} label={`周${n}`} selected={weekdays.includes(i + 1)} onPress={() => toggleDay(i + 1)} />
+          {weekdayNames().map((n, i) => (
+            <Chip key={n} label={tr('周{n}', { n })} selected={weekdays.includes(i + 1)} onPress={() => toggleDay(i + 1)} />
           ))}
         </View>
 
-        <Text style={styles.label}>开始</Text>
+        <Text style={styles.label}>{tr('开始')}</Text>
         <View style={styles.days}>
-          <Chip label="今天开始" selected={start === 'today'} onPress={() => setStart('today')} />
-          <Chip label="下周一开始" selected={start === 'nextMonday'} onPress={() => setStart('nextMonday')} />
+          <Chip label={tr('今天开始')} selected={start === 'today'} onPress={() => setStart('today')} />
+          <Chip label={tr('下周一开始')} selected={start === 'nextMonday'} onPress={() => setStart('nextMonday')} />
         </View>
 
         {ready && (
           <View style={styles.preview}>
-            <Text style={styles.label}>第一周</Text>
+            <Text style={styles.label}>{tr('第一周')}</Text>
             {preview.length ? (
               preview.map((p) => (
                 <Text key={p.date} style={text.body}>
@@ -147,13 +146,13 @@ export default function NewPlan() {
                 </Text>
               ))
             ) : (
-              <Text style={text.muted}>这周剩下的日子没有训练日，下周开始。</Text>
+              <Text style={text.muted}>{tr('这周剩下的日子没有训练日，下周开始。')}</Text>
             )}
           </View>
         )}
       </ScrollView>
       <View style={styles.footer}>
-        <Button label={ready ? '开始这个计划' : `还要选 ${needed - weekdays.length} 天`} onPress={create} disabled={!ready} busy={saving} />
+        <Button label={ready ? tr('开始这个计划') : tr('还要选 {needed} 天', { needed: needed - weekdays.length })} onPress={create} disabled={!ready} busy={saving} />
       </View>
     </SafeAreaView>
   );

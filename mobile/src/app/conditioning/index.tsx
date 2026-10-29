@@ -3,12 +3,13 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
 import { CONDITIONING_TESTS } from '@/domain/metrics';
+import { localized, tr } from '@/i18n';
 import { colors, fonts, radius, text } from '@/theme';
 
-const GROUPS = [
+const GROUPS = localized([
   { title: '有氧能力 · VO2max', codes: ['yoyo_ir1', 'cooper'] },
   { title: '反复冲刺能力 · RSA', codes: ['rsa'] },
-];
+], 'title');
 
 const ROUTES = { yoyo_ir1: '/conditioning/yoyo', cooper: '/conditioning/cooper', rsa: '/conditioning/rsa' } as const;
 
@@ -38,9 +39,7 @@ export default function ConditioningTests() {
           ))}
         </View>
       ))}
-      <Text style={styles.note}>
-        两种 VO2max 都是按跑动距离估算的，适合看自己前后的变化。Yo-Yo 的间歇跑动更接近球类比赛，有田径场时 Cooper 更省事。同一种测试隔 4–6 周复测一次，尽量在同一场地、同一时段。
-      </Text>
+      <Text style={styles.note}>{tr('两种 VO2max 都是按跑动距离估算的，适合看自己前后的变化。Yo-Yo 的间歇跑动更接近球类比赛，有田径场时 Cooper 更省事。同一种测试隔 4–6 周复测一次，尽量在同一场地、同一时段。')}</Text>
     </ScrollView>
   );
 }

@@ -12,19 +12,20 @@ import { manualProblem, parseNumber } from '@/domain/entry';
 import { parseHealthImport } from '@/domain/healthImport';
 import { formatValue, getCategory, getMetric } from '@/domain/metrics';
 import { readRecovery, RECOVERY_CODES, STATUS_TEXT, type RecoveryDay, type RecoveryKey } from '@/domain/recovery';
+import { localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
-import { CONSENT_TEXT, CONSENT_TITLE, hasHealthConsent, setHealthConsent } from '@/state/healthConsent';
+import { CONSENT_TITLE, consentText, hasHealthConsent, setHealthConsent } from '@/state/healthConsent';
 import { todayISO } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
 
 const COLOR = getCategory('recovery').color;
 const KEYS = Object.keys(RECOVERY_CODES) as RecoveryKey[];
-const HINT: Record<RecoveryKey, string> = {
+const HINT: Record<RecoveryKey, string> = localized({
   hrv: '早上醒来，「健康」App → 浏览 → 心脏 → 心率变异性',
   rhr: '「健康」App → 心脏 → 静息心率，或手表上的晨起心率',
   sleep: '昨晚实际睡着的时间',
   resp: '「健康」App → 呼吸 → 呼吸速率（可不填）',
-};
+});
 const STATUS_COLOR = { good: colors.good, fair: colors.warn, poor: colors.record, unknown: colors.textMuted };
 
 type Form = Record<RecoveryKey, string>;
@@ -33,9 +34,9 @@ type Sources = Partial<Record<RecoveryKey, RecoverySource>>;
 /** Asks once, before the first import, whether Apple Health data may be pasted in. */
 function askConsent(): Promise<boolean> {
   return new Promise((resolve) =>
-    Alert.alert(CONSENT_TITLE, CONSENT_TEXT, [
-      { text: '不同意', style: 'cancel', onPress: () => resolve(false) },
-      { text: '同意并导入', onPress: () => resolve(true) },
+    Alert.alert(tr(CONSENT_TITLE), consentText(), [
+      { text: tr('不同意'), style: 'cancel', onPress: () => resolve(false) },
+      { text: tr('同意并导入'), onPress: () => resolve(true) },
     ]),
   );
 }
@@ -86,17 +87,17 @@ export default function Recovery() {
     }
     const parsed = parseHealthImport(await Clipboard.getStringAsync());
     if (!parsed || !Object.keys(parsed.values).length) {
-      Alert.alert('剪贴板里没有健康数据', parsed?.problems.join('\n') || '先运行「恢复数据」快捷指令，再回来点导入。', [
-        { text: '好', style: 'cancel' },
-        { text: '查看设置方法', onPress: () => router.push('/recovery/health') },
+      Alert.alert(tr('剪贴板里没有健康数据'), parsed?.problems.join('\n') || tr('先运行「恢复数据」快捷指令，再回来点导入。'), [
+        { text: tr('好'), style: 'cancel' },
+        { text: tr('查看设置方法'), onPress: () => router.push('/recovery/health') },
       ]);
       return;
     }
     const keys = KEYS.filter((k) => parsed.values[k] != null);
     setForm((f) => ({ ...f, ...Object.fromEntries(keys.map((k) => [k, String(parsed.values[k])])) }));
     setSources((s) => ({ ...s, ...Object.fromEntries(keys.map((k) => [k, 'health'])) }));
-    const names = keys.map((k) => getMetric(RECOVERY_CODES[k])!.short ?? getMetric(RECOVERY_CODES[k])!.name).join('、');
-    setImportNote([`已从健康导入${names}，核对后点保存。`, ...parsed.problems].join('\n'));
+    const names = keys.map((k) => getMetric(RECOVERY_CODES[k])!.short ?? getMetric(RECOVERY_CODES[k])!.name).join(tr('、'));
+    setImportNote([tr('已从健康导入{names}，核对后点保存。', { names }), ...parsed.problems].join('\n'));
   }
 
   function edit(k: RecoveryKey, t: string) {
@@ -115,7 +116,7 @@ export default function Recovery() {
       await saveRecoveryDay(db, current.id, { date, ...values }, sources);
       await load(date);
     } catch (e) {
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
     } finally {
       setSaving(false);
     }
@@ -125,7 +126,7 @@ export default function Recovery() {
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
         <Card style={{ gap: 6 }}>
-          <Text style={text.muted}>今日恢复状态</Text>
+          <Text style={text.muted}>{tr('今日恢复状态')}</Text>
           <Text style={[styles.status, { color: STATUS_COLOR[read.status] }]}>{STATUS_TEXT[read.status].label}</Text>
           <Text style={text.body}>{STATUS_TEXT[read.status].advice}</Text>
           {read.reasons.map((r) => (
@@ -142,14 +143,14 @@ export default function Recovery() {
             const base = k === 'hrv' ? read.hrv : k === 'rhr' ? read.rhr : null;
             const cmp =
               v == null
-                ? '今天还没记'
+                ? tr('今天还没记')
                 : !base
                   ? k === 'hrv' || k === 'rhr'
-                    ? '记满 3 天后显示基线'
+                    ? tr('记满 3 天后显示基线')
                     : ''
                   : k === 'hrv'
-                    ? `基线 ${Math.round(base.low)}–${Math.round(base.high)}`
-                    : `比 7 天平均 ${v - base.mean >= 0 ? '+' : '−'}${Math.abs(Math.round(v - base.mean))}`;
+                    ? tr('基线 {low}–{high}', { low: Math.round(base.low), high: Math.round(base.high) })
+                    : tr('比 7 天平均 {p}{v}', { p: v - base.mean >= 0 ? '+' : '−', v: Math.abs(Math.round(v - base.mean)) });
             return (
               <View key={k} style={styles.tile}>
                 <Text style={text.caption}>{def.name}</Text>
@@ -164,16 +165,16 @@ export default function Recovery() {
 
         <Card style={{ gap: 12 }}>
           <View style={styles.formHead}>
-            <Text style={text.section}>记录</Text>
+            <Text style={text.section}>{tr('记录')}</Text>
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              <Chip label="今天" selected={date === today} onPress={() => setDate(today)} color={COLOR} />
-              <Chip label="昨天" selected={date === addDays(today, -1)} onPress={() => setDate(addDays(today, -1))} color={COLOR} />
+              <Chip label={tr('今天')} selected={date === today} onPress={() => setDate(today)} color={COLOR} />
+              <Chip label={tr('昨天')} selected={date === addDays(today, -1)} onPress={() => setDate(addDays(today, -1))} color={COLOR} />
             </View>
           </View>
-          <Text style={text.caption}>{shortDate(date)} · 起床后记一次。可以从苹果健康导入，也可以手填。</Text>
-          <Button label="从苹果健康导入" variant="secondary" onPress={importFromHealth} />
+          <Text style={text.caption}>{tr('{date} · 起床后记一次。可以从苹果健康导入，也可以手填。', { date: shortDate(date) })}</Text>
+          <Button label={tr('从苹果健康导入')} variant="secondary" onPress={importFromHealth} />
           <Pressable accessibilityRole="link" onPress={() => router.push('/recovery/health')}>
-            <Text style={styles.smallLink}>怎么设置快捷指令 · 隐私说明</Text>
+            <Text style={styles.smallLink}>{tr('怎么设置快捷指令 · 隐私说明')}</Text>
           </Pressable>
           {importNote && <Text style={styles.note}>{importNote}</Text>}
           {KEYS.map((k) => {
@@ -189,7 +190,7 @@ export default function Recovery() {
                     placeholder="—"
                     placeholderTextColor={colors.textFaint}
                     style={styles.input}
-                    accessibilityLabel={`${def.name}（${def.unit}）`}
+                    accessibilityLabel={tr('{name}（{unit}）', { name: def.name, unit: def.unit })}
                   />
                   <Text style={styles.unit}>{def.unit}</Text>
                 </View>
@@ -202,11 +203,11 @@ export default function Recovery() {
               {p}
             </Text>
           ))}
-          <Button label="保存" onPress={save} busy={saving} disabled={problems.length > 0} />
+          <Button label={tr('保存')} onPress={save} busy={saving} disabled={problems.length > 0} />
         </Card>
 
         <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/history/[metric]', params: { metric: RECOVERY_CODES.hrv } })}>
-          <Text style={styles.link}>在「历史」查看 HRV 与心率趋势</Text>
+          <Text style={styles.link}>{tr('在「历史」查看 HRV 与心率趋势')}</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>

@@ -18,6 +18,7 @@ import { nextClip, queuedCount } from '@/domain/importQueue';
 import { markedTrial, markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { calibrationProblem } from '@/domain/touch';
+import { tr } from '@/i18n';
 import { probeFrameRate } from '@/media/frameRate';
 import { isWeb } from '@/media/runtime';
 import { useAthlete } from '@/state/athlete';
@@ -107,7 +108,7 @@ export default function Mark() {
     setMarks((m) => profile!.marks.map((_, j) => (j === i ? frame : (m[j] ?? null))));
   }
 
-  if (!profile) return <Empty title="这个项目不能用录像测量" />;
+  if (!profile) return <Empty title={tr('这个项目不能用录像测量')} />;
   const marked = profile.marks.map((_, i) => marks[i] ?? null);
   const result = profile.measure(marked, fps);
   const touched = isTouch && result.ok ? parseNumber(touchedRaw) : null;
@@ -141,7 +142,7 @@ export default function Mark() {
       setMarks([]);
       setSaving(false);
     } catch (e) {
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
       setSaving(false);
     }
   }
@@ -185,7 +186,7 @@ export default function Mark() {
         )}
 
         <View style={styles.fpsRow}>
-          <Text style={styles.label}>拍摄帧率{detectedFps ? `（视频 ${detectedFps} fps）` : ''}</Text>
+          <Text style={styles.label}>{tr('拍摄帧率{p}', { p: detectedFps ? tr('（视频 {detectedFps} fps）', { detectedFps }) : '' })}</Text>
           <View style={{ flexDirection: 'row', gap: 6 }}>
             {fpsChoices.map((f) => (
               <Chip key={f} label={String(f)} selected={f === fps} onPress={() => changeFps(f)} />
@@ -195,13 +196,13 @@ export default function Mark() {
         {looksSlowMo && (
           <Text style={[styles.slowMoHint, fps > fileFps && { color: colors.accent }]}>
             {fps > fileFps
-              ? `按慢动作计算：每帧 = 1/${fps} 秒`
-              : `这个视频是 ${detectedFps} fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。`}
+              ? tr('按慢动作计算：每帧 = 1/{fps} 秒', { fps })
+              : tr('这个视频是 {detectedFps} fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。', { detectedFps })}
           </Text>
         )}
 
         <Slider
-          accessibilityLabel="逐帧拖动"
+          accessibilityLabel={tr('逐帧拖动')}
           minimumValue={0}
           maximumValue={last || 1}
           step={1}
@@ -214,7 +215,7 @@ export default function Mark() {
 
         <View style={styles.stepRow}>
           {[-10, -1, 1, 10].map((d) => (
-            <Pressable key={d} accessibilityRole="button" accessibilityLabel={`${d > 0 ? '前进' : '后退'} ${Math.abs(d)} 帧`} onPress={() => go(frame + d)} style={styles.step}>
+            <Pressable key={d} accessibilityRole="button" accessibilityLabel={tr('{p} {d} 帧', { p: d > 0 ? tr('前进') : tr('后退'), d: Math.abs(d) })} onPress={() => go(frame + d)} style={styles.step}>
               <Text style={styles.stepText}>{d > 0 ? `+${d}` : d}</Text>
             </Pressable>
           ))}
@@ -245,15 +246,15 @@ export default function Mark() {
           <View style={styles.calibrate}>
             <Text style={styles.label}>
               {offset != null
-                ? `已按你的校准加 ${offset.toFixed(1)} cm。这一跳有墙上或篮板上的刻度的话，填上会更准，也会更新校准。`
-                : '录像算的摸高通常比实际摸到的低几厘米。这一跳有墙上或篮板上的刻度的话填上，用来校准以后的录像和原地估算。'}
+                ? tr('已按你的校准加 {offset} cm。这一跳有墙上或篮板上的刻度的话，填上会更准，也会更新校准。', { offset: offset.toFixed(1) })
+                : tr('录像算的摸高通常比实际摸到的低几厘米。这一跳有墙上或篮板上的刻度的话填上，用来校准以后的录像和原地估算。')}
             </Text>
             <TextInput
-              accessibilityLabel="墙上摸到的刻度（cm）"
+              accessibilityLabel={tr('墙上摸到的刻度（cm）')}
               value={touchedRaw}
               onChangeText={setTouchedRaw}
               keyboardType="decimal-pad"
-              placeholder="墙上摸到的刻度（cm，可选）"
+              placeholder={tr('墙上摸到的刻度（cm，可选）')}
               placeholderTextColor={colors.textFaint}
               style={styles.input}
             />
@@ -262,15 +263,15 @@ export default function Mark() {
         )}
       </ScrollView>
       <View style={styles.footer}>
-        {queued > 0 && <Text style={styles.savedNote}>还有 {queued} 段视频，保存后接着看下一段</Text>}
-        {saved > 0 && <Text style={styles.savedNote}>这段视频已存 {saved} 次，可以接着往后标下一跳</Text>}
+        {queued > 0 && <Text style={styles.savedNote}>{tr('还有 {queued} 段视频，保存后接着看下一段', { queued })}</Text>}
+        {saved > 0 && <Text style={styles.savedNote}>{tr('这段视频已存 {saved} 次，可以接着往后标下一跳', { saved })}</Text>}
         {saved > 0 && !result.ok ? (
-          <Button label={nextRoute ? '看下一段' : '看结果'} onPress={goResult} />
+          <Button label={nextRoute ? tr('看下一段') : tr('看结果')} onPress={goResult} />
         ) : (
-          <Button label="保存这一次" onPress={() => save()} disabled={!result.ok || touchProblem != null} busy={saving} />
+          <Button label={tr('保存这一次')} onPress={() => save()} disabled={!result.ok || touchProblem != null} busy={saving} />
         )}
-        {!logger && result.ok && <Button label="保存，接着标这段视频的下一跳" variant="ghost" onPress={() => save(true)} disabled={saving || touchProblem != null} />}
-        {nextRoute && saved === 0 && <Button label="跳过这段，看下一段" variant="ghost" onPress={() => router.replace(nextRoute)} disabled={saving} />}
+        {!logger && result.ok && <Button label={tr('保存，接着标这段视频的下一跳')} variant="ghost" onPress={() => save(true)} disabled={saving || touchProblem != null} />}
+        {nextRoute && saved === 0 && <Button label={tr('跳过这段，看下一段')} variant="ghost" onPress={() => router.replace(nextRoute)} disabled={saving} />}
       </View>
     </SafeAreaView>
   );
@@ -279,12 +280,12 @@ export default function Mark() {
 function MarkButton({ title, hint, value, color, onMark, onJump }: { title: string; hint: string; value: number | null; color: string; onMark: () => void; onJump: () => void }) {
   return (
     <View style={styles.markCard}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`把当前帧标为${title}`} onPress={onMark} style={[styles.markButton, { borderColor: color }]}>
-        <Text style={[styles.markTitle, { color }]}>标为{title}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('把当前帧标为{title}', { title })} onPress={onMark} style={[styles.markButton, { borderColor: color }]}>
+        <Text style={[styles.markTitle, { color }]}>{tr('标为{title}', { title })}</Text>
         <Text style={styles.markHint}>{hint}</Text>
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={`跳到${title}`} onPress={onJump} disabled={value == null}>
-        <Text style={styles.markValue}>{value == null ? '未设' : `#${value}`}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('跳到{title}', { title })} onPress={onJump} disabled={value == null}>
+        <Text style={styles.markValue}>{value == null ? tr('未设') : `#${value}`}</Text>
       </Pressable>
     </View>
   );

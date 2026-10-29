@@ -10,6 +10,7 @@ import { analysisKindFor } from '@/domain/analysisTrials';
 import { firstClip, IMPORT_LIMIT } from '@/domain/importQueue';
 import { returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
+import { tr } from '@/i18n';
 import { isWeb } from '@/media/runtime';
 
 export default function Capture() {
@@ -55,8 +56,8 @@ export default function Capture() {
 
   return (
     <SlowMoImport
-      title={`录制 · ${def?.name ?? metric}`}
-      subtitle={`第 ${attempt} 次`}
+      title={tr('录制 · {name}', { name: def?.name ?? metric })}
+      subtitle={tr('第 {attempt} 次', { attempt })}
       guide={captureGuide(def?.category ?? 'jump', def?.code)}
       onClose={close}
       onImport={importVideo}

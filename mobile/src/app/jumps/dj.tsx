@@ -12,16 +12,17 @@ import { deleteTrial } from '@/db/repo';
 import { BOX_HEIGHTS_CM, dropJump, FAST_CONTACT_S, flightFromHeight, ladder, type DropJumpProblem } from '@/domain/dropJump';
 import { parseNumber } from '@/domain/entry';
 import { DROP_JUMP } from '@/domain/metrics';
+import { localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
 const COLOR = DROP_JUMP.color;
-const PROBLEMS: Partial<Record<DropJumpProblem, string>> = {
+const PROBLEMS: Partial<Record<DropJumpProblem, string>> = localized({
   'contact-short': '触地不到 80 ms，检查一下数字',
   'contact-long': '触地超过 1 秒，这是下蹲而不是反弹',
   'flight-short': '跳高太低，检查一下数字',
   'flight-long': '跳高超出范围，检查一下数字',
-};
+});
 
 /** Drop jumps from rising boxes: RSI at each height, and the height where it peaks. */
 export default function DropJumpLadder() {
@@ -61,7 +62,7 @@ export default function DropJumpLadder() {
       setCm('');
       await reload();
     } catch (e) {
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
     } finally {
       setSaving(false);
     }
@@ -72,18 +73,16 @@ export default function DropJumpLadder() {
   }
 
   function remove(j: DropJumpTrial) {
-    Alert.alert(`删除 ${j.boxCm} cm 的这一跳？`, '', [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: async () => (await deleteTrial(db, j.id), reload()) },
+    Alert.alert(tr('删除 {boxCm} cm 的这一跳？', { boxCm: j.boxCm }), '', [
+      { text: tr('取消'), style: 'cancel' },
+      { text: tr('删除'), style: 'destructive', onPress: async () => (await deleteTrial(db, j.id), reload()) },
     ]);
   }
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        <Text style={text.muted}>
-          从 {BOX_HEIGHTS_CM[0]} cm 开始，每级加 10 cm，每级跳 2 次。从箱子上迈出落下，一着地就尽快弹起，双手叉腰。RSI 开始下降、或触地超过 {FAST_CONTACT_S * 1000} ms 就不用再加高。
-        </Text>
+        <Text style={text.muted}>{tr('从 {BOX_HEIGHTS_CM} cm 开始，每级加 10 cm，每级跳 2 次。从箱子上迈出落下，一着地就尽快弹起，双手叉腰。RSI 开始下降、或触地超过 {FAST_CONTACT_S} ms 就不用再加高。', { BOX_HEIGHTS_CM: BOX_HEIGHTS_CM[0], FAST_CONTACT_S: FAST_CONTACT_S * 1000 })}</Text>
 
         {result.steps.length > 0 && (
           <Card style={{ gap: 4 }}>
@@ -106,7 +105,7 @@ export default function DropJumpLadder() {
             })}
             <View style={styles.jumps}>
               {today.map((j) => (
-                <Pressable key={j.id} accessibilityRole="button" accessibilityLabel={`删除 ${j.boxCm} cm 的 RSI ${j.rsi.toFixed(2)}`} onPress={() => remove(j)} style={styles.jump}>
+                <Pressable key={j.id} accessibilityRole="button" accessibilityLabel={tr('删除 {boxCm} cm 的 RSI {rsi}', { boxCm: j.boxCm, rsi: j.rsi.toFixed(2) })} onPress={() => remove(j)} style={styles.jump}>
                   <Text style={styles.jumpText}>
                     {j.boxCm}: {j.rsi.toFixed(2)}
                   </Text>
@@ -114,51 +113,47 @@ export default function DropJumpLadder() {
                 </Pressable>
               ))}
             </View>
-            <Text style={text.caption}>每级显示最好的一跳：RSI、触地时间、跳高。</Text>
+            <Text style={text.caption}>{tr('每级显示最好的一跳：RSI、触地时间、跳高。')}</Text>
           </Card>
         )}
 
         {result.best && (
           <Card style={{ gap: 8 }}>
-            <Text style={text.section}>最佳跳深高度</Text>
+            <Text style={text.section}>{tr('最佳跳深高度')}</Text>
             <Text style={styles.bestBox}>
               {result.best.boxCm} <Text style={styles.unit}>cm</Text>
             </Text>
-            <Text style={text.body}>
-              这个高度的 RSI 最高（{result.best.rsi.toFixed(2)}）。做跳深训练就用这个高度的箱子。
-            </Text>
-            {result.tryHigher && <Text style={text.muted}>RSI 在你试过的最高一级还在涨，下次可以再加一级看看。</Text>}
+            <Text style={text.body}>{tr('这个高度的 RSI 最高（{rsi}）。做跳深训练就用这个高度的箱子。', { rsi: result.best.rsi.toFixed(2) })}</Text>
+            {result.tryHigher && <Text style={text.muted}>{tr('RSI 在你试过的最高一级还在涨，下次可以再加一级看看。')}</Text>}
             {result.slowContact && (
-              <Text style={[text.muted, { color: colors.warn }]}>
-                最好那一跳触地 {result.best.contactMs} ms，超过 {FAST_CONTACT_S * 1000} ms，用的是慢速反弹。先降低箱高，练「一碰就走」的快速离地。
-              </Text>
+              <Text style={[text.muted, { color: colors.warn }]}>{tr('最好那一跳触地 {contactMs} ms，超过 {FAST_CONTACT_S} ms，用的是慢速反弹。先降低箱高，练「一碰就走」的快速离地。', { contactMs: result.best.contactMs, FAST_CONTACT_S: FAST_CONTACT_S * 1000 })}</Text>
             )}
           </Card>
         )}
 
         <Card style={{ gap: 12 }}>
-          <Text style={text.section}>下一跳</Text>
+          <Text style={text.section}>{tr('下一跳')}</Text>
           <View style={styles.chips}>
             {BOX_HEIGHTS_CM.map((h) => (
               <Chip key={h} label={`${h}`} selected={box === h} onPress={() => setBox(h)} color={COLOR} />
             ))}
           </View>
-          <Button label={`录像测 ${box} cm 这一跳`} onPress={measureVideo} />
+          <Button label={tr('录像测 {box} cm 这一跳', { box })} onPress={measureVideo} />
           <View style={styles.fields}>
-            <Field label="触地（手填）" unit="ms" value={contact} onChange={setContact} />
-            <Field label="跳高（手填）" unit="cm" value={cm} onChange={setCm} />
+            <Field label={tr('触地（手填）')} unit="ms" value={contact} onChange={setContact} />
+            <Field label={tr('跳高（手填）')} unit="cm" value={cm} onChange={setCm} />
           </View>
           {typed && !typed.ok && PROBLEMS[typed.problem] ? <Text style={styles.problem}>{PROBLEMS[typed.problem]}</Text> : null}
-          <Button label="记手填的这一跳" variant="secondary" onPress={logManual} disabled={!typed?.ok} busy={saving} />
-          <Text style={text.caption}>录像要拍到箱子边缘和落地点。用 My Jump 等 App 测过的触地时间和跳高也可以直接手填。</Text>
+          <Button label={tr('记手填的这一跳')} variant="secondary" onPress={logManual} disabled={!typed?.ok} busy={saving} />
+          <Text style={text.caption}>{tr('录像要拍到箱子边缘和落地点。用 My Jump 等 App 测过的触地时间和跳高也可以直接手填。')}</Text>
         </Card>
 
         <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/history/[metric]', params: { metric: DROP_JUMP.code } })}>
-          <Text style={styles.link}>查看 RSI 历史趋势</Text>
+          <Text style={styles.link}>{tr('查看 RSI 历史趋势')}</Text>
         </Pressable>
       </ScrollView>
       <View style={styles.footer}>
-        <Button label="完成" variant={today.length ? 'primary' : 'secondary'} onPress={() => router.back()} />
+        <Button label={tr('完成')} variant={today.length ? 'primary' : 'secondary'} onPress={() => router.back()} />
       </View>
     </SafeAreaView>
   );
@@ -176,7 +171,7 @@ function Field({ label, unit, value, onChange }: { label: string; unit: string; 
           placeholder="—"
           placeholderTextColor={colors.textFaint}
           style={styles.input}
-          accessibilityLabel={`${label}（${unit}）`}
+          accessibilityLabel={tr('{label}（{unit}）', { label, unit })}
         />
         <Text style={styles.unit}>{unit}</Text>
       </View>

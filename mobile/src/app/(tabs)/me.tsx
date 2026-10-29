@@ -15,6 +15,7 @@ import { CLEARANCE_CM, dunkLine, RIM_CM } from '@/domain/dunk';
 import { toISODate } from '@/domain/dates';
 import { pushOff } from '@/domain/fvp';
 import { parseGoalDate } from '@/domain/goal';
+import { tr } from '@/i18n';
 import { deleteSavedVideos, savedVideos } from '@/media/videos';
 import { pickBackupText, shareAthleteFile } from '@/sync/files';
 import { useAthlete } from '@/state/athlete';
@@ -32,7 +33,7 @@ export default function Me() {
     <SafeAreaView style={styles.screen} edges={['top']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <Text style={text.title}>我的</Text>
+          <Text style={text.title}>{tr('我的')}</Text>
 
           <Athletes />
 
@@ -41,7 +42,7 @@ export default function Me() {
 
           <Pressable accessibilityRole="button" onPress={() => router.push('/backup')} style={styles.athlete}>
             <Icon name="cloud" size={18} color={colors.textMuted} />
-            <Text style={styles.athleteName}>数据备份与同步</Text>
+            <Text style={styles.athleteName}>{tr('数据备份与同步')}</Text>
             <Icon name="chevronRight" size={18} color={colors.textMuted} />
           </Pressable>
 
@@ -49,9 +50,7 @@ export default function Me() {
           {Platform.OS !== 'web' && <OldVideos />}
 
           {Platform.OS === 'web' && (
-            <Text style={styles.footnote}>
-              网页版的数据保存在这个浏览器里，换浏览器或清除网站数据就看不到了，登录上面的云端同步就不怕丢。iPhone 上用 Safari 点「分享 → 添加到主屏幕」，之后从主屏幕图标打开，数据保存更稳。
-            </Text>
+            <Text style={styles.footnote}>{tr('网页版的数据保存在这个浏览器里，换浏览器或清除网站数据就看不到了，登录上面的云端同步就不怕丢。iPhone 上用 Safari 点「分享 → 添加到主屏幕」，之后从主屏幕图标打开，数据保存更稳。')}</Text>
           )}
         </ScrollView>
       </KeyboardAvoidingView>
@@ -89,7 +88,7 @@ function Athletes() {
     if (picked == null) return;
     const parsed = parseAthleteFile(picked, LATEST_VERSION);
     if (!parsed.ok) {
-      Alert.alert('没有导入', parsed.problem);
+      Alert.alert(tr('没有导入'), parsed.problem);
       return;
     }
     const file = parsed.file;
@@ -98,7 +97,7 @@ function Athletes() {
       const r = await importAthlete(db, file, { replace });
       setBusy(null);
       if (!r.ok) {
-        Alert.alert('没有导入', r.problem);
+        Alert.alert(tr('没有导入'), r.problem);
         return;
       }
       await reload();
@@ -112,18 +111,18 @@ function Athletes() {
     }
     const here = describeBackup(await exportAthlete(db, same.id));
     Alert.alert(
-      `更新${same.name}的数据？`,
-      `文件里：${describeBackup(file)}\n手机上现在：${here}\n\n${same.name}在这台手机上的记录会换成文件里的，只在这台手机上记的会没有，不能撤销；需要的话先导出一份。其他人的数据不受影响。`,
+      tr('更新{name}的数据？', { name: same.name }),
+      tr('文件里：{file}\n手机上现在：{here}\n\n{name}在这台手机上的记录会换成文件里的，只在这台手机上记的会没有，不能撤销；需要的话先导出一份。其他人的数据不受影响。', { file: describeBackup(file), here, name: same.name }),
       [
-        { text: '取消', style: 'cancel' },
-        { text: '更新', style: 'destructive', onPress: () => void run(same.id) },
+        { text: tr('取消'), style: 'cancel' },
+        { text: tr('更新'), style: 'destructive', onPress: () => void run(same.id) },
       ],
     );
   }
 
   return (
     <View style={{ gap: 10 }}>
-      <Text style={text.section}>测试对象</Text>
+      <Text style={text.section}>{tr('测试对象')}</Text>
       {athletes.map((a) => {
         const selected = a.id === current?.id;
         return (
@@ -136,29 +135,29 @@ function Athletes() {
       })}
       <View style={styles.addRow}>
         <TextInput
-          accessibilityLabel="新运动员的名字"
+          accessibilityLabel={tr('新运动员的名字')}
           value={name}
           onChangeText={setName}
           onSubmitEditing={add}
-          placeholder="添加一个人：输入名字"
+          placeholder={tr('添加一个人：输入名字')}
           placeholderTextColor={colors.textFaint}
           returnKeyType="done"
           style={[styles.input, { flex: 1 }]}
         />
-        <Button label="添加" variant="secondary" onPress={add} disabled={!name.trim()} style={{ paddingHorizontal: 18 }} />
+        <Button label={tr('添加')} variant="secondary" onPress={add} disabled={!name.trim()} style={{ paddingHorizontal: 18 }} />
       </View>
       {athletes.length > 1 && (
         <Pressable accessibilityRole="button" onPress={() => router.push('/team')} style={styles.athlete}>
           <Icon name="trend" size={18} color={colors.textMuted} />
-          <Text style={styles.athleteName}>团队总览</Text>
+          <Text style={styles.athleteName}>{tr('团队总览')}</Text>
           <Icon name="chevronRight" size={18} color={colors.textMuted} />
         </Pressable>
       )}
       <View style={styles.addRow}>
-        {current && <Button label={`导出 ${current.name} 的数据`} variant="ghost" onPress={exportFile} busy={busy === 'export'} style={{ flex: 1 }} />}
-        <Button label="导入运动员" variant="ghost" onPress={importFile} busy={busy === 'import'} style={{ flex: 1 }} />
+        {current && <Button label={tr('导出 {name} 的数据', { name: current.name })} variant="ghost" onPress={exportFile} busy={busy === 'export'} style={{ flex: 1 }} />}
+        <Button label={tr('导入运动员')} variant="ghost" onPress={importFile} busy={busy === 'import'} style={{ flex: 1 }} />
       </View>
-      <Text style={styles.footnote}>一台手机可以记好几个人，测之前先点选是谁。导出的文件只含这个人的数据，可以发给本人导入到他自己的手机；云端同步备份的是这台手机上的所有人。</Text>
+      <Text style={styles.footnote}>{tr('一台手机可以记好几个人，测之前先点选是谁。导出的文件只含这个人的数据，可以发给本人导入到他自己的手机；云端同步备份的是这台手机上的所有人。')}</Text>
     </View>
   );
 }
@@ -204,30 +203,28 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
 
   return (
     <View style={{ gap: 10 }}>
-      <Text style={text.section}>档案</Text>
-      <Field label="名字" value={name} onChangeText={setName} />
-      <Field label="体重（kg）" value={mass} onChangeText={setMass} keyboardType="decimal-pad" />
-      <Field label="站立摸高（cm）" value={reach} onChangeText={setReach} keyboardType="decimal-pad" />
-      <Field label="腿长（cm）· 踮脚站立，大转子到脚尖" value={leg} onChangeText={setLeg} keyboardType="decimal-pad" />
-      <Field label="90° 下蹲时大转子离地（cm）" value={squat} onChangeText={setSquat} keyboardType="decimal-pad" />
+      <Text style={text.section}>{tr('档案')}</Text>
+      <Field label={tr('名字')} value={name} onChangeText={setName} />
+      <Field label={tr('体重（kg）')} value={mass} onChangeText={setMass} keyboardType="decimal-pad" />
+      <Field label={tr('站立摸高（cm）')} value={reach} onChangeText={setReach} keyboardType="decimal-pad" />
+      <Field label={tr('腿长（cm）· 踮脚站立，大转子到脚尖')} value={leg} onChangeText={setLeg} keyboardType="decimal-pad" />
+      <Field label={tr('90° 下蹲时大转子离地（cm）')} value={squat} onChangeText={setSquat} keyboardType="decimal-pad" />
       <Text style={styles.footnote}>
         {hpo != null
-          ? `蹬伸距离 ${Math.round(hpo * 100)} cm，用于力-速度曲线。`
+          ? tr('蹬伸距离 {hpo} cm，用于力-速度曲线。', { hpo: Math.round(hpo * 100) })
           : legCm != null && squatCm != null
-            ? '腿长减下蹲高度应在 15–70 cm 之间，检查一下两个数。'
-            : '后两项用于力-速度曲线：大转子是大腿外侧最突出的骨点，下蹲到膝关节 90°、脚跟着地时量。'}
+            ? tr('腿长减下蹲高度应在 15–70 cm 之间，检查一下两个数。')
+            : tr('后两项用于力-速度曲线：大转子是大腿外侧最突出的骨点，下蹲到膝关节 90°、脚跟着地时量。')}
       </Text>
-      <Text style={[text.section, { paddingTop: 8 }]}>扣篮目标</Text>
-      <Field label="篮筐高度（cm）" value={rim} onChangeText={setRim} keyboardType="decimal-pad" placeholder={String(RIM_CM)} />
-      <Field label="过筐余量（cm）· 手要高出篮筐多少才扣得进" value={clearance} onChangeText={setClearance} keyboardType="decimal-pad" placeholder={String(CLEARANCE_CM)} />
-      <Text style={styles.footnote}>
-        扣篮线 {dunkLine(toNumber(rim), toNumber(clearance))} cm。单手能抓住球约需高出篮筐 15 cm；手小要托球或想双手扣，余量再加大。
-      </Text>
-      <Field label="目标日 · 哪天前要扣进" value={goal} onChangeText={setGoal} placeholder="2026-12-01" autoCapitalize="none" autoCorrect={false} />
+      <Text style={[text.section, { paddingTop: 8 }]}>{tr('扣篮目标')}</Text>
+      <Field label={tr('篮筐高度（cm）')} value={rim} onChangeText={setRim} keyboardType="decimal-pad" placeholder={String(RIM_CM)} />
+      <Field label={tr('过筐余量（cm）· 手要高出篮筐多少才扣得进')} value={clearance} onChangeText={setClearance} keyboardType="decimal-pad" placeholder={String(CLEARANCE_CM)} />
+      <Text style={styles.footnote}>{tr('扣篮线 {rim} cm。单手能抓住球约需高出篮筐 15 cm；手小要托球或想双手扣，余量再加大。', { rim: dunkLine(toNumber(rim), toNumber(clearance)) })}</Text>
+      <Field label={tr('目标日 · 哪天前要扣进')} value={goal} onChangeText={setGoal} placeholder="2026-12-01" autoCapitalize="none" autoCorrect={false} />
       <Text style={[styles.footnote, !goalDate.ok && { color: colors.warn }]}>
-        {goalDate.ok ? '计划按它倒推：不到 6 周不再开力量块，最后 10 天量减半，当天测摸高、试扣。' : goalDate.problem}
+        {goalDate.ok ? tr('计划按它倒推：不到 6 周不再开力量块，最后 10 天量减半，当天测摸高、试扣。') : goalDate.problem}
       </Text>
-      <Button label="保存" onPress={save} busy={saving} disabled={!name.trim() || !goalDate.ok} />
+      <Button label={tr('保存')} onPress={save} busy={saving} disabled={!name.trim() || !goalDate.ok} />
     </View>
   );
 }
@@ -245,10 +242,10 @@ function OldVideos() {
   const mb = Math.round(stored.bytes / 1e6);
 
   function confirmClear() {
-    Alert.alert('清理旧录像？', `删除 App 里保存的 ${stored!.count} 段录像副本，释放约 ${mb} MB。原视频还在相册里，测试成绩不受影响。`, [
-      { text: '取消', style: 'cancel' },
+    Alert.alert(tr('清理旧录像？'), tr('删除 App 里保存的 {count} 段录像副本，释放约 {mb} MB。原视频还在相册里，测试成绩不受影响。', { count: stored!.count, mb }), [
+      { text: tr('取消'), style: 'cancel' },
       {
-        text: '清理',
+        text: tr('清理'),
         style: 'destructive',
         onPress: async () => {
           await deleteSavedVideos();
@@ -261,11 +258,9 @@ function OldVideos() {
 
   return (
     <View style={{ gap: 10 }}>
-      <Text style={text.section}>存储</Text>
-      <Text style={text.muted}>
-        {stored.count} 段旧录像，共 {mb} MB
-      </Text>
-      <Button label="清理旧录像" variant="secondary" onPress={confirmClear} />
+      <Text style={text.section}>{tr('存储')}</Text>
+      <Text style={text.muted}>{tr('{count} 段旧录像，共 {mb} MB', { count: stored.count, mb })}</Text>
+      <Button label={tr('清理旧录像')} variant="secondary" onPress={confirmClear} />
     </View>
   );
 }

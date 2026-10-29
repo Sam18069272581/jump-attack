@@ -13,6 +13,7 @@ import { manualProblem, parseNumber } from '@/domain/entry';
 import { getCategory, getMetric, sessionValue } from '@/domain/metrics';
 import { personalRecord, recordable } from '@/domain/record';
 import { assess, type Assessment } from '@/domain/verdict';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadPoorDaysOf, POOR_DAY_NOTE } from '@/state/training';
 import { colors, fonts, radius } from '@/theme';
@@ -57,9 +58,9 @@ export default function Result() {
   }, [db, session, def, current, version, fromHistory]);
 
   function remove(t: Trial, n: number) {
-    Alert.alert(`删除第 ${n} 次？`, '这次的成绩会从记录中去掉。', [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: async () => (await deleteTrial(db, t.id), setVersion((v) => v + 1)) },
+    Alert.alert(tr('删除第 {n} 次？', { n }), tr('这次的成绩会从记录中去掉。'), [
+      { text: tr('取消'), style: 'cancel' },
+      { text: tr('删除'), style: 'destructive', onPress: async () => (await deleteTrial(db, t.id), setVersion((v) => v + 1)) },
     ]);
   }
 
@@ -78,7 +79,7 @@ export default function Result() {
 
   const best = sessionValue(def, trials.map((t) => t.value));
   const top3 = def.aggregate === 'top3' && trials.length > 1;
-  const label = `${def.name} · ${top3 ? `最好 ${Math.min(3, trials.length)} 跳均值` : '最好成绩'}`;
+  const label = `${def.name} · ${top3 ? tr('最好 {p} 跳均值', { p: Math.min(3, trials.length) }) : tr('最好成绩')}`;
   // The attempts the result is made of: the best one, or the best three.
   const counted = new Set(top3 ? [...trials].sort((a, b) => b.value - a.value).slice(0, 3).map((t) => t.id) : trials.filter((t) => t.value === best).map((t) => t.id));
   const scale = trials.length ? Math.max(...trials.map((t) => t.value)) * 1.1 : 1;
@@ -93,7 +94,7 @@ export default function Result() {
             label={label}
             value={best.toFixed(def.decimals)}
             unit={def.unit}
-            gain={def.lowerIsBetter ? `快了 ${record.by.toFixed(def.decimals)} ${def.unit}` : `+${record.by.toFixed(def.decimals)} ${def.unit}`}
+            gain={def.lowerIsBetter ? tr('快了 {by} {unit}', { by: record.by.toFixed(def.decimals), unit: def.unit }) : `+${record.by.toFixed(def.decimals)} ${def.unit}`}
           />
         ) : (
           <View style={styles.hero}>
@@ -113,69 +114,67 @@ export default function Result() {
               </View>
               <Text style={styles.trialValue}>{t.value.toFixed(def.decimals)}</Text>
               {editable(t) && (
-                <Pressable accessibilityRole="button" accessibilityLabel={`改第 ${i + 1} 次`} onPress={() => setEditing({ id: t.id, n: i + 1, raw: String(t.value) })} style={styles.trash}>
+                <Pressable accessibilityRole="button" accessibilityLabel={tr('改第 {i} 次', { i: i + 1 })} onPress={() => setEditing({ id: t.id, n: i + 1, raw: String(t.value) })} style={styles.trash}>
                   <Icon name="edit" size={18} color={colors.textMuted} />
                 </Pressable>
               )}
-              <Pressable accessibilityRole="button" accessibilityLabel={`删除第 ${i + 1} 次`} onPress={() => remove(t, i + 1)} style={styles.trash}>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr('删除第 {i} 次', { i: i + 1 })} onPress={() => remove(t, i + 1)} style={styles.trash}>
                 <Icon name="trash" size={18} color={colors.textMuted} />
               </Pressable>
             </View>
           ))}
           {flights.length > 0 && def.capture.includes('flight') && (
-            <Text style={styles.trialMeta}>
-              滞空 {flights.map((t) => Math.round(t.flight_ms!)).join(' / ')} ms · {flights[0].fps} fps
-            </Text>
+            <Text style={styles.trialMeta}>{tr('滞空 {p} ms · {fps} fps', { p: flights.map((t) => Math.round(t.flight_ms!)).join(' / '), fps: flights[0].fps })}</Text>
           )}
-          {trials.some((t) => t.detail?.source === 'manual') && <Text style={styles.trialMeta}>含手动输入的成绩</Text>}
+          {trials.some((t) => t.detail?.source === 'manual') && <Text style={styles.trialMeta}>{tr('含手动输入的成绩')}</Text>}
         </View>
 
         {editing && (
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>改第 {editing.n} 次</Text>
+            <Text style={styles.sectionTitle}>{tr('改第 {n} 次', { n: editing.n })}</Text>
             <TextInput
               value={editing.raw}
               onChangeText={(raw) => setEditing({ ...editing, raw })}
               keyboardType="decimal-pad"
               autoFocus
               style={styles.editInput}
-              accessibilityLabel={`第 ${editing.n} 次（${def.unit}）`}
+              accessibilityLabel={tr('第 {n} 次（{unit}）', { n: editing.n, unit: def.unit })}
             />
             {editProblem ? <Text style={styles.problem}>{editProblem}</Text> : null}
             <View style={styles.editButtons}>
-              <Button label="取消" variant="secondary" onPress={() => setEditing(null)} style={{ flex: 1 }} />
-              <Button label="保存修改" onPress={saveEdit} disabled={editValue == null || editProblem != null} style={{ flex: 1 }} />
+              <Button label={tr('取消')} variant="secondary" onPress={() => setEditing(null)} style={{ flex: 1 }} />
+              <Button label={tr('保存修改')} onPress={saveEdit} disabled={editValue == null || editProblem != null} style={{ flex: 1 }} />
             </View>
           </View>
         )}
 
         {assessment && (
           <View style={styles.card}>
-            <Text style={styles.sectionTitle}>评估</Text>
+            <Text style={styles.sectionTitle}>{tr('评估')}</Text>
             <Text style={[styles.assessText, { color: assessment.change.verdict === 'better' ? colors.good : assessment.change.verdict === 'worse' ? colors.warn : colors.textSoft }]}>
               {assessment.change.text}
             </Text>
             {assessment.readiness && (
               <Text style={[styles.assessText, { color: assessment.readiness.readiness === 'fatigued' ? colors.warn : colors.good }]}>{assessment.readiness.text}</Text>
             )}
-            {poorDay && <Text style={[styles.assessText, { color: colors.textMuted }]}>{POOR_DAY_NOTE}</Text>}
+            {poorDay && <Text style={[styles.assessText, { color: colors.textMuted }]}>{tr(POOR_DAY_NOTE)}</Text>}
           </View>
         )}
 
         {!fromHistory && (
           <Pressable accessibilityRole="link" onPress={() => router.push({ pathname: '/history/[metric]', params: { metric } })}>
-            <Text style={styles.link}>查看历史趋势</Text>
+            <Text style={styles.link}>{tr('查看历史趋势')}</Text>
           </Pressable>
         )}
       </ScrollView>
 
       <View style={styles.footer}>
         {fromHistory ? (
-          <Button label="返回" variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} />
+          <Button label={tr('返回')} variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} />
         ) : (
           <>
-            <Button label="再测一次" variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} />
-            <Button label="完成" onPress={() => (from === 'train' ? router.dismissAll() : router.dismissTo((from === 'testday' ? '/test-day' : home) as Href))} style={{ flex: 1 }} />
+            <Button label={tr('再测一次')} variant="secondary" onPress={() => router.back()} style={{ flex: 1 }} />
+            <Button label={tr('完成')} onPress={() => (from === 'train' ? router.dismissAll() : router.dismissTo((from === 'testday' ? '/test-day' : home) as Href))} style={{ flex: 1 }} />
           </>
         )}
       </View>

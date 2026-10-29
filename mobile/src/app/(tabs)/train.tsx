@@ -11,7 +11,7 @@ import { Button, Card } from '@/components/ui';
 import { newSessionId } from '@/db/repo';
 import { listPain } from '@/db/pain';
 import { insertDeload } from '@/db/training';
-import { addDays, daysBetween, shortDate, weekday, WEEKDAY_NAMES, type ISODate } from '@/domain/dates';
+import { addDays, daysBetween, shortDate, weekday, weekdayNames, type ISODate } from '@/domain/dates';
 import { isRetestWeek, nextBlockStart, retestCodes } from '@/domain/blocks';
 import { blockPosition, DELOAD_DAYS, missedThisWeek, nextSession, PHASE_NAMES, planDay, planFinished, planPosition, planWeekOf, planWeeks, weekDays } from '@/domain/plan';
 import { APPROACH_TOUCH } from '@/domain/metrics';
@@ -19,6 +19,7 @@ import { loadNote } from '@/domain/load';
 import { kneeStatus, type PainEntry } from '@/domain/pain';
 import { DELOAD_STREAK } from '@/domain/readiness';
 import { STATUS_TEXT } from '@/domain/recovery';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { acceptBlockSuggestion, declineBlockSuggestion, loadBlockAdvice, type BlockAdvice } from '@/state/blocks';
 import { loadTrainingLoads } from '@/state/load';
@@ -100,7 +101,7 @@ export default function Train() {
                 await beginWorkout(db, data, date, makeUp);
                 router.push({ pathname: '/workout/[date]', params: { date } });
               } catch (e) {
-                Alert.alert('无法开始训练', String(e));
+                Alert.alert(tr('无法开始训练'), String(e));
               } finally {
                 setStarting(false);
               }
@@ -108,12 +109,12 @@ export default function Train() {
           />
         ) : (
           <>
-            <Text style={text.title}>训练</Text>
+            <Text style={text.title}>{tr('训练')}</Text>
             <ReadinessCard readiness={readiness} loads={loads} />
             <Card style={{ gap: 12 }}>
-              <Text style={text.section}>还没有训练计划</Text>
-              <Text style={text.muted}>选一个模板，按你的训练日生成每周的训练。每次练之前测一次 CMJ，状态差时自动减量。</Text>
-              <Button label="选择训练计划" onPress={() => router.push('/plan/new')} />
+              <Text style={text.section}>{tr('还没有训练计划')}</Text>
+              <Text style={text.muted}>{tr('选一个模板，按你的训练日生成每周的训练。每次练之前测一次 CMJ，状态差时自动减量。')}</Text>
+              <Button label={tr('选择训练计划')} onPress={() => router.push('/plan/new')} />
             </Card>
           </>
         )}
@@ -167,14 +168,14 @@ function PlanView({
   const blockSpec = block ? template.blocks?.[block.type].weeks[block.week] : undefined;
   const retest = block && !inDeload && isRetestWeek(template, block);
   const subtitle = finished
-    ? '计划已完成'
+    ? tr('计划已完成')
     : daysBetween(plan.startDate, today) < 0
-      ? `${shortDate(plan.startDate)} 开始`
+      ? tr('{startDate} 开始', { startDate: shortDate(plan.startDate) })
       : inDeload
-        ? '插入的减量周 · 之后的计划顺延一周'
+        ? tr('插入的减量周 · 之后的计划顺延一周')
         : block
           ? blockLabel(block, blockSpec)
-          : `第 ${week + 1}${total ? ` / ${total}` : ''} 周 · ${PHASE_NAMES[phase]}`;
+          : tr('第 {week}{p} 周 · {PHASE_NAMES}', { week: week + 1, p: total ? ` / ${total}` : '', PHASE_NAMES: PHASE_NAMES[phase] });
   // One suggestion per fatigue spell: not while a deload is running or right after one.
   const recentDeload = (plan.deloads ?? []).some((d) => daysBetween(d, today) < DELOAD_DAYS * 2);
   const suggestDeload = readiness.streak >= DELOAD_STREAK && !finished && !recentDeload;
@@ -190,7 +191,7 @@ function PlanView({
 
   return (
     <>
-      <Pressable accessibilityRole="button" accessibilityLabel="查看整个计划" onPress={() => router.push('/plan')} style={styles.header}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('查看整个计划')} onPress={() => router.push('/plan')} style={styles.header}>
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={text.muted}>{subtitle}</Text>
           <Text style={text.heading}>{template.name}</Text>
@@ -221,7 +222,7 @@ function PlanView({
 
       {isToday && (knee?.light === 'yellow' || knee?.light === 'stop') && (
         <Card style={{ gap: 4 }}>
-          <Text style={[text.section, knee.light === 'stop' && { color: colors.warn }]}>{knee.light === 'stop' ? '膝盖：暂停跳跃' : '膝盖：黄灯'}</Text>
+          <Text style={[text.section, knee.light === 'stop' && { color: colors.warn }]}>{knee.light === 'stop' ? tr('膝盖：暂停跳跃') : tr('膝盖：黄灯')}</Text>
           {knee.reasons.map((r) => (
             <Text key={r} style={text.muted}>
               {r}
@@ -232,18 +233,16 @@ function PlanView({
 
       {isToday && suggestDeload && (
         <Card style={styles.deload}>
-          <Text style={[text.section, { color: colors.warn }]}>建议插入一周减量</Text>
-          <Text style={text.muted}>
-            最近 {readiness.streak} 次测量都有疲劳信号。从今天起练 {DELOAD_DAYS} 天减量版（组数约 −40%，RPE −1.5，取消最大强度），之后的计划顺延一周。
-          </Text>
-          <Button label="从今天开始减量周" onPress={onDeload} />
+          <Text style={[text.section, { color: colors.warn }]}>{tr('建议插入一周减量')}</Text>
+          <Text style={text.muted}>{tr('最近 {streak} 次测量都有疲劳信号。从今天起练 {DELOAD_DAYS} 天减量版（组数约 −40%，RPE −1.5，取消最大强度），之后的计划顺延一周。', { streak: readiness.streak, DELOAD_DAYS })}</Text>
+          <Button label={tr('从今天开始减量周')} onPress={onDeload} />
         </Card>
       )}
 
       <Card style={{ gap: 12 }}>
         <View style={styles.dayHead}>
-          <Text style={text.muted}>{isToday ? '今天' : shortDate(selected)}</Text>
-          {workout?.finishedAt ? <Text style={[styles.tag, { color: colors.good }]}>已完成</Text> : workout ? <Text style={[styles.tag, { color: colors.warn }]}>进行中</Text> : null}
+          <Text style={text.muted}>{isToday ? tr('今天') : shortDate(selected)}</Text>
+          {workout?.finishedAt ? <Text style={[styles.tag, { color: colors.good }]}>{tr('已完成')}</Text> : workout ? <Text style={[styles.tag, { color: colors.warn }]}>{tr('进行中')}</Text> : null}
         </View>
         {planned && shown ? (
           <>
@@ -254,18 +253,18 @@ function PlanView({
               <Text style={text.muted}>
                 {planned.session.focus} ·{' '}
                 {planned.goal === 'test'
-                  ? '目标日'
+                  ? tr('目标日')
                   : planned.goal === 'taper'
-                    ? '赛前减量：量减半，强度不变'
+                    ? tr('赛前减量：量减半，强度不变')
                     : planned.block && !planned.inserted && template.blocks?.[planned.block.type].weeks[planned.block.week].retest
-                      ? '减量复测周'
+                      ? tr('减量复测周')
                       : PHASE_NAMES[planned.phase]}
-                {planned.inserted && !planned.goal ? '（疲劳后插入）' : ''}
+                {planned.inserted && !planned.goal ? tr('（疲劳后插入）') : ''}
               </Text>
             </View>
             <AdjustmentNote
               adjustments={shown.adjustments}
-              reason={workout ? workout.reason : readiness.signals.join('；') || null}
+              reason={workout ? workout.reason : readiness.signals.join(tr('；')) || null}
               dropPct={workout ? workout.cmjDrop : readiness.dropPct}
               kneeReasons={knee?.reasons}
             />
@@ -274,27 +273,25 @@ function PlanView({
               <TestDayActions today={isToday} />
             ) : daysBetween(selected, today) >= 0 ? (
               <Button
-                label={workout?.finishedAt ? '查看训练记录' : workout ? '继续训练' : isToday ? '开始训练' : '补记这次训练'}
+                label={workout?.finishedAt ? tr('查看训练记录') : workout ? tr('继续训练') : isToday ? tr('开始训练') : tr('补记这次训练')}
                 variant={workout?.finishedAt ? 'secondary' : 'primary'}
                 busy={starting}
                 onPress={() => onStart(selected)}
               />
             ) : (
-              <Text style={text.caption}>到那天再开始</Text>
+              <Text style={text.caption}>{tr('到那天再开始')}</Text>
             )}
           </>
         ) : (
           <View style={{ gap: 4 }}>
-            <Text style={text.heading}>{finished && daysBetween(selected, today) <= 0 ? '计划已完成' : '休息日'}</Text>
+            <Text style={text.heading}>{finished && daysBetween(selected, today) <= 0 ? tr('计划已完成') : tr('休息日')}</Text>
             <Text style={text.muted}>
-              {next ? `下次：${shortDate(next.date)} · ${next.session.code} ${next.session.name}` : finished ? '测一次 CMJ 看看提升，再选下一个计划。' : ''}
+              {next ? tr('下次：{date} · {code} {name}', { date: shortDate(next.date), code: next.session.code, name: next.session.name }) : finished ? tr('测一次 CMJ 看看提升，再选下一个计划。') : ''}
             </Text>
             {missed.map((m) => (
               <View key={m.date} style={styles.makeUp}>
-                <Text style={text.body}>
-                  周{WEEKDAY_NAMES[weekday(m.date) - 1]}的 {m.session.code} · {m.session.name} 还没练
-                </Text>
-                <Button label="今天补练" variant="secondary" busy={starting} onPress={() => onStart(m.date, true)} />
+                <Text style={text.body}>{tr('周{day}的 {code} · {name} 还没练', { day: weekdayNames()[weekday(m.date) - 1], code: m.session.code, name: m.session.name })}</Text>
+                <Button label={tr('今天补练')} variant="secondary" busy={starting} onPress={() => onStart(m.date, true)} />
               </View>
             ))}
           </View>
@@ -306,11 +303,11 @@ function PlanView({
 
 /** The goal day is the real test: the touch test, then attempts at the rim. Nothing to tick off as a workout. */
 function TestDayActions({ today }: { today: boolean }) {
-  if (!today) return <Text style={text.caption}>到那天：热身，测助跑摸高，再去篮下试扣。</Text>;
+  if (!today) return <Text style={text.caption}>{tr('到那天：热身，测助跑摸高，再去篮下试扣。')}</Text>;
   return (
     <View style={{ gap: 10 }}>
-      <Button label="测助跑摸高" onPress={() => router.push({ pathname: '/measure/capture', params: { metric: APPROACH_TOUCH.code, session: newSessionId(), from: 'train' } })} />
-      <Button label="记扣篮尝试" variant="secondary" onPress={() => router.push('/attempts')} />
+      <Button label={tr('测助跑摸高')} onPress={() => router.push({ pathname: '/measure/capture', params: { metric: APPROACH_TOUCH.code, session: newSessionId(), from: 'train' } })} />
+      <Button label={tr('记扣篮尝试')} variant="secondary" onPress={() => router.push('/attempts')} />
     </View>
   );
 }
@@ -324,31 +321,31 @@ function ReadinessCard({ readiness, loads }: { readiness: DayReadiness; loads: L
         <View style={{ flex: 1, gap: 4 }}>
           {readiness.readiness === 'fatigued' ? (
             <>
-              <Text style={[styles.readinessLabel, { color: colors.warn }]}>疲劳信号</Text>
-              <Text style={text.muted}>{readiness.signals.join('；')}，今天已自动减量。</Text>
+              <Text style={[styles.readinessLabel, { color: colors.warn }]}>{tr('疲劳信号')}</Text>
+              <Text style={text.muted}>{tr('{signals}，今天已自动减量。', { signals: readiness.signals.join(tr('；')) })}</Text>
             </>
           ) : (
             <>
-              <Text style={text.section}>今日准备度</Text>
-              <Text style={text.muted}>练之前测一次 CMJ，状态差的话今天的训练会自动减量。</Text>
+              <Text style={text.section}>{tr('今日准备度')}</Text>
+              <Text style={text.muted}>{tr('练之前测一次 CMJ，状态差的话今天的训练会自动减量。')}</Text>
             </>
           )}
           <RecoveryLine readiness={readiness} />
           <LoadLines loads={loads} />
         </View>
-        <Button label="测 CMJ" onPress={testCmj} style={{ paddingHorizontal: 18 }} />
+        <Button label={tr('测 CMJ')} onPress={testCmj} style={{ paddingHorizontal: 18 }} />
       </Card>
     );
   }
 
-  const label = { ready: '状态正常', fatigued: '疲劳信号', unknown: '基线不足' }[readiness.readiness];
+  const label = { ready: tr('状态正常'), fatigued: tr('疲劳信号'), unknown: tr('基线不足') }[readiness.readiness];
   const color = { ready: colors.good, fatigued: colors.warn, unknown: colors.textMuted }[readiness.readiness];
   const detail =
     readiness.readiness === 'fatigued'
-      ? `${readiness.signals.join('；')}，今天已自动减量`
+      ? tr('{signals}，今天已自动减量', { signals: readiness.signals.join(tr('；')) })
       : readiness.readiness === 'unknown'
-        ? '至少要有 3 天的 CMJ 记录才能判断，先照计划练。'
-        : `CMJ 比近期均值${readiness.dropPct > 0 ? '低' : '高'} ${Math.abs(readiness.dropPct * 100).toFixed(1)}%`;
+        ? tr('至少要有 3 天的 CMJ 记录才能判断，先照计划练。')
+        : tr('CMJ 比近期均值{p} {dropPct}%', { p: readiness.dropPct > 0 ? tr('低') : tr('高'), dropPct: Math.abs(readiness.dropPct * 100).toFixed(1) });
 
   return (
     <Card style={styles.readiness}>
@@ -358,12 +355,12 @@ function ReadinessCard({ readiness, loads }: { readiness: DayReadiness; loads: L
         <RecoveryLine readiness={readiness} />
         <LoadLines loads={loads} />
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel="再测一次 CMJ" onPress={testCmj} style={{ alignItems: 'flex-end' }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('再测一次 CMJ')} onPress={testCmj} style={{ alignItems: 'flex-end' }}>
         <Text style={styles.cmj}>
           {readiness.today.toFixed(1)}
           <Text style={styles.cmjUnit}> cm</Text>
         </Text>
-        <Text style={text.caption}>今日 CMJ 均值</Text>
+        <Text style={text.caption}>{tr('今日 CMJ 均值')}</Text>
       </Pressable>
     </Card>
   );
@@ -384,7 +381,7 @@ function RecoveryLine({ readiness }: { readiness: DayReadiness }) {
   return (
     <Pressable accessibilityRole="link" onPress={() => router.push('/recovery')}>
       <Text style={[text.caption, r.status === 'poor' && { color: colors.warn }]}>
-        {r.status === 'unknown' ? '记录 HRV 和静息心率，判断会更准 ›' : `恢复：${STATUS_TEXT[r.status].label} ›`}
+        {r.status === 'unknown' ? tr('记录 HRV 和静息心率，判断会更准 ›') : tr('恢复：{label} ›', { label: STATUS_TEXT[r.status].label })}
       </Text>
     </Pressable>
   );

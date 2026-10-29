@@ -9,6 +9,7 @@ import { Icon } from '@/components/Icon';
 import { Button, Card, Empty } from '@/components/ui';
 import { demoClipProblem, demoFor } from '@/domain/demos';
 import { exerciseIn, TEMPLATES } from '@/domain/templates';
+import { tr } from '@/i18n';
 import { deleteDemoClip, demoClip, saveDemoClip } from '@/media/demos';
 import { colors, radius, text } from '@/theme';
 
@@ -34,7 +35,7 @@ export default function ExerciseDemo() {
     setClip(null);
   }
 
-  if (!demo) return <Empty title="这个动作还没有示范" />;
+  if (!demo) return <Empty title={tr('这个动作还没有示范')} />;
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -43,14 +44,14 @@ export default function ExerciseDemo() {
         <OwnClip uri={clip} />
       ) : (
         <View style={styles.poses}>
-          <Pose label="起始" pose={demo.poses[0]} />
+          <Pose label={tr('起始')} pose={demo.poses[0]} />
           <Icon name="chevronRight" size={20} color={colors.textMuted} />
-          <Pose label="关键动作" pose={demo.poses[1]} />
+          <Pose label={tr('关键动作')} pose={demo.poses[1]} />
         </View>
       )}
 
       <Card style={styles.card}>
-        <Text style={text.section}>怎么做</Text>
+        <Text style={text.section}>{tr('怎么做')}</Text>
         {demo.steps.map((s, i) => (
           <Text key={s} style={styles.line}>
             {`${i + 1}. ${s}`}
@@ -58,7 +59,7 @@ export default function ExerciseDemo() {
         ))}
       </Card>
       <Card style={styles.card}>
-        <Text style={text.section}>常见错误</Text>
+        <Text style={text.section}>{tr('常见错误')}</Text>
         {demo.mistakes.map((m) => (
           <Text key={m} style={styles.line}>
             {`· ${m}`}
@@ -69,14 +70,14 @@ export default function ExerciseDemo() {
       <View style={styles.own}>
         {clip && (
           <View style={styles.poses}>
-            <Pose label="起始" pose={demo.poses[0]} small />
-            <Pose label="关键动作" pose={demo.poses[1]} small />
+            <Pose label={tr('起始')} pose={demo.poses[0]} small />
+            <Pose label={tr('关键动作')} pose={demo.poses[1]} small />
           </View>
         )}
-        <Button label={clip ? '换一段自己的视频' : '用自己拍的视频'} variant="secondary" onPress={pickClip} />
-        {clip && <Button label="删掉自己的视频" variant="ghost" onPress={removeClip} />}
+        <Button label={clip ? tr('换一段自己的视频') : tr('用自己拍的视频')} variant="secondary" onPress={pickClip} />
+        {clip && <Button label={tr('删掉自己的视频')} variant="ghost" onPress={removeClip} />}
         {problem && <Text style={styles.problem}>{problem}</Text>}
-        <Text style={text.caption}>自己拍的示范只存在这台手机上，不进备份；30 秒以内、几次标准动作就够。</Text>
+        <Text style={text.caption}>{tr('自己拍的示范只存在这台手机上，不进备份；30 秒以内、几次标准动作就够。')}</Text>
       </View>
     </ScrollView>
   );
