@@ -823,18 +823,22 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const offPx = 0.1 / roughScale;
   const floor0 = fitFloor(traces, nearPx, offPx);
   if (!floor0) return { ok: false, problem: 'no-plant' };
-  // How far the frame is turned to level the floor (rad); none with markers, whose line is the floor.
-  const releveled = !markers && abs(floor0.c1) > 1e-3 ? Math.atan(abs(floor0.c1)) : 0;
-  if (releveled) {
-    // A tilted phone: turn the frame so the floor is level, and read everything again.
-    const along = unit({ x: frame.xAxis.x + floor0.c1 * frame.up.x, y: frame.xAxis.y + floor0.c1 * frame.up.y });
+  // A tilted phone: turn the frame so the floor is level, and read everything again; none with markers, whose line is
+  // the floor. Again while the floor still slopes: the fit keeps the lower part of a sloping floor's points, which
+  // trims one end of the run-up more than the other, so one turn falls short. `releveled` is the whole turn (rad).
+  let floor = floor0;
+  let turned = 0;
+  for (let it = 0; it < 4 && !markers && abs(floor.c1) > 1e-3; it++) {
+    turned += Math.atan(floor.c1);
+    const along = unit({ x: frame.xAxis.x + floor.c1 * frame.up.x, y: frame.xAxis.y + floor.c1 * frame.up.y });
     up = { x: along.y, y: -along.x };
     if (dot(up, frame.up) < 0) up = { x: -up.x, y: -up.y };
     frame = { origin: frame.origin, xAxis: along, up };
     s = seriesOf(athlete, frames, frame, maxGap);
     traces = footTraces(s, fps, roughScale);
+    floor = fitFloor(traces, nearPx, offPx) ?? floor;
   }
-  const floor = fitFloor(traces, nearPx, offPx) ?? floor0;
+  const releveled = abs(turned);
   const contacts = contactsOf(traces, s, floor, fps, roughScale);
   const flight = flightOf(contacts, s, fps);
   if (!flight) return { ok: false, problem: 'no-jump' };

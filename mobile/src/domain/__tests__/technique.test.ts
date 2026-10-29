@@ -399,6 +399,15 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       expect(misses(scene, result).filter((m) => /^(vz|vx|angle):/.test(m))).toEqual([]);
     }
   });
+
+  it('no lines, the phone rolled 1–3° either way: the floor is levelled as on a level phone', () => {
+    // The floor fit keeps the lower part of a sloping floor's points, which trims one end of the run-up more than the
+    // other: one turn falls short of level, and what is left of it leaks the run-up's speed into the take-off's.
+    for (const seed of [1, 2, 3]) {
+      const level = resultOf(analyse({ seed, markers: null }).r).metrics.vz!.value;
+      for (const rollDeg of [-3, -1, 2]) expect([seed, rollDeg, Math.abs(resultOf(analyse({ seed, markers: null, rollDeg }).r).metrics.vz!.value - level) < 0.005]).toEqual([seed, rollDeg, true]);
+    }
+  });
 });
 
 describe('pose-model mistakes it copes with', () => {
