@@ -19,6 +19,8 @@ import { mean, sd } from './assess';
 import { MAX_CONTACT_S } from './dropJump';
 import { G, heightFromFlightTime } from './jump';
 
+import { localized } from '@/i18n';
+
 export type AnalysisKind = 'jump' | 'drop' | 'repeat';
 
 /** Frames of one jump, in the clip's file frames. `flags` are what the detector saw (see `JumpFlag`). */
@@ -49,12 +51,12 @@ export const OUTLIER_SHARE = 0.25;
 /** One frame worth more than this much jump height (cm) is flagged. */
 export const MAX_FRAME_ERROR_CM = 1;
 
-export const FLAG_TEXT: Record<JumpFlag, { what: string; advice: string }> = {
+export const FLAG_TEXT: Record<JumpFlag, { what: string; advice: string }> = localized({
   edge: { what: '脚在画面边上，可能出画了', advice: '让人站在画面中间，起跳和落地都别出画' },
   outlier: { what: '和这组其他跳差得太多，没算进均值', advice: '逐帧核对一下；落地前别收腿，脚尖先着地、膝盖伸直' },
   'slow-contact': { what: '触地超过 250 ms，不是快速反弹', advice: '触地要短：脚一碰地就弹起，别蹲下去' },
   'low-fps': { what: '帧率低，一帧就差 1 cm 以上', advice: '用慢动作（240 fps）拍' },
-};
+});
 
 export type JumpResult = {
   index: number;

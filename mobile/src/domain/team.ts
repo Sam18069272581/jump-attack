@@ -1,5 +1,7 @@
 import type { BlockType, DunkDiagnosis, Missing } from './dunk';
 
+import { localized, tr } from '@/i18n';
+
 /**
  * Several athletes on one phone: a coach's board of how far each is from their own dunk line and what holds them back,
  * and the order they take turns in on a test day.
@@ -26,28 +28,28 @@ export type TeamRow = {
   lastAt: string | null;
 };
 
-const LIMITER: Record<BlockType, string> = { strength: '力量', reactive: '反应力量', transfer: '转化' };
+const LIMITER: Record<BlockType, string> = localized({ strength: '力量', reactive: '反应力量', transfer: '转化' });
 
-const MISSING: Record<Missing, string> = { body_mass: '体重', standing_reach: '站立摸高', squat: '深蹲 1RM', drop_jump: '跳深', approach: '助跑摸高', cmj: 'CMJ' };
+const MISSING: Record<Missing, string> = localized({ body_mass: '体重', standing_reach: '站立摸高', squat: '深蹲 1RM', drop_jump: '跳深', approach: '助跑摸高', cmj: 'CMJ' });
 
 const round1 = (x: number) => Math.round(x * 10) / 10;
 
 /** Says what the dunk page says (domain/dunkSummary.ts gapHeading): over the line only once the touch's error clears it. */
 function gapText(d: DunkDiagnosis): string {
   const gap = d.gapCm;
-  if (gap == null) return '还没测摸高';
+  if (gap == null) return tr('还没测摸高');
   let text: string;
-  if (d.verdict === 'over') text = gap < 0 ? `过线 ${(-gap).toFixed(1)} cm` : '正好摸到线';
-  else if (d.verdict === 'close') text = gap <= 0 ? '摸到线 · 在误差内' : `差 ${gap.toFixed(1)} cm · 在误差内`;
+  if (d.verdict === 'over') text = gap < 0 ? tr('过线 {gap} cm', { gap: (-gap).toFixed(1) }) : tr('正好摸到线');
+  else if (d.verdict === 'close') text = gap <= 0 ? tr('摸到线 · 在误差内') : tr('差 {gap} cm · 在误差内', { gap: gap.toFixed(1) });
   // A touch a hair under the line rounds to a 0.0 cm gap.
-  else text = gap > 0 ? `差 ${gap.toFixed(1)} cm` : '差不到 0.1 cm';
-  return d.touch.source === 'standing' ? `${text} · 原地估算` : text;
+  else text = gap > 0 ? tr('差 {gap} cm', { gap: gap.toFixed(1) }) : tr('差不到 0.1 cm');
+  return d.touch.source === 'standing' ? tr('{text} · 原地估算', { text }) : text;
 }
 
 function weaknessText(d: DunkDiagnosis): string {
-  const parts = [...(d.limiter ? [LIMITER[d.limiter] + (d.confirmed ? '' : '（待复测确认）')] : []), ...(d.technique ? ['助跑技术'] : [])];
-  if (parts.length) return parts.join('、');
-  return d.missing.length ? `先测：${d.missing.map((m) => MISSING[m]).join('、')}` : '—';
+  const parts = [...(d.limiter ? [LIMITER[d.limiter] + (d.confirmed ? '' : tr('（待复测确认）'))] : []), ...(d.technique ? [tr('助跑技术')] : [])];
+  if (parts.length) return parts.join(tr('、'));
+  return d.missing.length ? tr('先测：{p}', { p: d.missing.map((m) => MISSING[m]).join(tr('、')) }) : '—';
 }
 
 /**

@@ -1,15 +1,17 @@
+import { localized, tr } from '@/i18n';
+
 /** Velocity-based training: zones, velocity loss, and the load-velocity profile that estimates 1RM. */
 
 export type Zone = { key: string; name: string; min: number; max: number };
 
 /** Mean concentric velocity zones (m/s), as in the design's VBT screen. */
-export const ZONES: Zone[] = [
+export const ZONES: Zone[] = localized([
   { key: 'absolute', name: '绝对力量', min: 0, max: 0.5 },
   { key: 'accel', name: '加速力量', min: 0.5, max: 0.75 },
   { key: 'strength-speed', name: '力量-速度', min: 0.75, max: 1.0 },
   { key: 'speed-strength', name: '速度-力量', min: 1.0, max: 1.3 },
   { key: 'speed', name: '速度', min: 1.3, max: Infinity },
-];
+], 'name');
 
 export function zoneOf(v: number): Zone {
   return ZONES.find((z) => v < z.max) ?? ZONES[ZONES.length - 1];
@@ -79,9 +81,15 @@ export const ONE_RM_RULES = { minLoads: 3, heaviestV: 0.75, minR2: 0.9 };
 export type OneRmProblem = 'few-loads' | 'too-light' | 'scatter';
 
 export const ONE_RM_PROBLEMS: Record<OneRmProblem, string> = {
-  'few-loads': `至少要 ${ONE_RM_RULES.minLoads} 个不同重量才估 1RM`,
-  'too-light': `最重一组要慢到 ${ONE_RM_RULES.heaviestV} m/s 以下才估 1RM，太轻的重量往外推误差很大`,
-  scatter: '这几组的速度不在一条线上，估不准 1RM：检查是不是有一组测错了',
+  get 'few-loads'() {
+    return tr('至少要 {minLoads} 个不同重量才估 1RM', { minLoads: ONE_RM_RULES.minLoads });
+  },
+  get 'too-light'() {
+    return tr('最重一组要慢到 {heaviestV} m/s 以下才估 1RM，太轻的重量往外推误差很大', { heaviestV: ONE_RM_RULES.heaviestV });
+  },
+  get scatter() {
+    return tr('这几组的速度不在一条线上，估不准 1RM：检查是不是有一组测错了');
+  },
 };
 
 /** The fastest set at each load: a slower one at the same load is fatigue, not the load. */

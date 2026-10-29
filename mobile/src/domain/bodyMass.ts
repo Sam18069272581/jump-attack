@@ -1,6 +1,8 @@
 import { daysBetween, type ISODate } from './dates';
 import { maxJumpHeight } from './fvp';
 
+import { tr } from '@/i18n';
+
 /**
  * Body mass in centimetres: how much higher the athlete would jump a few kilos lighter. The athlete's own
  * force-velocity line (fvp.ts) is re-run at the lighter mass, assuming the loss is fat: absolute force (F0 × mass)
@@ -22,7 +24,7 @@ export function massGainCm(p: MassProfile, lossKg: number): number | null {
 const cm = (x: number) => x.toFixed(1);
 
 export function massGainText(oneKg: number, threeKg: number): string {
-  return `体重 −1 kg ≈ 摸高 +${cm(oneKg)} cm，−3 kg ≈ +${cm(threeKg)} cm（按你的力-速度曲线估算，假设减的是脂肪、力量和速度不变）`;
+  return tr('体重 −1 kg ≈ 摸高 +{oneKg} cm，−3 kg ≈ +{threeKg} cm（按你的力-速度曲线估算，假设减的是脂肪、力量和速度不变）', { oneKg: cm(oneKg), threeKg: cm(threeKg) });
 }
 
 /** A weigh-in this many days from a test still stands for the test day. */

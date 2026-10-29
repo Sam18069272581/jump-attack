@@ -1,5 +1,7 @@
 import { mean } from './assess';
 
+import { tr } from '@/i18n';
+
 // Field tests for aerobic capacity (VO2max) and repeated-sprint ability that need only cones, a tape and the phone.
 
 /** One running bout of the Yo-Yo Intermittent Recovery Test level 1: 20 m out and 20 m back. */
@@ -116,17 +118,17 @@ export type RsaRating = 'good' | 'typical' | 'poor';
 
 /** Rough bands from team-sport studies, where most players fall between 3 % and 6 %. */
 export function rsaRating(sdec: number): { rating: RsaRating; text: string } {
-  if (sdec <= 3) return { rating: 'good', text: '后程掉速小，反复冲刺能力好' };
-  if (sdec <= 6) return { rating: 'typical', text: '掉速在团队项目运动员的常见范围' };
-  return { rating: 'poor', text: '后程掉速明显，建议加强反复冲刺和有氧基础' };
+  if (sdec <= 3) return { rating: 'good', text: tr('后程掉速小，反复冲刺能力好') };
+  if (sdec <= 6) return { rating: 'typical', text: tr('掉速在团队项目运动员的常见范围') };
+  return { rating: 'poor', text: tr('后程掉速明显，建议加强反复冲刺和有氧基础') };
 }
 
 /** Rough VO2max bands for trained young men (ml/kg/min), only to give the number some context. */
 export function vo2maxBand(vo2: number): string {
-  if (vo2 >= 60) return '很高，接近耐力型运动员';
-  if (vo2 >= 52) return '良好，球类项目运动员的常见水平';
-  if (vo2 >= 45) return '一般，有提升空间';
-  return '偏低，建议补有氧基础';
+  if (vo2 >= 60) return tr('很高，接近耐力型运动员');
+  if (vo2 >= 52) return tr('良好，球类项目运动员的常见水平');
+  if (vo2 >= 45) return tr('一般，有提升空间');
+  return tr('偏低，建议补有氧基础');
 }
 
 /** Formats seconds as m:ss. */

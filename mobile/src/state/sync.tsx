@@ -5,6 +5,7 @@ import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, u
 import { Alert, AppState, Platform } from 'react-native';
 
 import { toISODate } from '@/domain/dates';
+import { tr } from '@/i18n';
 import { authProblem, getSupabase } from '@/sync/client';
 import { supabaseBackups } from '@/sync/cloud';
 import { syncWithCloud, type SyncChoice, type SyncOutcome } from '@/sync/sync';
@@ -32,7 +33,7 @@ type SyncContextValue = {
 
 const SyncContext = createContext<SyncContextValue | null>(null);
 
-const DEVICE = Platform.OS === 'web' ? '网页' : Platform.OS === 'ios' ? 'iPhone' : 'Android';
+const device = () => (Platform.OS === 'web' ? tr('网页') : Platform.OS === 'ios' ? 'iPhone' : 'Android');
 
 function clock(iso: string): string {
   const d = new Date(iso);
@@ -68,17 +69,17 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       if (!supabase || running.current) return;
       running.current = true;
       setBusy(true);
-      const outcome = await syncWithCloud(db, supabaseBackups(supabase, userId), Storage, userId, DEVICE, choice);
+      const outcome = await syncWithCloud(db, supabaseBackups(supabase, userId), Storage, userId, device(), choice);
       running.current = false;
       setBusy(false);
       const now = clock(new Date().toISOString());
       if (outcome.kind === 'conflict') {
-        setStatus('手机和云端的数据不一样，选一份保留');
+        setStatus(tr('手机和云端的数据不一样，选一份保留'));
         setConflict(outcome);
         return;
       }
       setConflict(null);
-      setStatus(outcome.kind === 'failed' ? outcome.problem : `${STATUS[outcome.kind]} · ${now}`);
+      setStatus(outcome.kind === 'failed' ? outcome.problem : `${tr(STATUS[outcome.kind])} · ${now}`);
       if (outcome.kind === 'downloaded') await dataReplaced();
     },
     [db, supabase, dataReplaced],
@@ -127,11 +128,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<SyncContextValue>(() => {
     const auth = async (fn: 'signInWithPassword' | 'signUp', email: string, password: string) => {
-      if (!supabase) return '云端还没设置好。';
+      if (!supabase) return tr('云端还没设置好。');
       try {
         const { data, error } = await supabase.auth[fn]({ email: email.trim(), password });
         if (error) return authProblem(error.message);
-        if (!data.session) return '注册好了，去邮箱点一下确认链接，再回来登录。';
+        if (!data.session) return tr('注册好了，去邮箱点一下确认链接，再回来登录。');
         return null;
       } catch (e) {
         return authProblem(e instanceof Error ? e.message : String(e));
@@ -165,12 +166,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 
 export function askWhichToKeep(c: Conflict, choose: (choice: SyncChoice) => void) {
   Alert.alert(
-    '手机和云端的数据不一样',
-    `手机上：${c.phone}\n云端（${c.cloudAt ? clock(c.cloudAt) : '较早'}）：${c.cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。`,
+    tr('手机和云端的数据不一样'),
+    tr('手机上：{phone}\n云端（{p}）：{cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。', { phone: c.phone, p: c.cloudAt ? clock(c.cloudAt) : tr('较早'), cloud: c.cloud }),
     [
-      { text: '以后再说', style: 'cancel' },
-      { text: '用手机上的', onPress: () => choose('phone') },
-      { text: '用云端的', onPress: () => choose('cloud') },
+      { text: tr('以后再说'), style: 'cancel' },
+      { text: tr('用手机上的'), onPress: () => choose('phone') },
+      { text: tr('用云端的'), onPress: () => choose('cloud') },
     ],
   );
 }

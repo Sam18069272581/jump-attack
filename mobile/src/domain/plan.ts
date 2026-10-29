@@ -4,20 +4,22 @@ import type { BlockType } from './dunk';
 import { DUNK_TEST_SESSION, goalDay, TAPER } from './goal';
 import { roundLoad } from './vbt';
 
+import { localized, tr } from '@/i18n';
+
 /**
  * What an exercise trains. Block plans tag every exercise strength, reactive, transfer or technique, so a block
  * can say how much of each it wants; `plyo` and `accessory` are the older tags and stay valid.
  */
 export type ItemKind = 'plyo' | 'strength' | 'accessory' | 'reactive' | 'transfer' | 'technique';
 
-export const KIND_NAMES: Record<ItemKind, string> = {
+export const KIND_NAMES: Record<ItemKind, string> = localized({
   plyo: '跳跃',
   strength: '力量',
   accessory: '辅助',
   reactive: '反应',
   transfer: '转化',
   technique: '技术',
-};
+});
 
 /** One exercise in a session, written as a rule (sets × reps at an effort) rather than a fixed weight. */
 export type Prescription = {
@@ -43,7 +45,7 @@ export type SessionTemplate = { code: string; name: string; focus: string; items
 
 export type Phase = 'accumulate' | 'intensify' | 'deload';
 
-export const PHASE_NAMES: Record<Phase, string> = { accumulate: '积累期', intensify: '强化期', deload: '减量期' };
+export const PHASE_NAMES: Record<Phase, string> = localized({ accumulate: '积累期', intensify: '强化期', deload: '减量期' });
 
 /** How a week changes the base sessions. `setFactor` wins over `setDelta`. `retest` marks the week to test again. */
 export type WeekSpec = { phase: Phase; setDelta?: number; setFactor?: number; rpeDelta?: number; dropIntense?: boolean; retest?: boolean };
@@ -316,16 +318,16 @@ export function adjustForReadiness(session: SessionTemplate, readiness: Readines
   const items: Prescription[] = [];
   for (const p of session.items) {
     if (p.intense) {
-      adjustments.push({ code: p.code, name: p.name, change: '今天取消（最大强度）' });
+      adjustments.push({ code: p.code, name: p.name, change: tr('今天取消（最大强度）') });
       continue;
     }
     const sets = Math.max(1, Math.round(p.sets * FATIGUE_SET_FACTOR));
     const rpe = p.rpe != null ? clampRpe(p.rpe - 1) : undefined;
     const changes = [
-      sets !== p.sets ? `${p.sets} 组 → ${sets} 组` : null,
+      sets !== p.sets ? tr('{sets} 组 → {sets2} 组', { sets: p.sets, sets2: sets }) : null,
       rpe != null && rpe !== p.rpe ? `RPE ${formatRpe(p.rpe!)} → ${formatRpe(rpe)}` : null,
     ].filter((c): c is string => c != null);
-    if (changes.length) adjustments.push({ code: p.code, name: p.name, change: changes.join('，') });
+    if (changes.length) adjustments.push({ code: p.code, name: p.name, change: changes.join(tr('，')) });
     items.push({ ...p, sets, rpe });
   }
   return { session: { ...session, items }, adjustments };
@@ -346,17 +348,17 @@ export const TRAP_BAR_SHARE = [0.2, 0.3] as const;
  * the trap-bar load from the squat 1RM, to the nearest 2.5 kg.
  */
 export function personalNote(code: string, n: PersonalNumbers): string | null {
-  if (code === 'depth_jump' && n.bestBoxCm != null) return `你的最佳箱高 ${n.bestBoxCm} cm`;
+  if (code === 'depth_jump' && n.bestBoxCm != null) return tr('你的最佳箱高 {bestBoxCm} cm', { bestBoxCm: n.bestBoxCm });
   if (code === 'trap_bar_jump' && n.squat1rmKg != null) {
     const [lo, hi] = TRAP_BAR_SHARE.map((f) => roundLoad(n.squat1rmKg! * f));
-    return `建议 ${lo}–${hi} kg（后蹲 1RM ${Math.round(n.squat1rmKg)} kg 的 ${TRAP_BAR_SHARE[0] * 100}–${TRAP_BAR_SHARE[1] * 100}%）`;
+    return tr('建议 {lo}–{hi} kg（后蹲 1RM {squat1rmKg} kg 的 {TRAP_BAR_SHARE}–{TRAP_BAR_SHARE2}%）', { lo, hi, squat1rmKg: Math.round(n.squat1rmKg), TRAP_BAR_SHARE: TRAP_BAR_SHARE[0] * 100, TRAP_BAR_SHARE2: TRAP_BAR_SHARE[1] * 100 });
   }
   return null;
 }
 
 /** e.g. "4 × 5 · RPE 8" or "3 × 5/侧". */
 export function formatPrescription(p: Prescription): string {
-  const base = `${p.sets} × ${p.reps}${p.perSide ? '/侧' : ''}`;
+  const base = `${p.sets} × ${p.reps}${p.perSide ? tr('/侧') : ''}`;
   return p.rpe != null ? `${base} · RPE ${formatRpe(p.rpe)}` : base;
 }
 

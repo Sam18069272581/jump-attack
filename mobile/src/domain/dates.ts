@@ -1,3 +1,5 @@
+import { getLang, tr, type Lang } from '@/i18n';
+
 /** A calendar day as `YYYY-MM-DD`. Training is planned by local day, not by instant. */
 export type ISODate = string;
 
@@ -36,10 +38,22 @@ export function mondayOf(date: ISODate): ISODate {
   return addDays(date, 1 - weekday(date));
 }
 
+// i18n-ignore: the Chinese column of WEEKDAYS, which the tests read.
 export const WEEKDAY_NAMES = ['一', '二', '三', '四', '五', '六', '日'];
+
+const WEEKDAYS: Record<Lang, string[]> = {
+  zh: WEEKDAY_NAMES,
+  en: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+  de: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
+};
+
+/** Short weekday names, Monday first, in the current language. */
+export function weekdayNames(): string[] {
+  return WEEKDAYS[getLang()];
+}
 
 /** e.g. "10/20 周一". */
 export function shortDate(date: ISODate): string {
   const [, m, d] = date.split('-').map(Number);
-  return `${m}/${d} 周${WEEKDAY_NAMES[weekday(date) - 1]}`;
+  return tr('{m}/{d} 周{day}', { m, d, day: weekdayNames()[weekday(date) - 1] });
 }

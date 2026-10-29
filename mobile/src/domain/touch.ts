@@ -7,6 +7,8 @@
  */
 import { APPROACH_TOUCH } from './metrics';
 
+import { tr } from '@/i18n';
+
 export type Calibration = { touchedCm: number; reachCm: number; jumpCm: number };
 
 /** Only the latest few: technique and the way the athlete lands change over time. */
@@ -29,9 +31,9 @@ export const MAX_CALIBRATION_GAP_CM = 25;
 
 export function calibrationProblem(touchedCm: number, videoCm: number): string | null {
   const [lo, hi] = APPROACH_TOUCH.range!;
-  if (touchedCm < lo || touchedCm > hi) return `摸高一般在 ${lo}–${hi} cm，检查一下刻度`;
+  if (touchedCm < lo || touchedCm > hi) return tr('摸高一般在 {lo}–{hi} cm，检查一下刻度', { lo, hi });
   const gap = Math.abs(touchedCm - videoCm);
-  if (gap > MAX_CALIBRATION_GAP_CM) return `和录像算出的 ${videoCm.toFixed(1)} cm 差了 ${Math.round(gap)} cm，不像同一跳，检查一下刻度`;
+  if (gap > MAX_CALIBRATION_GAP_CM) return tr('和录像算出的 {videoCm} cm 差了 {gap} cm，不像同一跳，检查一下刻度', { videoCm: videoCm.toFixed(1), gap: Math.round(gap) });
   return null;
 }
 

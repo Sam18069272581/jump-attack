@@ -5,6 +5,7 @@ import { LATEST_VERSION } from '@/db/migrations';
 import { backupHash, describeBackup, isPristine, parseBackup } from '@/domain/backup';
 import { toISODate } from '@/domain/dates';
 import { decideSync } from '@/domain/sync';
+import { tr } from '@/i18n';
 
 import type { CloudBackups } from './cloud';
 
@@ -57,7 +58,7 @@ export async function syncWithCloud(
     if (!remote) return { kind: 'nothing' };
     const parsed = parseBackup(JSON.stringify(remote.data), LATEST_VERSION);
     if (action === 'conflict') {
-      return { kind: 'conflict', phone: describeBackup(local), cloud: parsed.ok ? describeBackup(parsed.backup) : '无法读取', cloudAt: meta?.updatedAt ?? '' };
+      return { kind: 'conflict', phone: describeBackup(local), cloud: parsed.ok ? describeBackup(parsed.backup) : tr('无法读取'), cloudAt: meta?.updatedAt ?? '' };
     }
     if (!parsed.ok) return { kind: 'failed', problem: parsed.problem };
     const restored = await restoreBackup(db, parsed.backup);
@@ -67,6 +68,6 @@ export async function syncWithCloud(
     await memory.setItem(lastKey(userId), remote.hash);
     return { kind: 'downloaded' };
   } catch {
-    return { kind: 'failed', problem: OFFLINE };
+    return { kind: 'failed', problem: tr(OFFLINE) };
   }
 }

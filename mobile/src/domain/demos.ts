@@ -1,3 +1,5 @@
+import { tr } from '@/i18n';
+
 /**
  * How each training exercise is done: a few steps, the mistakes that cost the most, and a side-view stick figure of
  * its start and key position. Everything is drawn and written here, so a teammate sees the same demo offline and no
@@ -283,8 +285,10 @@ export const DEMOS: Record<string, Demo> = {
   },
 };
 
+/** The demo of an exercise, its text in the current language. */
 export function demoFor(code: string): Demo | null {
-  return DEMOS[code] ?? null;
+  const d = DEMOS[code];
+  return d ? { ...d, steps: d.steps.map((s) => tr(s)), mistakes: d.mistakes.map((m) => tr(m)) } : null;
 }
 
 /** A demo is a few reps, not a training session: longer clips are trimmed in Photos first. */
@@ -294,5 +298,5 @@ export const DEMO_MAX_S = 30;
 export function demoClipProblem(durationMs: number | null | undefined): string | null {
   if (durationMs == null) return null;
   const s = Math.round(durationMs / 1000);
-  return s > DEMO_MAX_S ? `这段有 ${s} 秒，示范剪到 ${DEMO_MAX_S} 秒以内再选` : null;
+  return s > DEMO_MAX_S ? tr('这段有 {s} 秒，示范剪到 {DEMO_MAX_S} 秒以内再选', { s, DEMO_MAX_S }) : null;
 }
