@@ -29,10 +29,10 @@
 ---
 
 <p align="center">
-  <img src="docs/assets/showcase.png" width="880" alt="Three phone screenshots: the home screen shows 12 cm below the dunk line with reactivity as the current weakness; the history screen shows the reach curve and tiles for strength, reactivity and speed; the training screen shows today’s session in week 2 of the reactive block">
+  <img src="docs/assets/showcase.en.png" width="880" alt="Three phone screenshots: the home screen shows 12.8 cm below the dunk line with reactivity as the current weakness; the history screen shows the reach curve and tiles for strength, reactivity and speed; the training screen shows today’s session in week 2 of the reactive block">
 </p>
 
-<p align="center"><sub>Screens show a demo athlete. The app itself is in Chinese for now.</sub></p>
+<p align="center"><sub>Screens show a demo athlete. The app follows the phone’s language (Chinese, English or German); change it under Me → Language.</sub></p>
 
 ## Why
 
@@ -69,7 +69,7 @@ Three ways, **none of them need Xcode or a developer account**:
 | 📱 **Expo Go cloud build** | Daily use without a computer | Sign in to Expo Go with your Expo account and open `exp://u.expo.dev/589a8a7c-8269-46a9-a6f1-a9fa25be2636?channel-name=main` |
 | 💻 **From your computer** | Changing code, trying a branch | See the collapsed section below |
 
-GitHub Actions updates the web app and the cloud build whenever code is merged into `main`. Each way keeps its own data. Sign in with the same email under Me → Backup & sync to share it between them.
+GitHub Actions updates the web app and the cloud build whenever code is merged into `main`. Each way keeps its own data. Sign in with the same email under Me → Backup and sync to share it between them.
 
 <details>
 <summary><b>💻 Start from your computer (scan with Expo Go)</b></summary>
