@@ -1129,8 +1129,14 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // the scales 2–5 % apart, short of `SCALE_MISMATCH`. Each scale has its own error (1 SD: gravity's fit, the lines'
   // laying and taps), and two right scales are within 1.96 of their combined SD in 95 % of clips: further apart, one of
   // them is off and which can't be told, so the figures on the lines' scale take in the whole gap too, as off the line.
-  const scalesDisagree = linesScale != null && (flags.includes('short-fall') || abs(scaleRatio - 1) > 1.96 * hypot(gravityScaleRel, linesRel / 1.96));
+  const chanceSd = hypot(gravityScaleRel, linesRel / 1.96);
+  const scalesDisagree = linesScale != null && (flags.includes('short-fall') || abs(scaleRatio - 1) > 1.96 * chanceSd);
   const scalesApart = markerScale != null && (linesScale == null || scalesDisagree) ? gap : 0;
+  // Within chance isn't proof the lines are right: laid 0.1–0.2 m nearer or further than the athlete ran (2–3 %), they
+  // pass the check about as often as right ones. Read on their scale alone, the run-up speed then takes in the most a
+  // gap can be and still pass (`unseen`), added outright like a gap that is seen: it bounds a fixed offset, not a
+  // scatter. Without it, lines 0.15–0.2 m further than the athlete ran had it cover the truth in 88–90 of 100 clips.
+  const unseen = linesScale != null && !scalesDisagree ? 1.96 * chanceSd : 0;
 
   // Velocities at take-off. vz = g·(time from take-off to the top), so it rests on the take-off's timing, plus the
   // fit's own uncertainty about the top.
@@ -1247,8 +1253,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       // lines': it is as much longer or shorter as the scales disagree, about the picture's middle, so each end moves
       // along the run-up, the take-off line's through the plant's braking. With the take-off line within 3 m of the
       // middle, that moves the mean speed by up to the same share (`scalesApart`, added outright as for the lengths).
+      // On the lines' scale with no gap seen, the gap that could pass unseen (`unseen`).
       const gravityRel = linesScale != null ? 0 : 1.96 * gravityScaleRel;
-      metrics.approach = measured('approach', v, v * (hypot(1.96 * rel, sizeChange, gravityRel) + scalesApart));
+      metrics.approach = measured('approach', v, v * (hypot(1.96 * rel, sizeChange, gravityRel) + scalesApart + unseen));
     }
   }
 

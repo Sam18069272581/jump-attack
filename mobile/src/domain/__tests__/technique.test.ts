@@ -793,6 +793,22 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     expect(Object.entries(tally).filter(([k, c]) => (k !== 'brake' && c.n < 40) || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 
+  it.each([
+    ['at 240 fps, both lines 0.2 m further from the camera', 240, -0.2, [84415, 84443, 84474]],
+    ['at 240 fps, both lines 0.2 m nearer the camera', 240, 0.2, [84640, 84673]],
+    ['at 60 fps, both lines 0.15 m further from the camera', 60, -0.15, [73863]],
+  ])('%s than where the athlete ran, the scales apart by no more than chance: the run-up speed still holds the truth', (_, fps, nearerM, seeds) => {
+    // Clips of the probes', read and tapped as tools/pose-validation does. Gravity's scale came out 2–3 % off the lines',
+    // within what the two errors explain, so nothing widened the run-up speed: it read 0.24–0.37 m/s off with 0.21–0.29
+    // stated.
+    for (const seed of seeds) {
+      const scene = poseScene({ fps, seed, markers: { aM: -3, bM: 0, nearerM } });
+      const { frames, target } = readAsTheScreen(scene);
+      const result = resultOf(analyseTechnique({ frames, captureFps: fps, markers: tappedAtTheFeet(scene, 0.08), target }));
+      expect([seed, result.flags.includes('off-line'), misses(scene, result).filter((x) => /^approach:/.test(x))]).toEqual([seed, false, []]);
+    }
+  });
+
   it('lines where the athlete ran, tapped at their feet: the last step is still a figure to trust in most clips', () => {
     // Two scales a little apart by chance aren't lines laid wrong: only a gap beyond both their errors widens the step.
     const depth = normals(38);
