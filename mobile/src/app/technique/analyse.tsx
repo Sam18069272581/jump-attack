@@ -49,6 +49,12 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
 }
 
 // The page says why (it can't decode the clip, the model won't start, iOS closed it): trying again comes first.
+/**
+ * What a slow-motion clip timed at its file's rate runs into: its flight lasts eight times too long, and a run-up stride
+ * can pass for it. The problem's own advice can't name that cause; the reminder to set the rate can.
+ */
+const SLOW_MO_PROBLEMS: (TechniqueProblem | 'error')[] = ['no-jump', 'no-plant', 'unclear-jump'];
+
 const READ_FAILED = localized({ what: '没分析完', advice: '点「重新点选」再分析一次，分析时别切到别的 App；还不行就换一段视频。' });
 
 /** Keeps the screen on while it is shown: nobody touches the phone during a read, and Auto-Lock would end the page. */
@@ -110,6 +116,7 @@ export default function TechniqueAnalyse() {
   const { file: fileFps, capture: fps } = markingRates({ detected: detectedFps, chosen: camera ? null : captureOverride, reported: Number(params.fps) || 0 });
   const total = frameCount(duration || clip?.duration || 0, fileFps);
   const looksSlowMo = !camera && detectedFps != null && detectedFps < 100;
+  const slowMoHint = looksSlowMo && fps <= fileFps ? tr('这个视频是 {detectedFps} fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。', { detectedFps }) : null;
   const fpsChoices = detectedFps == null ? FPS_CHOICES : [fileFps, ...FPS_CHOICES.filter((f) => f > fileFps)];
 
   function show(f: number) {
@@ -322,7 +329,7 @@ export default function TechniqueAnalyse() {
                 </View>
               </View>
             )}
-            {looksSlowMo && fps <= fileFps && <Text style={styles.warn}>{tr('这个视频是 {detectedFps} fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。', { detectedFps })}</Text>}
+            {slowMoHint && <Text style={styles.warn}>{slowMoHint}</Text>}
           </>
         )}
 
@@ -334,6 +341,7 @@ export default function TechniqueAnalyse() {
             <Text style={styles.cardTitle}>{failure.what}</Text>
             {phase.message && <Text style={styles.muted}>{phase.message}</Text>}
             <Text style={styles.muted}>{tr('建议：{advice}', { advice: failure.advice })}</Text>
+            {slowMoHint && SLOW_MO_PROBLEMS.includes(phase.problem) && <Text style={styles.warn}>{slowMoHint}</Text>}
           </View>
         )}
 

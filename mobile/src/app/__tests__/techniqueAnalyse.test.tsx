@@ -323,6 +323,20 @@ it.each([
   if (source === 'camera') expect(shown).not.toContain(PROBLEM_TEXT['frame-rate'].what);
 });
 
+it('with no lines, a slow-motion clip left at its file’s 30 fps: when the jump can’t be told, it says again to pick 240', async () => {
+  // Timed at the file's rate, the flight lasts eight times too long, and a run-up stride can pass for it. The page's own
+  // reminder names the cause the problem's advice can't.
+  const scene = poseScene({ seed: 6 });
+  await open(scene, { uri: 'file:///picked/IMG_0013.MOV', fps: '0', source: 'import', session: 'tt-14' }, 30);
+  await tapAthlete(scene, scene.truth.takeoffFrame - 60);
+  await press(r.root, '没贴线，跳过');
+  await press(r.root, '开始分析');
+  await answerReads();
+  const shown = texts(r.root);
+  expect(shown).toContain(PROBLEM_TEXT['unclear-jump'].what);
+  expect(shown).toContain('这个视频是 30 fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。');
+});
+
 it('says so when the page can’t read the clip', async () => {
   const scene = poseScene();
   await open(scene, { uri: 'file:///picked/IMG_0011.MOV', fps: '0', source: 'import', session: 'tt-4' });
