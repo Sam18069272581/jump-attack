@@ -189,10 +189,14 @@ export function analyseCoarse(
   const first = req.frames[0];
   const lastFrame = min(v.frames - 1, req.frames[n - 1] + step - 1);
   const f = (k: number) => req.frames[max(0, min(n - 1, k))];
-  // Two samples either side: the coarse pass can misjudge a sample next to the event.
+  // Two samples either side, at the usual rate: the coarse pass can misjudge a sample next to the event. Sampling rebounds
+  // twice as densely doesn't make it misjudge less. Rebounds push off the forefoot, whose mirror image on a glossy floor
+  // a codec smears into the floor in the small coarse pictures, and the coarse pass then sees a take-off a sample or two
+  // early; the fine pass has to look just as far past it.
+  const reach = 2 * max(step, round(v.captureFps / COARSE_PER_S));
   const around = (a: number, b: number): Window => ({
-    from: max(first, f(a) - 2 * step),
-    to: min(lastFrame, f(b) + 2 * step),
+    from: max(first, f(a) - reach),
+    to: min(lastFrame, f(b) + reach),
   });
 
   const jumps: JumpPlan[] = [];
@@ -457,10 +461,10 @@ export function contactSeries(strips: Grey[], empty: Grey, eps: number, hold: nu
   // How far above the floor a still foot counts as hovering (≈ 15 mm: the strip is about a fifth of the athlete's
   // height).
   const tol = max(1, round(h / 24));
-  // A fine-pass window reaches at most three coarse steps (≈ 0.13 s) past the take-off or landing it is around, less
-  // than the shortest flight, so it can't hold a whole flight. A column that reached lower both before and after a
-  // level it held, in the same window, stood through it (see the line below). The coarse pass has no windows: its one
-  // series runs through every flight, and a foot reaches lower before and after the top of one.
+  // A fine-pass window reaches at most three coarse steps at the usual rate (≈ 0.13 s) past the take-off or landing it
+  // is around, less than the shortest flight, so it can't hold a whole flight. A column that reached lower both before
+  // and after a level it held, in the same window, stood through it (see the line below). The coarse pass has no
+  // windows: its one series runs through every flight, and a foot reaches lower before and after the top of one.
   const stood = new Uint8Array(w);
   const lowerBy = (x: number, k: number, dir: number, level: number) => {
     for (let i = k + dir; i >= 0 && i < n && seg(i) === seg(k); i += dir) if (steady[i][x] > level + tol) return true;
