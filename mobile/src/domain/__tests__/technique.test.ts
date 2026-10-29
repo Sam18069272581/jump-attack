@@ -363,6 +363,17 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('at 60 fps, a two-foot take-off with the frames right after it lost: still a two-foot take-off, left when it was', () => {
+    // An up edge that can't be timed stays where the foot was last seen down: moved past the lost frames, it falls after
+    // the other foot's and out of the plant, which then holds one foot.
+    for (const seed of [2, 5, 8]) {
+      const scene = poseScene({ style: 'two', fps: 60, seed });
+      const to = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, to, to + 4), captureFps: 60, markers: scene.markers }));
+      expect([seed, result.style.kind, result.metrics.gap != null, Math.abs(result.events.takeoff - to) <= 1, misses(scene, result)]).toEqual([seed, 'two', true, true, []]);
+    }
+  });
+
   it('a 24 or 25 fps clip (a phone’s video mode): the plant is found, and knee and trunk come out as angles', () => {
     for (const fps of [24, 25]) {
       const { scene, r } = analyse({ fps });

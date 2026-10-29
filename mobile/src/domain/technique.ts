@@ -751,11 +751,7 @@ function contactsOf(traces: Record<Side, FootTrace>, s: Series, floor: Floor, fp
         // The heel or the toe, whichever comes down first.
         const atFloor = (k: number) => [heel, toe].some((pt) => pt.sy[k] - floor.level(pt.x[k], side) <= tol);
         const dn = acrossGap(downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 }, s.lost, fps, atFloor);
-        // An up edge that can't be timed is next to frames the model lost: the foot may still be down until they end, and
-        // the frame beside them isn't known to be in the air (its stillness can't be read next to the gap).
-        let seenUp = j;
-        while (seenUp < s.lost.length && (s.lost[seenUp] || s.lost[seenUp + 1])) seenUp++;
-        const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: seenUp - 0.5 }), s.lost, fps);
+        const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: j - 0.5 }), s.lost, fps);
         const downAt = frameAt(s, dn.t);
         const upAt = frameAt(s, max(up.t, dn.t + 1));
         // The toe's place: the median over the part of the stance it is planted for, good to 1.25σ/√n (1 SD).
@@ -905,6 +901,16 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   }
 
   // --- Flight parabola, on the raw centre of mass (the fit does the smoothing; a filter would bend the take-off).
+  // A take-off that can't be timed is next to frames the model lost: the foot may still be down until they end, and the
+  // frame beside them isn't known to be in the air (its stillness can't be read next to the gap). The free fall is
+  // fitted from after them. The take-off itself stays where the foot was last seen down: moved past them, a two-foot
+  // take-off's foot would fall out of the plant.
+  let freeFrom = takeoffAt;
+  if (!Number.isFinite(off.err)) {
+    let k = s.frame.findIndex((f) => f > takeoffAt);
+    while (k >= 0 && k < s.lost.length && (s.lost[k] || s.lost[k + 1])) k++;
+    if (k >= 0) freeFrom = max(takeoffAt, frameAt(s, k - 0.5));
+  }
   // Time runs from take-off, s.
   const fitRange = (toFrame: number) => {
     const ts: number[] = [];
@@ -912,7 +918,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const xs: number[] = [];
     athlete.forEach((p, i) => {
       const f = s.frame[i];
-      if (!p || f <= takeoffAt || f >= toFrame) return;
+      if (!p || f <= freeFrom || f >= toFrame) return;
       const c = toWorld(frame, centreOfMass(p));
       ts.push((f - takeoffAt) / fps);
       ys.push(c.y);
