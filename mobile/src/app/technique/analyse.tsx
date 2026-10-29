@@ -91,6 +91,8 @@ export default function TechniqueAnalyse() {
   const [phase, setPhase] = useState<Phase>({ name: 'setup' });
   const [reach, setReach] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  /** Bumped to read the clip on a fresh page after the page failed: the clip wouldn't open, the model wouldn't start. */
+  const [readerRun, setReaderRun] = useState(0);
 
   useEventListener(player, 'sourceLoad', ({ duration: d, availableVideoTracks }) => {
     setDuration(d);
@@ -231,6 +233,7 @@ export default function TechniqueAnalyse() {
           {/* The page that reads poses: hidden until it runs, then it shows each frame it reads with the athlete's skeleton. */}
           <View style={[StyleSheet.absoluteFill, { opacity: running ? 1 : 0.01 }]} pointerEvents="none">
             <PoseReader
+              key={readerRun}
               ref={reader}
               uri={params.uri}
               fileFps={fileFps}
@@ -367,7 +370,16 @@ export default function TechniqueAnalyse() {
       <View style={styles.footer}>
         {phase.name === 'setup' && <Button label={startLabel} onPress={analyse} disabled={!ready} />}
         {result && <Button label="保存" onPress={save} busy={saving} />}
-        {(result || phase.name === 'failed') && <Button label="重新点选" variant="secondary" onPress={() => setPhase({ name: 'setup' })} />}
+        {(result || phase.name === 'failed') && (
+          <Button
+            label="重新点选"
+            variant="secondary"
+            onPress={() => {
+              if (phase.name === 'failed' && phase.problem === 'error') setReaderRun((n) => n + 1);
+              setPhase({ name: 'setup' });
+            }}
+          />
+        )}
       </View>
     </SafeAreaView>
   );

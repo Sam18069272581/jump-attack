@@ -44,6 +44,9 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
     const job = useRef<{ id: number; got: WireFrame[]; resolve: (items: WireFrame[]) => void; reject: (e: Error) => void; progress?: (n: number) => void } | null>(null);
     const nextId = useRef(1);
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    /** Whether the page has said it has the clip since it was loaded: a request made before then waits for it. */
+    const loaded = useRef(false);
+    const waiting = useRef<string | null>(null);
     const handlers = useRef({ onReady, onError });
     useEffect(() => {
       handlers.current = { onReady, onError };
@@ -81,6 +84,8 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
       // The read's own failure says the same as onError: whichever the screen hears last is what the athlete reads.
       job.current?.reject(new Error(message));
       job.current = null;
+      loaded.current = false;
+      waiting.current = null;
       web.current?.reload();
       if (reading) handlers.current.onError(message);
     }
@@ -95,7 +100,9 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
         const id = nextId.current++;
         job.current = { id, got: [], resolve, reject, progress: onProgress };
         hear();
-        web.current?.injectJavaScript(`window.${call}(${JSON.stringify({ id, fps: fileFps, ...req })}); true;`);
+        const js = `window.${call}(${JSON.stringify({ id, fps: fileFps, ...req })}); true;`;
+        if (loaded.current) web.current?.injectJavaScript(js);
+        else waiting.current = js;
       });
     }
 
@@ -112,7 +119,12 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
         return;
       }
       if (m.type === 'error') return fail(m.stage === 'model' ? `骨架识别启动不了：${m.message}` : m.message);
-      if (m.type === 'ready') return handlers.current.onReady({ duration: m.duration, width: m.width, height: m.height });
+      if (m.type === 'ready') {
+        loaded.current = true;
+        if (waiting.current) web.current?.injectJavaScript(waiting.current);
+        waiting.current = null;
+        return handlers.current.onReady({ duration: m.duration, width: m.width, height: m.height });
+      }
       if (m.type === 'model') return hear();
       const j = job.current;
       if (!j || m.id !== j.id) return;

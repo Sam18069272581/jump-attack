@@ -19,6 +19,7 @@ const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), dismi
 const mockWeb: { props: Record<string, any> | null; inject: jest.Mock; reload: jest.Mock } = { props: null, inject: jest.fn(), reload: jest.fn() };
 const mockState: { scene: PoseScene | null; fileFps: number; params: Record<string, string> } = { scene: null, fileFps: 240, params: {} };
 const mockAwake = jest.fn();
+const mockStaged = jest.fn();
 
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
 jest.mock('@/state/athlete', () => ({ useAthlete: () => ({ current: { id: 1, name: '我自己', standing_reach_cm: 240 } }) }));
@@ -47,7 +48,10 @@ jest.mock('expo', () => {
 });
 jest.mock('@/media/poseLib', () => ({
   ...jest.requireActual('@/media/poseLib'),
-  stagePosePage: async () => ({ page: 'file:///app/Documents/pose/run-1/page.html', dir: 'file:///app/Documents/pose/run-1', root: 'file:///app/Documents/pose' }),
+  stagePosePage: async () => {
+    mockStaged();
+    return { page: 'file:///app/Documents/pose/run-1/page.html', dir: 'file:///app/Documents/pose/run-1', root: 'file:///app/Documents/pose' };
+  },
   unstagePosePage: jest.fn(),
 }));
 jest.mock('react-native-webview', () => {
@@ -267,4 +271,29 @@ it('says, in its own words, that the phone closed the reading page, and lets it 
   expect(mockWeb.reload).toHaveBeenCalled();
   await press(r.root, '重新点选');
   expect(texts(r.root)).toContain('开始分析');
+});
+
+it('reads the clip on a fresh page after the model wouldn’t start there, and waits for it before asking', async () => {
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0014.MOV', fps: '0', source: 'import', session: 'tt-7' });
+  // The page found the clip but couldn't start the model: every request it is sent fails the same way.
+  await post({ type: 'error', stage: 'model', message: 'Failed to create WebGL canvas context' });
+  expect(texts(r.root)).toContain('骨架识别启动不了');
+  expect(texts(r.root)).toContain('再分析一次');
+  const staged = mockStaged.mock.calls.length;
+  await press(r.root, '重新点选');
+  await act(async () => {});
+  expect(mockStaged.mock.calls.length).toBe(staged + 1);
+
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await press(r.root, '没贴线，跳过');
+  mockWeb.inject.mockClear();
+  await press(r.root, '开始分析');
+  // Nothing is sent to a page still loading: it would be lost.
+  expect(mockWeb.inject).not.toHaveBeenCalled();
+  await post({ type: 'ready', duration: scene.frames.length / scene.options.fps, width: scene.width, height: scene.height });
+  await post({ type: 'model', delegate: 'CPU', source: 'local' });
+  expect(mockWeb.inject).toHaveBeenCalled();
+  await answerReads();
+  expect(texts(r.root)).toContain('起跳垂直速度');
 });
