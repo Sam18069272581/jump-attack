@@ -358,3 +358,30 @@ it('stops the take before a piece the phone has no room for: iOS can’t say a w
   expect(mockWeb.inject).toHaveBeenCalledWith('window.stopRecording(); true;');
   expect(mockWeb.inject).toHaveBeenLastCalledWith('window.ack(0); true;');
 });
+
+it('doesn’t start a take the phone has no room for: says so before the athlete runs up', async () => {
+  // 45 MB free: less than the 50 MB kept free; 70 MB: room for some 15 s of a take (1.25 MB/s), not all 20.
+  for (const free of [45e6, 70e6]) {
+    mockDisk.free = free;
+    try {
+      await open();
+      await press('不检查直接拍');
+      await press('开始录像');
+      expect(mockWeb.inject).not.toHaveBeenCalledWith('window.startRecording(); true;');
+      expect(texts(r.root)).toContain('手机存储空间不够了');
+      expect(Speech.speak).not.toHaveBeenCalledWith('开始录了，去助跑吧', expect.anything());
+    } finally {
+      mockDisk.free = 64e9;
+    }
+  }
+  // Room for the whole take and what is kept free: it starts.
+  mockDisk.free = 80e6;
+  try {
+    await open();
+    await press('不检查直接拍');
+    await press('开始录像');
+    expect(mockWeb.inject).toHaveBeenLastCalledWith('window.startRecording(); true;');
+  } finally {
+    mockDisk.free = 64e9;
+  }
+});

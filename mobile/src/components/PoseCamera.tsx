@@ -3,7 +3,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { type StyleProp, type ViewStyle } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
-import { poseCameraHtml } from '@/media/poseCameraHtml';
+import { CAMERA_BITRATE, MAX_TAKE_S, poseCameraHtml } from '@/media/poseCameraHtml';
 import { stagePosePage, unstagePosePage } from '@/media/poseLib';
 import { dropTake, newTakeFile } from '@/media/takes';
 import { colors } from '@/theme';
@@ -13,6 +13,8 @@ type Web = WebView<Record<never, never>>;
 
 /** Room kept free while filming: about two takes (20 s at 60 fps is some 25 MB), so the phone isn't filled to the brim. */
 const RESERVE_BYTES = 50e6;
+/** A whole take at the page's bit rate: 20 s × 1.25 MB/s = 25 MB. */
+const TAKE_BYTES = (MAX_TAKE_S * CAMERA_BITRATE) / 8;
 
 export type CameraInfo = { label: string; physical: boolean; fps: number | null; maxFps: number | null; width: number; height: number };
 /** One picture the page read: its people (132 numbers each), brightness, and the count of the latest whole-picture search. */
@@ -81,7 +83,12 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
 
   const call = (js: string) => web.current?.injectJavaScript(`${js}; true;`);
   useImperativeHandle(ref, () => ({
-    startRecording: () => call('window.startRecording()'),
+    startRecording: () => {
+      // A take the phone can't hold to the end isn't started: the athlete would run up for nothing.
+      const free = Paths.availableDiskSpace;
+      if (free != null && free < TAKE_BYTES + RESERVE_BYTES) return fail('record', '录像存不下来：手机存储空间不够了，清理一些再拍');
+      call('window.startRecording()');
+    },
     stopRecording: () => call('window.stopRecording()'),
     stopCamera: () => call('window.stopCamera()'),
   }));
