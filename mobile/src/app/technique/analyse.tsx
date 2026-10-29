@@ -19,7 +19,7 @@ import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { Pt } from '@/domain/pose';
 import { analyseTechnique, TAP_PT, TAP_PX, type Markers, type TechniqueProblem, type TechniqueResult } from '@/domain/technique';
 import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, planWindow, TAP_REACH_S, windowOf } from '@/domain/techniqueRead';
-import { flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT, shownFlags } from '@/domain/techniqueText';
+import { flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, problemText, shownFlags } from '@/domain/techniqueText';
 import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
@@ -212,7 +212,7 @@ export default function TechniqueAnalyse() {
   const result = phase.name === 'done' ? phase.result : null;
   const ready = clip != null && total > 0 && athlete != null && linesDone;
   const startLabel = !clip ? tr('正在读取视频…') : !athlete ? tr('先点运动员') : !linesDone ? tr('先点两条线，或者跳过') : tr('开始分析');
-  const failure = phase.name === 'failed' ? (phase.problem === 'error' ? READ_FAILED : PROBLEM_TEXT[phase.problem]) : null;
+  const failure = phase.name === 'failed' ? (phase.problem === 'error' ? READ_FAILED : problemText(phase.problem, { camera })) : null;
   const marks = [
     ...(athlete ? [{ key: 'athlete', at: athlete.at, color: colors.accent, label: '' }] : []),
     ...(!skipLines && lines.takeoff ? [{ key: 'takeoff', at: lines.takeoff, color: colors.rim, label: tr('起跳线') }] : []),

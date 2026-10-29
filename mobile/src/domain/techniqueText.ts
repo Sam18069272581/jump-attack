@@ -80,7 +80,7 @@ export const PROBLEM_TEXT: Record<TechniqueProblem, { what: string; advice: stri
     what: '分不清哪一下是起跳，可能把助跑的一步当成了起跳',
     advice: '没贴线、助跑又斜着朝手机跑来时会这样。贴好两条线再拍，或者站到助跑路线的正侧面拍，让运动员横着跑过画面。',
   },
-  'frame-rate': { what: '拍摄帧率多半选错了', advice: '按选的帧率，腾空时下落的快慢和运动员的身材对不上。iPhone 慢动作选 240（120 fps 慢动作选 120），普通视频选视频本身的帧率，改好再分析一次。' },
+  'frame-rate': { what: '拍摄帧率多半选错了', advice: '按选的帧率，腾空时下落的快慢和运动员的身材对不上。iPhone「慢动作」选 240（120 fps 慢动作选 120），普通视频选视频本身的帧率，改好再分析一次。帧率没错的话，是帧率太低、下落读不准（比如手碰篮筐那一下没认出来）：用「慢动作」重拍再导入。' },
   markers: { what: '两条线点得太近', advice: '起跳线点在起跳点的胶带上，3 米线点在往回 3 米的那条胶带上；没贴线就点「没贴线，跳过」。' },
 };
 
@@ -88,3 +88,18 @@ export const PROBLEM_TEXT: Record<TechniqueProblem, { what: string; advice: stri
 localized(METRIC_TEXT, 'name', 'hint');
 localized(FLAG_TEXT);
 localized(PROBLEM_TEXT);
+
+/**
+ * A clip filmed in the app is timed at its real rate, which the page doesn't offer to change: a fall that fits no
+ * athlete there comes of the low rate itself.
+ */
+const CAMERA_PROBLEM_TEXT: Partial<Record<TechniqueProblem, { what: string; advice: string }>> = {
+  'no-jump': { what: '没找到起跳', advice: '视频里要有完整的助跑、起跳和落地。' },
+  'frame-rate': { what: '下落的快慢和运动员的身材对不上', advice: '在 App 里拍的帧率不高，下落读不准，手碰篮筐那一下也可能没认出来。用 iPhone 相机的「慢动作」拍了再导入。' },
+};
+localized(CAMERA_PROBLEM_TEXT);
+
+/** What went wrong and what to do about it, for a clip imported or filmed in the app. */
+export function problemText(problem: TechniqueProblem, { camera }: { camera: boolean }): { what: string; advice: string } {
+  return (camera && CAMERA_PROBLEM_TEXT[problem]) || PROBLEM_TEXT[problem];
+}

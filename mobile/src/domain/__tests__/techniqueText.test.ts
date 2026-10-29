@@ -1,6 +1,6 @@
 import { PASS_LINE } from '../technique';
 import { setLang } from '@/i18n';
-import { FLAG_TEXT, flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT, shownFlags } from '../techniqueText';
+import { FLAG_TEXT, flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT, problemText, shownFlags } from '../techniqueText';
 
 describe('formatMeasured', () => {
   it('writes the figure with its 95 % error, to the figure’s own precision', () => {
@@ -118,8 +118,39 @@ it('when the jump couldn’t be told from the run-up, says so rather than that t
   expect(PROBLEM_TEXT['unclear-jump'].advice).toMatch(/侧面/);
 });
 
-it('when the fall fits no athlete, says the frame rate is most likely wrong and which to pick', () => {
-  expect(PROBLEM_TEXT['frame-rate'].what).toMatch(/帧率/);
-  expect(PROBLEM_TEXT['frame-rate'].advice).toMatch(/240/);
-  expect(PROBLEM_TEXT['frame-rate'].advice).toMatch(/120/);
+it('when the fall fits no athlete, says the frame rate is most likely wrong, which to pick, and what to do if it isn’t', () => {
+  const imported = problemText('frame-rate', { camera: false });
+  expect(imported).toBe(PROBLEM_TEXT['frame-rate']);
+  expect(imported.what).toMatch(/帧率/);
+  expect(imported.advice).toMatch(/240/);
+  expect(imported.advice).toMatch(/120/);
+  // Where it is right after all, a low rate read the fall wrong (a hand on the rim unseen): film in slow motion. Tape
+  // wouldn't help there: the lines' scale then disagrees with the same fall (`scale-broken`).
+  expect(imported.advice).toMatch(/帧率没错.*慢动作/);
+  expect(imported.advice).not.toMatch(/帧率没错.*两条线/);
+});
+
+it('for a clip filmed in the app, doesn’t ask to pick a frame rate the page doesn’t offer', () => {
+  // The app's own camera times every frame at its real time: a fall that fits no athlete comes of the low rate itself.
+  const filmed = problemText('frame-rate', { camera: true });
+  expect(filmed.what).not.toMatch(/帧率/);
+  expect(filmed.advice).not.toMatch(/选 240|改好再分析|帧率.*不一样/);
+  expect(filmed.advice).toMatch(/篮筐/);
+  expect(filmed.advice).toMatch(/慢动作/);
+  expect(problemText('no-jump', { camera: true }).advice).not.toMatch(/帧率/);
+  expect(problemText('no-jump', { camera: true }).what).toBe(PROBLEM_TEXT['no-jump'].what);
+  for (const p of ['no-athlete', 'no-plant', 'unclear-jump', 'markers'] as const) expect(problemText(p, { camera: true })).toBe(PROBLEM_TEXT[p]);
+});
+
+it('says what went wrong with a clip filmed in the app in the app’s language too', () => {
+  setLang('en');
+  try {
+    for (const p of ['frame-rate', 'no-jump'] as const) {
+      const { what, advice } = problemText(p, { camera: true });
+      expect(what).not.toMatch(/[\u3400-\u9fff]/);
+      expect(advice).not.toMatch(/[\u3400-\u9fff]/);
+    }
+  } finally {
+    setLang('zh');
+  }
 });
