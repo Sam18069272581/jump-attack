@@ -1087,6 +1087,37 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     }
   });
 
+  it.each([
+    ['a 1.50 m athlete at 60 fps', { fps: 60, heightM: 1.5 }],
+    ['a 1.50 m athlete with a hand on the rim', { heightM: 1.5, hangAfterS: 0.34 }],
+  ])('no lines, %s: the jump is still measured, its fall not taken for a frame rate set wrong', (_, over) => {
+    // A short athlete's hips stand about 0.5 m above the ankles on gravity's scale, well over the 0.35 m below which no
+    // athlete fits.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const r = analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: null });
+      expect([seed, r.ok ? Math.abs(r.result.events.takeoff - scene.truth.takeoffFrame) <= 1 : r.problem]).toEqual([seed, true]);
+    }
+  });
+
+  it.each([
+    ['filmed at 240 fps, read at 120', {}, 120],
+    ['filmed at 240 fps, read at 60', {}, 60],
+    // A shorter athlete's flight, read at twice the rate, is often too short to be a jump at all (`no-jump`).
+    ['a 2.25 m athlete filmed at 120 fps, read at 240', { fps: 120, heightM: 2.25 }, 240],
+    ['filmed at 60 fps, read at 30', { fps: 60 }, 30],
+  ])('no lines, %s: no figure, and it says the frame rate is most likely wrong', (_, over, readFps) => {
+    // Timed at half the real rate, the fall slows fourfold, and gravity's scale puts the hips 1.8 m or more above the
+    // ankles; timed at twice it, 0.24 m or less. Athletes of 1.50–2.25 m stand 0.48–0.96 m there in the synthetic clips,
+    // however they are filmed. With lines, the lines' scale catches it instead (`scale-broken`).
+    for (const seed of [1, 2]) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const frames = scene.frames.map((f) => ({ ...f, t: f.frame / readFps }));
+      const r = analyseTechnique({ frames, captureFps: readFps, markers: null });
+      expect([seed, r.ok ? `measured: vz ${r.result.metrics.vz?.value}` : r.problem]).toEqual([seed, 'frame-rate']);
+    }
+  });
+
   it('lines each tapped TAP_PX in towards the other, filmed from 10 m: the last step, measured on their scale, still holds the truth', () => {
     // A 1.4 SD error in their gap: the scale is good only to the taps, a share that grows with the distance.
     for (const seed of [1, 2, 3, 4, 5]) {

@@ -55,9 +55,12 @@ export type TechniqueProblem =
   | 'no-jump'
   /** A flight, but no plant before it in the clip. */
   | 'no-plant'
-  /** No lines, and the flight found falls too slowly for the athlete's size: a stride of the run-up, taken for the jump
-   *  where the floor was read wrong (a run-up that comes at the camera, a high or rolled phone). */
+  /** No lines, and the flight found falls too slowly for the athlete's size and leaves the floor flat: a stride of the
+   *  run-up, taken for the jump where the floor was read wrong (a run-up that comes at the camera, a high or rolled phone). */
   | 'unclear-jump'
+  /** No lines, and the fall found fits no athlete: on gravity's scale the hips stand further from the ankles than any
+   *  athlete's could (`GRAVITY_LEG_M`), the frame rate set at half the real one or less, or twice it or more. */
+  | 'frame-rate'
   /** The two floor lines were tapped too close together to be 3 m apart: both on the same tape. */
   | 'markers';
 
@@ -149,6 +152,14 @@ export const MIN_FLIGHT_S = 0.25;
  * the synthetic clips of tools/pose-validation (see `analyseTechnique`'s `unclear-jump`).
  */
 const STRIDE_RISE_DEG = 25;
+
+/**
+ * With no lines, how far above the ankles the hips may stand on gravity's scale, m. Athletes of 1.50–2.25 m stand
+ * 0.48–0.96 m there in the synthetic clips of tools/pose-validation, however they are filmed. A frame rate set at half
+ * the real one or less slows the fall fourfold or more, which puts them 1.8 m or more up; set at twice it or more, 0.24 m
+ * or less. The bounds sit about halfway between, on a ratio scale.
+ */
+const GRAVITY_LEG_M = { min: 0.35, max: 1.35 };
 
 /**
  * The body's size changes by more than this share along a run-up a couple of degrees off the picture: too little to
@@ -1109,14 +1120,16 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const curvature = -2 * fy.c[2];
   if (!(curvature > 0)) return { ok: false, problem: 'no-jump' };
   const gravityScale = G / curvature;
-  // Without lines nothing else checks gravity's scale. On it, a jump's fall puts the hips 0.49–0.95 m above the ankles in
+  // Without lines nothing else checks gravity's scale. On it, a jump's fall puts the hips 0.48–0.96 m above the ankles in
   // the synthetic clips of tools/pose-validation, the most for a 2.25 m athlete with bent legs on a curved run-up whose
   // fall a hand on the rim cuts short. A run-up stride taken for the jump (a floor read wrong) mostly falls far too slowly
   // for the athlete: past the 0.9 m leg `roughScale` takes, some to tens of metres. There the path the hips leave the floor
-  // on tells the two apart, whatever the scale: a jump's rises at 31–48°, a stride's at under 22°. Every figure would rest
-  // on such a stride.
+  // on tells the two apart, whatever the scale: a jump's rises at 31–48°, a stride's at under 22°. A fall that fits no
+  // athlete at all is timed at the wrong frame rate (`GRAVITY_LEG_M`). Every figure would rest on either.
   const riseDeg = (atan2(fy.c[1], abs(fx.c[1])) * 180) / PI;
-  if (!markers && gravityScale * max(1, legPx) > 0.9 && riseDeg < STRIDE_RISE_DEG) return { ok: false, problem: 'unclear-jump' };
+  const gravityLegM = gravityScale * max(1, legPx);
+  if (!markers && gravityLegM > 0.9 && riseDeg < STRIDE_RISE_DEG) return { ok: false, problem: 'unclear-jump' };
+  if (!markers && (gravityLegM < GRAVITY_LEG_M.min || gravityLegM > GRAVITY_LEG_M.max)) return { ok: false, problem: 'frame-rate' };
   const gravityScaleRel = (2 * fy.se[2]) / curvature;
   const gWithMarkers = markerScale != null ? curvature * markerScale : null;
   if (markerScale != null) {
