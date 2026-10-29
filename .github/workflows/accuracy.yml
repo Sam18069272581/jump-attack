@@ -1,0 +1,81 @@
+# Accuracy regression: runs a quick, seeded subset of each synthetic validation (jump detection, jump analysis,
+# take-off technique, bar speed) and fails when a figure is worse than tools/accuracy-regression/baseline.json.
+# Only runs when the measuring code or the validations change. Reports are kept as artifacts for two weeks.
+name: Accuracy
+
+on:
+  pull_request:
+    paths:
+      - 'mobile/src/domain/**'
+      - 'mobile/src/media/**'
+      - 'mobile/src/i18n/**'
+      - 'mobile/package-lock.json'
+      - 'tools/**'
+      - '.github/workflows/accuracy.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/src/domain/**'
+      - 'mobile/src/media/**'
+      - 'mobile/src/i18n/**'
+      - 'mobile/package-lock.json'
+      - 'tools/**'
+      - '.github/workflows/accuracy.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: accuracy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: ${{ matrix.check }}
+    # Pinned, like the tools below: the baseline was recorded with Ubuntu 24.04's ffmpeg.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [detect, analysis, pose, vbt]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      # The validations compile the app's TypeScript with its own tsc.
+      - run: npm ci
+        working-directory: mobile
+      - if: matrix.check != 'pose'
+        name: ffmpeg and Chromium
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq --no-install-recommends ffmpeg
+          npm install -g playwright@1.63.0
+          playwright install --with-deps chromium
+          echo "NODE_PATH=$(npm root -g)" >> "$GITHUB_ENV"
+      - if: matrix.check == 'vbt'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: tools/vbt-validation/requirements.txt
+      - if: matrix.check == 'vbt'
+        run: pip install -r tools/vbt-validation/requirements.txt
+      - if: matrix.check == 'pose'
+        run: node --test tools/accuracy-regression/*.test.js
+      - run: node tools/accuracy-regression/run.js ${{ matrix.check }} --out "$RUNNER_TEMP/accuracy"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: accuracy-${{ matrix.check }}
+          path: |
+            ${{ runner.temp }}/accuracy/*/report.md
+            ${{ runner.temp }}/accuracy/*/report.json
+            ${{ runner.temp }}/accuracy/*/results.json
+          if-no-files-found: ignore
+          retention-days: 14

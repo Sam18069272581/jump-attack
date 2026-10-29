@@ -2,7 +2,7 @@
 
 Checks the app's video bar-speed measurement (`mobile/src/media/barTrackerHtml.ts` + `mobile/src/domain/barPath.ts`) against known answers, next to an independent OpenCV pipeline (`reference_tracker.py`).
 
-Needs Python 3 with numpy, scipy and opencv-python-headless, ffmpeg, Node with Playwright (`NODE_PATH=$(npm root -g)`), and `npm install` done in `mobile/`.
+Needs Python 3 with numpy, scipy and opencv-python-headless (`pip install -r requirements.txt`), ffmpeg, Node with Playwright (`NODE_PATH=$(npm root -g)`), and `npm install` done in `mobile/`.
 
 ## Synthetic videos with exact ground truth
 
