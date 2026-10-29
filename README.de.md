@@ -29,10 +29,10 @@
 ---
 
 <p align="center">
-  <img src="docs/assets/showcase.png" width="880" alt="Drei Handy-Screenshots: Der Startbildschirm zeigt 12 cm bis zur Dunk-Linie und Reaktivkraft als aktuelle Schwäche; der Verlauf zeigt die Reichhöhenkurve und Kacheln für Kraft, Reaktivkraft und Sprint; das Training zeigt die heutige Einheit in Woche 2 des Reaktivblocks">
+  <img src="docs/assets/showcase.de.png" width="880" alt="Drei Handy-Screenshots: Der Startbildschirm zeigt 12,8 cm bis zur Dunk-Linie und Reaktivkraft als aktuelle Schwäche; der Verlauf zeigt die Reichhöhenkurve und Kacheln für Kraft, Reaktivkraft und Sprint; das Training zeigt die heutige Einheit in Woche 2 des Reaktivblocks">
 </p>
 
-<p align="center"><sub>Die Screenshots zeigen einen Demo-Athleten. Die App selbst ist vorerst auf Chinesisch.</sub></p>
+<p align="center"><sub>Die Screenshots zeigen einen Demo-Athleten. Die App folgt der Sprache des Handys (Chinesisch, Englisch oder Deutsch); umstellen unter Ich → Sprache.</sub></p>
 
 ## Warum
 
@@ -69,7 +69,7 @@ Drei Wege, **keiner braucht Xcode oder ein Entwicklerkonto**:
 | 📱 **Expo Go Cloud-Build** | Tägliche Nutzung ohne Computer | In Expo Go mit dem eigenen Expo-Konto anmelden und `exp://u.expo.dev/589a8a7c-8269-46a9-a6f1-a9fa25be2636?channel-name=main` öffnen |
 | 💻 **Vom Computer** | Code ändern, einen Branch testen | Siehe den eingeklappten Abschnitt unten |
 
-GitHub Actions aktualisiert Web-App und Cloud-Build, sobald Code in `main` gemergt wird. Jeder Weg speichert seine eigenen Daten. Mit derselben E-Mail unter Ich → Backup & Sync angemeldet, synchronisieren sie sich untereinander.
+GitHub Actions aktualisiert Web-App und Cloud-Build, sobald Code in `main` gemergt wird. Jeder Weg speichert seine eigenen Daten. Mit derselben E-Mail unter Ich → Sicherung und Synchronisierung angemeldet, synchronisieren sie sich untereinander.
 
 <details>
 <summary><b>💻 Vom Computer starten (mit Expo Go scannen)</b></summary>
