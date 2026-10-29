@@ -16,7 +16,7 @@ const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn() };
 const mockWeb: { props: Record<string, any> | null; inject: jest.Mock } = { props: null, inject: jest.fn() };
 const mockGravity: { cb: ((v: { x: number; y: number; z: number }) => void) | null } = { cb: null };
 const mockStaged = jest.fn();
-const mockDisk = { full: false };
+const mockDisk = { full: false, free: 64e9 };
 
 jest.mock('expo-router', () => ({
   get router() {
@@ -45,6 +45,13 @@ jest.mock('@/media/poseLib', () => ({
     return { page: 'file:///app/Documents/pose/run-1/page.html', dir: 'file:///app/Documents/pose/run-1', root: 'file:///app/Documents/pose' };
   },
   unstagePosePage: jest.fn(),
+}));
+jest.mock('expo-file-system', () => ({
+  Paths: {
+    get availableDiskSpace() {
+      return mockDisk.free;
+    },
+  },
 }));
 jest.mock('@/media/takes', () => {
   let n = 0;
@@ -337,4 +344,17 @@ it('keeps saying what went wrong when it fails as a take starts, whatever the pa
   shown = texts(r.root);
   expect(shown).toContain('骨架识别启动不了');
   expect(shown).not.toContain('没录到画面');
+});
+
+it('stops the take before a piece the phone has no room for: iOS can’t say a write ran out of room, it closes the app', async () => {
+  await open();
+  await press('不检查直接拍');
+  await press('开始录像');
+  await post({ type: 'recording', mime: 'video/mp4' });
+  mockDisk.free = 40e6;
+  await post({ type: 'chunk', seq: 0, data: Buffer.alloc(30_000, 7).toString('base64') });
+  mockDisk.free = 64e9;
+  expect(texts(r.root)).toContain('录像存不下来：手机存储空间不够了');
+  expect(mockWeb.inject).toHaveBeenCalledWith('window.stopRecording(); true;');
+  expect(mockWeb.inject).toHaveBeenLastCalledWith('window.ack(0); true;');
 });

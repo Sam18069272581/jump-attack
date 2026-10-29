@@ -1,4 +1,4 @@
-import type { File } from 'expo-file-system';
+import { Paths, type File } from 'expo-file-system';
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { type StyleProp, type ViewStyle } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
@@ -10,6 +10,9 @@ import { colors } from '@/theme';
 
 // The library's class defaults its extra-props parameter to `undefined`, which leaves no props at all under React 19's types.
 type Web = WebView<Record<never, never>>;
+
+/** Room kept free while filming: about two takes (20 s at 60 fps is some 25 MB), so the phone isn't filled to the brim. */
+const RESERVE_BYTES = 50e6;
 
 export type CameraInfo = { label: string; physical: boolean; fps: number | null; maxFps: number | null; width: number; height: number };
 /** One picture the page read: its people (132 numbers each), brightness, and the count of the latest whole-picture search. */
@@ -115,6 +118,10 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
         try {
           // Each piece is written before the page sends the next: base64 to bytes, with no copy of the whole take in memory.
           take.current ??= newTakeFile('mp4');
+          // iOS's append can't say the phone is full (it raises, and the app is closed), so the room is checked first,
+          // with enough left over for the camera's own copy of the take and for the phone itself.
+          const free = Paths.availableDiskSpace;
+          if (free != null && free < m.data.length + RESERVE_BYTES) throw new Error('手机存储空间不够了');
           await take.current.write(m.data, { encoding: 'base64', append: true });
         } catch (err) {
           fail('record', `录像存不下来：${err instanceof Error ? err.message : String(err)}`);
