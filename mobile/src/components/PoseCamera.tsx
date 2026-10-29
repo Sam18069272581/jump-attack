@@ -3,6 +3,7 @@ import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 're
 import { type StyleProp, type ViewStyle } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
+import { tr } from '@/i18n';
 import { CAMERA_BITRATE, MAX_TAKE_S, poseCameraHtml } from '@/media/poseCameraHtml';
 import { stagePosePage, unstagePosePage } from '@/media/poseLib';
 import { dropTake, newTakeFile } from '@/media/takes';
@@ -92,7 +93,7 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
     startRecording: () => {
       // A take the phone can't hold to the end isn't started: the athlete would run up for nothing.
       const free = Paths.availableDiskSpace;
-      if (free != null && free < takeBytes(maxSeconds) + RESERVE_BYTES) return fail('record', '录像存不下来：手机存储空间不够了，清理一些再拍');
+      if (free != null && free < takeBytes(maxSeconds) + RESERVE_BYTES) return fail('record', tr('录像存不下来：手机存储空间不够了，清理一些再拍'));
       call('window.startRecording()');
     },
     stopRecording: () => call('window.stopRecording()'),
@@ -118,7 +119,7 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
     const h = handlers.current;
     if (m.type === 'camera') return h.onCamera({ label: m.label, physical: m.physical, fps: m.fps, maxFps: m.maxFps, width: m.width, height: m.height });
     if (m.type === 'frame') return h.onFrame?.({ width: m.width, height: m.height, luma: m.luma, lumas: m.lumas, poses: m.poses, crowd: m.crowd });
-    if (m.type === 'error') return fail(m.stage, m.stage === 'record' ? `录像出错：${m.message}` : m.message, m.name);
+    if (m.type === 'error') return fail(m.stage, m.stage === 'record' ? tr('录像出错：{message}', { message: m.message }) : m.message, m.name);
     if (m.type === 'recording') {
       // A take whose start comes after a failure belongs to it: the page was told to stop it, and the failure stays said.
       if (broken.current) return;
@@ -134,10 +135,10 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
           // iOS's append can't say the phone is full (it raises, and the app is closed), so the room is checked first,
           // with enough left over for the camera's own copy of the take and for the phone itself.
           const free = Paths.availableDiskSpace;
-          if (free != null && free < m.data.length + RESERVE_BYTES) throw new Error('手机存储空间不够了');
+          if (free != null && free < m.data.length + RESERVE_BYTES) throw new Error(tr('手机存储空间不够了'));
           await take.current.write(m.data, { encoding: 'base64', append: true });
         } catch (err) {
-          fail('record', `录像存不下来：${err instanceof Error ? err.message : String(err)}`);
+          fail('record', tr('录像存不下来：{p}', { p: err instanceof Error ? err.message : String(err) }));
         }
       }
       // Answered even when not written: the page holds the take until every piece is, and records nothing new meanwhile.
@@ -148,10 +149,10 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
       if (broken.current) return;
       const file = take.current;
       take.current = null;
-      if (!file || m.chunks === 0) return fail('record', '没录到画面');
+      if (!file || m.chunks === 0) return fail('record', tr('没录到画面'));
       if (file.size !== m.size) {
         dropTake(file.uri);
-        return fail('record', `录像不完整（${file.size} / ${m.size} 字节）`);
+        return fail('record', tr('录像不完整（{size} / {size2} 字节）', { size: file.size, size2: m.size }));
       }
       h.onRecorded({ uri: file.uri, size: m.size, seconds: m.seconds, mime: m.mime });
     }
@@ -174,8 +175,8 @@ export const PoseCamera = forwardRef<PoseCameraHandle, Props>(function PoseCamer
       scrollEnabled={false}
       bounces={false}
       onMessage={onMessage}
-      onError={() => fail('page', '相机页面打不开')}
-      onContentProcessDidTerminate={() => fail('page', '手机把相机页面关掉了')}
+      onError={() => fail('page', tr('相机页面打不开'))}
+      onContentProcessDidTerminate={() => fail('page', tr('手机把相机页面关掉了'))}
       style={[{ backgroundColor: colors.text }, style]}
     />
   );

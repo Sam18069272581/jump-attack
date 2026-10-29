@@ -16,6 +16,8 @@
  */
 import { LM, SIDE, type Pose } from './pose';
 
+import { localized, tr } from '@/i18n';
+
 const { abs, acos, asin, atan2, hypot, max, min, PI, sqrt } = Math;
 const DEG = 180 / PI;
 
@@ -48,7 +50,7 @@ export type SetupCheckKey = 'phone' | 'steady' | 'person' | 'whole' | 'size' | '
 export type SetupCheck = { key: SetupCheckKey; state: 'ok' | 'warn' | 'fix' | 'wait'; hint: string };
 
 /** Every check, in the order to fix them, with its name on the screen's list. */
-export const SETUP_CHECKS: [SetupCheckKey, string][] = [
+export const SETUP_CHECKS: [SetupCheckKey, string][] = localized([
   ['phone', '手机横放、放平'],
   ['steady', '放稳'],
   ['person', '看到人'],
@@ -58,7 +60,7 @@ export const SETUP_CHECKS: [SetupCheckKey, string][] = [
   ['light', '光线'],
   ['clear', '关节看得清'],
   ['side', '侧对手机'],
-];
+]);
 
 export type SetupState = {
   /** In the order to fix them: the phone first, then where the athlete is in the picture, then how well they show. */
@@ -129,12 +131,12 @@ type Measure = {
   faint: { part: string; v: number };
 };
 
-const PARTS: [string, (keyof typeof SIDE.left)[]][] = [
+const PARTS: [string, (keyof typeof SIDE.left)[]][] = localized([
   ['脚', ['ankle', 'heel', 'toe']],
   ['膝盖', ['knee']],
   ['髋部', ['hip']],
   ['肩膀', ['shoulder']],
-];
+]);
 
 const median = (xs: number[]): number => {
   const s = [...xs].sort((a, b) => a - b);
@@ -188,7 +190,7 @@ function athleteIn(f: SetupFrame): { index: number; stature: number } | null {
 function phoneChecks(gravity: GravitySample[], now: number): { checks: SetupCheck[]; level: SetupState['level'] } {
   const recent = gravity.filter((g) => g.t >= now - WINDOW_S);
   if (recent.length < 3) {
-    const hint = '读不到手机的水平仪：自己确认手机横放、放平、放稳';
+    const hint = tr('读不到手机的水平仪：自己确认手机横放、放平、放稳');
     return { checks: [{ key: 'phone', state: 'warn', hint }, { key: 'steady', state: 'warn', hint }], level: null };
   }
   const units = recent.map((g) => {
@@ -204,13 +206,13 @@ function phoneChecks(gravity: GravitySample[], now: number): { checks: SetupChec
   const wobble = sqrt(units.reduce((s, u) => s + acos(max(-1, min(1, u.x * mean.x + u.y * mean.y + u.z * mean.z))) ** 2, 0) / units.length) * DEG;
 
   let phone: SetupCheck;
-  if (abs(mean.z) > 0.8) phone = { key: 'phone', state: 'fix', hint: '把手机立起来，背面的镜头对着起跳点' };
-  else if (abs(mean.y) > abs(mean.x)) phone = { key: 'phone', state: 'fix', hint: '把手机横过来放' };
-  else if (abs(pitch) > PITCH_DEG) phone = { key: 'phone', state: 'fix', hint: `手机前后没立直，差 ${Math.round(abs(pitch))} 度` };
-  else if (abs(roll) > LEVEL_DEG) phone = { key: 'phone', state: 'fix', hint: `手机歪了 ${Math.round(abs(roll))} 度，转平` };
-  else phone = { key: 'phone', state: 'ok', hint: '手机横放、放平了' };
+  if (abs(mean.z) > 0.8) phone = { key: 'phone', state: 'fix', hint: tr('把手机立起来，背面的镜头对着起跳点') };
+  else if (abs(mean.y) > abs(mean.x)) phone = { key: 'phone', state: 'fix', hint: tr('把手机横过来放') };
+  else if (abs(pitch) > PITCH_DEG) phone = { key: 'phone', state: 'fix', hint: tr('手机前后没立直，差 {pitch} 度', { pitch: Math.round(abs(pitch)) }) };
+  else if (abs(roll) > LEVEL_DEG) phone = { key: 'phone', state: 'fix', hint: tr('手机歪了 {roll} 度，转平', { roll: Math.round(abs(roll)) }) };
+  else phone = { key: 'phone', state: 'ok', hint: tr('手机横放、放平了') };
   const steady: SetupCheck =
-    wobble > STEADY_DEG ? { key: 'steady', state: 'fix', hint: '手机在晃：放到三脚架上，或者靠在稳的东西上' } : { key: 'steady', state: 'ok', hint: '手机放稳了' };
+    wobble > STEADY_DEG ? { key: 'steady', state: 'fix', hint: tr('手机在晃：放到三脚架上，或者靠在稳的东西上') } : { key: 'steady', state: 'ok', hint: tr('手机放稳了') };
   return { checks: [phone, steady], level: { roll, pitch } };
 }
 
@@ -224,10 +226,10 @@ function pictureChecks(frames: SetupFrame[]): { checks: SetupCheck[]; athlete: S
   const now = athleteIn(latest);
   if (frames.slice(-2).every((f) => !athleteIn(f))) {
     const dark = latest.luma < DARK_LUMA;
-    const hint = dark ? '太暗了，看不到人：开灯，或者换亮一点的地方' : '没看到人：站到起跳点，侧身对着手机，全身都要在画面里';
+    const hint = dark ? tr('太暗了，看不到人：开灯，或者换亮一点的地方') : tr('没看到人：站到起跳点，侧身对着手机，全身都要在画面里');
     return { checks: [{ key: 'person', state: 'fix', hint }], athlete: null };
   }
-  if (seen.length < 2) return { checks: [{ key: 'person', state: 'wait', hint: '正在找人，站着别动' }], athlete: now };
+  if (seen.length < 2) return { checks: [{ key: 'person', state: 'wait', hint: tr('正在找人，站着别动') }], athlete: now };
 
   const W = latest.width;
   const H = latest.height;
@@ -239,56 +241,56 @@ function pictureChecks(frames: SetupFrame[]): { checks: SetupCheck[]; athlete: S
   const crowd = latest.crowd ?? max(...recent.map((f) => f.poses.length));
   checks.push(
     crowd > 1
-      ? { key: 'person', state: 'warn', hint: `画面里有 ${crowd} 个人：最好只留运动员，分析时也可以点一下运动员` }
-      : { key: 'person', state: 'ok', hint: '找到人了' },
+      ? { key: 'person', state: 'warn', hint: tr('画面里有 {crowd} 个人：最好只留运动员，分析时也可以点一下运动员', { crowd }) }
+      : { key: 'person', state: 'ok', hint: tr('找到人了') },
   );
 
   // Whole body in the picture, feet clear of the bottom edge.
-  if (floor > H * (1 - FOOT_MARGIN)) checks.push({ key: 'whole', state: 'fix', hint: '脚出画了：镜头往下一点，或者手机往后挪' });
-  else if (med((m) => m.top) < 0) checks.push({ key: 'whole', state: 'fix', hint: '头出画了：手机往后挪，或者架高一点' });
-  else if (med((m) => m.left) < 0 || med((m) => m.right) > W) checks.push({ key: 'whole', state: 'fix', hint: '身体出画了：手机往后挪，让人在画面中间附近' });
-  else checks.push({ key: 'whole', state: 'ok', hint: '全身都在画面里' });
+  if (floor > H * (1 - FOOT_MARGIN)) checks.push({ key: 'whole', state: 'fix', hint: tr('脚出画了：镜头往下一点，或者手机往后挪') });
+  else if (med((m) => m.top) < 0) checks.push({ key: 'whole', state: 'fix', hint: tr('头出画了：手机往后挪，或者架高一点') });
+  else if (med((m) => m.left) < 0 || med((m) => m.right) > W) checks.push({ key: 'whole', state: 'fix', hint: tr('身体出画了：手机往后挪，让人在画面中间附近') });
+  else checks.push({ key: 'whole', state: 'ok', hint: tr('全身都在画面里') });
 
-  if (stature < MIN_SIZE * H) checks.push({ key: 'size', state: 'fix', hint: '人太小了：手机往前挪近一点' });
-  else if (floor < HEADROOM_S * stature) checks.push({ key: 'size', state: 'fix', hint: '上面不够高，跳起来手会出画：手机往后挪远一点，或者架高一点' });
-  else checks.push({ key: 'size', state: 'ok', hint: '大小合适，上面留够了' });
+  if (stature < MIN_SIZE * H) checks.push({ key: 'size', state: 'fix', hint: tr('人太小了：手机往前挪近一点') });
+  else if (floor < HEADROOM_S * stature) checks.push({ key: 'size', state: 'fix', hint: tr('上面不够高，跳起来手会出画：手机往后挪远一点，或者架高一点') });
+  else checks.push({ key: 'size', state: 'ok', hint: tr('大小合适，上面留够了') });
 
   // Room either side along the run-up: the toes point the way they run, the run-up comes from behind.
   const facing = med((m) => m.facing);
-  if (abs(facing) < 0.03 * stature) checks.push({ key: 'room', state: 'wait', hint: '面朝跑的方向站好' });
+  if (abs(facing) < 0.03 * stature) checks.push({ key: 'room', state: 'wait', hint: tr('面朝跑的方向站好') });
   else {
     const hipX = med((m) => m.hipX);
     const behind = facing > 0 ? hipX : W - hipX;
     const ahead = facing > 0 ? W - hipX : hipX;
     const shortBehind = behind < BEHIND_S * stature;
     const shortAhead = ahead < AHEAD_S * stature;
-    if (shortBehind && shortAhead) checks.push({ key: 'room', state: 'fix', hint: '两边都拍不全：手机往后挪远一点' });
-    else if (shortBehind) checks.push({ key: 'room', state: 'fix', hint: '助跑那边拍不全：把手机往助跑的方向平移一点' });
-    else if (shortAhead) checks.push({ key: 'room', state: 'fix', hint: '落地那边拍不全：把手机往篮筐那边平移一点' });
-    else checks.push({ key: 'room', state: 'ok', hint: '最后两步和落地都拍得到' });
+    if (shortBehind && shortAhead) checks.push({ key: 'room', state: 'fix', hint: tr('两边都拍不全：手机往后挪远一点') });
+    else if (shortBehind) checks.push({ key: 'room', state: 'fix', hint: tr('助跑那边拍不全：把手机往助跑的方向平移一点') });
+    else if (shortAhead) checks.push({ key: 'room', state: 'fix', hint: tr('落地那边拍不全：把手机往篮筐那边平移一点') });
+    else checks.push({ key: 'room', state: 'ok', hint: tr('最后两步和落地都拍得到') });
   }
 
   const luma = med((m) => m.luma);
   const scene = median(recent.map((f) => f.luma));
   // A dark figure in a bright picture: the exposure is set by a window or the sun behind them.
-  if (luma < BACKLIT_SHARE * scene) checks.push({ key: 'light', state: 'fix', hint: '逆光了：别对着窗户或太阳拍，换个方向' });
-  else if (luma < DARK_LUMA) checks.push({ key: 'light', state: 'fix', hint: '太暗了：开灯，或者换亮一点的地方' });
-  else if (luma > BRIGHT_LUMA) checks.push({ key: 'light', state: 'fix', hint: '太亮了：别对着窗户、太阳或灯拍' });
-  else if (luma < DIM_LUMA) checks.push({ key: 'light', state: 'warn', hint: '光线偏暗，脚快的时候可能会糊' });
-  else checks.push({ key: 'light', state: 'ok', hint: '光线够' });
+  if (luma < BACKLIT_SHARE * scene) checks.push({ key: 'light', state: 'fix', hint: tr('逆光了：别对着窗户或太阳拍，换个方向') });
+  else if (luma < DARK_LUMA) checks.push({ key: 'light', state: 'fix', hint: tr('太暗了：开灯，或者换亮一点的地方') });
+  else if (luma > BRIGHT_LUMA) checks.push({ key: 'light', state: 'fix', hint: tr('太亮了：别对着窗户、太阳或灯拍') });
+  else if (luma < DIM_LUMA) checks.push({ key: 'light', state: 'warn', hint: tr('光线偏暗，脚快的时候可能会糊') });
+  else checks.push({ key: 'light', state: 'ok', hint: tr('光线够') });
 
   const faint = seen[seen.length - 1].m.faint;
   const faintV = median(seen.map((s) => s.m.faint.v));
   checks.push(
     faintV < CLEAR_VISIBILITY
-      ? { key: 'clear', state: 'fix', hint: `看不清${faint.part}：别让东西挡住，衣服和背景颜色别太像，光线亮一点` }
-      : { key: 'clear', state: 'ok', hint: '关节都看得清' },
+      ? { key: 'clear', state: 'fix', hint: tr('看不清{part}：别让东西挡住，衣服和背景颜色别太像，光线亮一点', { part: faint.part }) }
+      : { key: 'clear', state: 'ok', hint: tr('关节都看得清') },
   );
 
   const spread = med((m) => m.spread);
-  if (spread > SIDE_OFF) checks.push({ key: 'side', state: 'fix', hint: '要侧对手机：侧身站好；已经侧着站了，就是手机不在跑道正侧面' });
-  else if (spread > SIDE_ON) checks.push({ key: 'side', state: 'warn', hint: '还没完全侧对：手机再往跑道正侧面挪一点' });
-  else checks.push({ key: 'side', state: 'ok', hint: '侧对手机了' });
+  if (spread > SIDE_OFF) checks.push({ key: 'side', state: 'fix', hint: tr('要侧对手机：侧身站好；已经侧着站了，就是手机不在跑道正侧面') });
+  else if (spread > SIDE_ON) checks.push({ key: 'side', state: 'warn', hint: tr('还没完全侧对：手机再往跑道正侧面挪一点') });
+  else checks.push({ key: 'side', state: 'ok', hint: tr('侧对手机了') });
 
   return { checks, athlete: now };
 }
@@ -300,7 +302,7 @@ function pictureChecks(frames: SetupFrame[]): { checks: SetupCheck[]; athlete: S
 export function checkSetup(frames: SetupFrame[], gravity: GravitySample[]): SetupState {
   const now = frames.length ? frames[frames.length - 1].t : gravity.length ? gravity[gravity.length - 1].t : 0;
   const phone = phoneChecks(gravity, now);
-  const picture = frames.length ? pictureChecks(frames) : { checks: [{ key: 'person', state: 'wait', hint: '正在打开相机' } as SetupCheck], athlete: null };
+  const picture = frames.length ? pictureChecks(frames) : { checks: [{ key: 'person', state: 'wait', hint: tr('正在打开相机') } as SetupCheck], athlete: null };
   const found = [...phone.checks, ...picture.checks];
   const checks = SETUP_CHECKS.map(([key]) => found.find((c) => c.key === key) ?? { key, state: 'wait' as const, hint: '' });
   const blocking = checks.find((c) => c.state === 'fix' || c.state === 'wait') ?? null;

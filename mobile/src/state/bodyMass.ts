@@ -6,6 +6,7 @@ import type { Athlete } from '@/db/repo';
 import { massGainCm, massGainText, massNear } from '@/domain/bodyMass';
 import { toISODate } from '@/domain/dates';
 import { fvProfile, pushOff } from '@/domain/fvp';
+import { tr } from '@/i18n';
 
 /**
  * The diagnosis's body-mass line: centimetres per kilo lost from the latest force-velocity profile, read at the
@@ -17,7 +18,7 @@ export async function loadMassGain(db: SQLiteDatabase, athlete: Athlete): Promis
   const latest = profileSessions(loaded).at(-1);
   const mass = latest ? (massNear(weighIns, toISODate(new Date(latest.startedAt))) ?? athlete.body_mass_kg) : null;
   const profile = latest && mass != null && hpo != null ? fvProfile(mass, hpo, latest.jumps) : null;
-  if (!profile || mass == null || hpo == null) return { text: '先测力-速度曲线，才能估算减体重能多摸几厘米', estimated: false };
+  if (!profile || mass == null || hpo == null) return { text: tr('先测力-速度曲线，才能估算减体重能多摸几厘米'), estimated: false };
   const p = { f0: profile.f0, v0: profile.v0, massKg: mass, hpoM: hpo };
   return { text: massGainText(massGainCm(p, 1)!, massGainCm(p, 3)!), estimated: true };
 }

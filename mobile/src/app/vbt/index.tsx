@@ -8,23 +8,24 @@ import { newSessionId } from '@/db/repo';
 import { latestEstimate, listVbtSets, type VbtSet } from '@/db/vbt';
 import { getCategory, VBT_LIFTS } from '@/domain/metrics';
 import { ZONES } from '@/domain/vbt';
+import { localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
 const COLOR = getCategory('vbt').color;
-const POSITIONS = [
+const POSITIONS = localized([
   { key: 'floor', name: '地面' },
   { key: 'hang', name: '悬垂' },
   { key: 'power', name: '发力位' },
-];
+], 'name');
 
 /** A card per lift; the Olympic pulls pick a start position. */
-const LIFTS = [
+const LIFTS = localized([
   { name: '深蹲', code: 'vbt_squat', zone: '常用区间：绝对力量 / 加速力量' },
   { name: '高翻', base: 'vbt_clean', zone: '常用区间：速度-力量' },
   { name: '高拉', base: 'vbt_pull', zone: '常用区间：速度-力量 / 速度' },
   { name: '深蹲跳', code: 'vbt_squat_jump', zone: '轻负荷 · 速度 / 速度-力量' },
-];
+], 'name', 'zone');
 
 export default function Vbt() {
   const db = useSQLiteContext();
@@ -41,7 +42,7 @@ export default function Vbt() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={text.muted}>追踪杠铃速度，按速度区间控制训练强度</Text>
+      <Text style={text.muted}>{tr('追踪杠铃速度，按速度区间控制训练强度')}</Text>
       {LIFTS.map((l) => {
         const code = l.code ?? `${l.base}_${pos[l.base!]}`;
         const lift = VBT_LIFTS.find((x) => x.code === code)!;
@@ -53,7 +54,7 @@ export default function Vbt() {
             <View style={styles.head}>
               <Text style={text.heading}>{lift.name}</Text>
               <View style={{ alignItems: 'flex-end' }}>
-                <Text style={text.caption}>上次平均</Text>
+                <Text style={text.caption}>{tr('上次平均')}</Text>
                 <Text style={styles.v}>
                   {last ? last.v.toFixed(2) : '—'} <Text style={styles.unit}>m/s{last?.load ? ` @ ${last.load} kg` : ''}</Text>
                 </Text>
@@ -69,16 +70,16 @@ export default function Vbt() {
             <View style={styles.foot}>
               <Text style={[text.caption, { flex: 1 }]}>
                 {l.zone}
-                {est?.oneRm ? ` · 估算 1RM ${Math.round(est.oneRm)} kg` : ''}
+                {est?.oneRm ? tr(' · 估算 1RM {oneRm} kg', { oneRm: Math.round(est.oneRm) }) : ''}
               </Text>
-              <Button label="开始" onPress={() => router.push({ pathname: '/vbt/[lift]', params: { lift: code, session: newSessionId() } })} style={{ height: 40, paddingHorizontal: 18 }} />
+              <Button label={tr('开始')} onPress={() => router.push({ pathname: '/vbt/[lift]', params: { lift: code, session: newSessionId() } })} style={{ height: 40, paddingHorizontal: 18 }} />
             </View>
           </Card>
         );
       })}
 
       <Card style={{ gap: 8 }}>
-        <Text style={text.section}>速度区间（平均速度 m/s）</Text>
+        <Text style={text.section}>{tr('速度区间（平均速度 m/s）')}</Text>
         {ZONES.map((z) => (
           <View key={z.key} style={styles.zone}>
             <Text style={text.body}>{z.name}</Text>

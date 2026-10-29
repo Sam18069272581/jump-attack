@@ -9,6 +9,7 @@ import { endPlan } from '@/db/training';
 import { addDays, daysBetween, mondayOf, shortDate } from '@/domain/dates';
 import { BLOCKS } from '@/domain/dunk';
 import { BLOCK_WEEKS, PHASE_NAMES, planDay, planWeekOf, planWeeks, type PlannedSession } from '@/domain/plan';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadTraining, todayISO, type TrainingData } from '@/state/training';
 import { colors, radius, text } from '@/theme';
@@ -33,8 +34,8 @@ export default function PlanOverview() {
   if (data === null) {
     return (
       <SafeAreaView style={styles.screen}>
-        <Empty title="还没有训练计划" />
-        <Button label="选择训练计划" onPress={() => router.replace('/plan/new')} style={{ margin: 16 }} />
+        <Empty title={tr('还没有训练计划')} />
+        <Button label={tr('选择训练计划')} onPress={() => router.replace('/plan/new')} style={{ margin: 16 }} />
       </SafeAreaView>
     );
   }
@@ -59,15 +60,15 @@ export default function PlanOverview() {
     const phase = sessions[0]?.phase ?? template.weeks[Math.max(0, planWeekOf(plan, monday)) % template.weeks.length].phase;
     const block = sessions.find((p) => !p.inserted)?.block;
     const spec = block && template.blocks?.[block.type].weeks[block.week];
-    const label = block && spec ? `${BLOCKS[block.type].name} ${block.week + 1}/${BLOCK_WEEKS} · ${spec.retest ? '减量复测' : PHASE_NAMES[spec.phase]}` : PHASE_NAMES[phase];
+    const label = block && spec ? `${BLOCKS[block.type].name} ${block.week + 1}/${BLOCK_WEEKS} · ${spec.retest ? tr('减量复测') : PHASE_NAMES[spec.phase]}` : PHASE_NAMES[phase];
     return { week, label, deload: sessions.some((p) => p.inserted), sessions };
   }).filter((w) => total == null || w.sessions.length > 0);
 
   function confirmEnd() {
-    Alert.alert('结束这个计划？', '训练记录会保留，之后可以再选一个新计划。', [
-      { text: '取消', style: 'cancel' },
+    Alert.alert(tr('结束这个计划？'), tr('训练记录会保留，之后可以再选一个新计划。'), [
+      { text: tr('取消'), style: 'cancel' },
       {
-        text: '结束计划',
+        text: tr('结束计划'),
         style: 'destructive',
         onPress: async () => {
           await endPlan(db, plan.id);
@@ -87,12 +88,10 @@ export default function PlanOverview() {
 
         {weeks.map(({ week, label, deload, sessions }) => (
           <View key={week} style={[styles.week, week === currentWeek && { borderColor: colors.accent }]}>
-            <Text style={text.section}>
-              第 {week + 1} 周 · {deload ? '减量（疲劳后插入）' : label}
-            </Text>
+            <Text style={text.section}>{tr('第 {week} 周 · {p}', { week: week + 1, p: deload ? tr('减量（疲劳后插入）') : label })}</Text>
             {sessions.map((p) => {
               const w = byDate.get(p.date);
-              const status = w?.finishedAt ? '已完成' : w ? '进行中' : p.date === today ? '今天' : daysBetween(p.date, today) > 0 ? '未练' : '';
+              const status = w?.finishedAt ? tr('已完成') : w ? tr('进行中') : p.date === today ? tr('今天') : daysBetween(p.date, today) > 0 ? tr('未练') : '';
               const color = w?.finishedAt ? colors.good : w ? colors.warn : p.date === today ? colors.accent : colors.textMuted;
               const canOpen = daysBetween(p.date, today) >= 0;
               return (
@@ -115,8 +114,8 @@ export default function PlanOverview() {
         ))}
 
         <View style={{ gap: 10, marginTop: 8 }}>
-          <Button label="更换计划" variant="secondary" onPress={() => router.push('/plan/new')} />
-          <Button label="结束计划" variant="ghost" onPress={confirmEnd} />
+          <Button label={tr('更换计划')} variant="secondary" onPress={() => router.push('/plan/new')} />
+          <Button label={tr('结束计划')} variant="ghost" onPress={confirmEnd} />
         </View>
       </ScrollView>
     </SafeAreaView>

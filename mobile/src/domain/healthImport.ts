@@ -12,18 +12,18 @@ export type HealthImport = {
   problems: string[];
 };
 
-// Checked in order: 心率变异性 before 静息心率, since both say 心率.
+// Checked in order: 心率变异性 before 静息心率, since both say 心率 (and Herzfrequenz…, Ruheherzfrequenz).
 const LABELS: [RecoveryKey, RegExp][] = [
-  ['hrv', /hrv|sdnn|心率变异性|heart\s*rate\s*variability/i],
-  ['rhr', /静息心率|resting\s*heart\s*rate|\brhr\b/i],
-  ['resp', /呼吸|respirat|\bresp\b/i],
-  ['sleep', /睡眠|sleep/i],
+  ['hrv', /hrv|sdnn|心率变异性|heart\s*rate\s*variability|herzfrequenzvariabilit/i],
+  ['rhr', /静息心率|resting\s*heart\s*rate|\brhr\b|ruhepuls|ruheherzfrequenz/i],
+  ['resp', /呼吸|respirat|\bresp\b|atemfrequenz/i],
+  ['sleep', /睡眠|sleep|schlaf/i],
 ];
 
 const NUMBER = /\d+(?:[.,]\d+)?/;
 const num = (s: string) => Number(s.replace(',', '.'));
 
-/** Hours from how Shortcuts may write a duration: "7.4", "7:24", "7小时24分钟", "7 hr 24 min", "444 分钟", "26640 秒". */
+/** Hours from how Shortcuts may write a duration: "7.4", "7:24", "7小时24分钟", "7 hr 24 min", "7 Std. 24 Min.", "444 分钟", "26640 秒". */
 export function parseSleepHours(raw: string): number | null {
   const t = raw.trim();
   const clock = t.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
@@ -32,9 +32,9 @@ export function parseSleepHours(raw: string): number | null {
     const m = t.match(re);
     return m ? num(m[1]) : null;
   };
-  const h = part(/(\d+(?:[.,]\d+)?)\s*(?:小时|时|hours?|hrs?|h)(?![a-z])/i);
+  const h = part(/(\d+(?:[.,]\d+)?)\s*(?:小时|时|hours?|hrs?|std|h)(?![a-z])/i);
   const m = part(/(\d+(?:[.,]\d+)?)\s*(?:分钟|分|minutes?|mins?|m)(?![a-z])/i);
-  const s = part(/(\d+(?:[.,]\d+)?)\s*(?:秒钟|秒|seconds?|secs?|s)(?![a-z])/i);
+  const s = part(/(\d+(?:[.,]\d+)?)\s*(?:秒钟|秒|seconds?|secs?|sek|s)(?![a-z])/i);
   if (h != null || m != null || s != null) return (h ?? 0) + (m ?? 0) / 60 + (s ?? 0) / 3600;
   const n = t.match(NUMBER);
   if (!n) return null;

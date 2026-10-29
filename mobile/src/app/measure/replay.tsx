@@ -12,6 +12,7 @@ import { analysisKindFor } from '@/domain/analysisTrials';
 import { toISODate } from '@/domain/dates';
 import { analyseJumps, type JumpEvents } from '@/domain/jumpAnalysis';
 import { getMetric } from '@/domain/metrics';
+import { tr } from '@/i18n';
 import { stageForGrabbing, unstage } from '@/media/frameGrabber';
 import { replayConfig } from '@/media/replayConfig';
 import { replayHtml } from '@/media/replayHtml';
@@ -73,7 +74,7 @@ export default function Replay() {
         dir = s.dir;
         setStage(s);
       })
-      .catch(() => !gone && setState({ name: 'problem', text: '视频打不开' }));
+      .catch(() => !gone && setState({ name: 'problem', text: tr('视频打不开') }));
     return () => {
       gone = true;
       if (dir) unstage(dir);
@@ -101,7 +102,7 @@ export default function Replay() {
   function died() {
     const exporting = state.name === 'exporting';
     dropFile();
-    setState(exporting ? { name: 'problem', text: '导出中断：手机把回放页面关掉了，页面重新加载后可以再导出一次。', retry: true } : { name: 'loading' });
+    setState(exporting ? { name: 'problem', text: tr('导出中断：手机把回放页面关掉了，页面重新加载后可以再导出一次。'), retry: true } : { name: 'loading' });
     web.current?.reload();
   }
 
@@ -118,8 +119,8 @@ export default function Replay() {
     }
     if (m.type === 'progress') return setState({ name: 'exporting', done: m.done, total: m.total });
     if (m.type === 'cancelled') return setState({ name: 'ready' });
-    if (m.type === 'unsupported') return setState({ name: 'problem', text: '这台手机的系统录不了这个画面。可以点「再放一次」，用系统录屏录下来。' });
-    if (m.type === 'error') return setState({ name: 'problem', text: `出错了：${m.message}`, retry: true });
+    if (m.type === 'unsupported') return setState({ name: 'problem', text: tr('这台手机的系统录不了这个画面。可以点「再放一次」，用系统录屏录下来。') });
+    if (m.type === 'error') return setState({ name: 'problem', text: tr('出错了：{message}', { message: m.message }), retry: true });
     // The video arrives in parts, each written as it comes: base64 to bytes, no copy of the whole video in memory.
     const mp4 = m.mime.includes('mp4');
     try {
@@ -131,21 +132,21 @@ export default function Replay() {
       file.current.write(m.data, m.part === 0 ? { encoding: 'base64' } : { encoding: 'base64', append: true });
     } catch (err) {
       dropFile();
-      return setState({ name: 'problem', text: `导出失败：${err instanceof Error ? err.message : String(err)}`, retry: true });
+      return setState({ name: 'problem', text: tr('导出失败：{p}', { p: err instanceof Error ? err.message : String(err) }), retry: true });
     }
     if (m.part < m.parts - 1) return;
     setState({ name: 'sharing' });
     try {
-      await Sharing.shareAsync(file.current.uri, { mimeType: mp4 ? 'video/mp4' : 'video/webm', UTI: mp4 ? 'public.mpeg-4' : 'org.webmproject.webm', dialogTitle: '保存或分享视频' });
+      await Sharing.shareAsync(file.current.uri, { mimeType: mp4 ? 'video/mp4' : 'video/webm', UTI: mp4 ? 'public.mpeg-4' : 'org.webmproject.webm', dialogTitle: tr('保存或分享视频') });
       setState({ name: 'ready' });
     } catch (err) {
-      setState({ name: 'problem', text: `分享失败：${err instanceof Error ? err.message : String(err)}`, retry: true });
+      setState({ name: 'problem', text: tr('分享失败：{p}', { p: err instanceof Error ? err.message : String(err) }), retry: true });
     } finally {
       dropFile();
     }
   }
 
-  if (!config) return <Empty title="这个项目不能回放" />;
+  if (!config) return <Empty title={tr('这个项目不能回放')} />;
   const exporting = state.name === 'exporting';
   const canExport = state.name === 'ready' || (state.name === 'problem' && state.retry === true);
 
@@ -166,7 +167,7 @@ export default function Replay() {
             scrollEnabled={false}
             bounces={false}
             onMessage={onMessage}
-            onError={() => setState({ name: 'problem', text: '视频打不开' })}
+            onError={() => setState({ name: 'problem', text: tr('视频打不开') })}
             onContentProcessDidTerminate={died}
             onRenderProcessGone={died}
             style={{ backgroundColor: colors.bg }}
@@ -174,13 +175,13 @@ export default function Replay() {
         )}
       </View>
       <View style={styles.footer}>
-        {exporting && <PulseProgress progress={state.done / state.total} label="正在导出视频…" />}
+        {exporting && <PulseProgress progress={state.done / state.total} label={tr('正在导出视频…')} />}
         {state.name === 'problem' && <Text style={styles.problem}>{state.text}</Text>}
         <View style={styles.row}>
-          <Button label="再放一次" variant="secondary" onPress={() => call('window.replay.play()')} disabled={state.name === 'loading' || exporting} style={{ flex: 1 }} />
-          <Button label="导出视频" onPress={startExport} disabled={!canExport} busy={exporting || state.name === 'sharing'} style={{ flex: 1 }} />
+          <Button label={tr('再放一次')} variant="secondary" onPress={() => call('window.replay.play()')} disabled={state.name === 'loading' || exporting} style={{ flex: 1 }} />
+          <Button label={tr('导出视频')} onPress={startExport} disabled={!canExport} busy={exporting || state.name === 'sharing'} style={{ flex: 1 }} />
         </View>
-        <Text style={styles.note}>竖屏 720 × 1280，带水印、起跳曲线和每跳数据，可以存到相册或直接发出去。</Text>
+        <Text style={styles.note}>{tr('竖屏 720 × 1280，带水印、起跳曲线和每跳数据，可以存到相册或直接发出去。')}</Text>
       </View>
     </SafeAreaView>
   );

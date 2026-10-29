@@ -7,18 +7,19 @@ import { Card } from '@/components/ui';
 import { openDunkTest } from '@/components/dunkTests';
 import { BLOCKS, MISSING_TEXT, RIM_CM, reachRuler, type DunkDiagnosis, type DunkMetric, type Missing } from '@/domain/dunk';
 import { gapHeading, touchNote } from '@/domain/dunkSummary';
+import { tr } from '@/i18n';
 import { colors, fonts, radius, text } from '@/theme';
 
 function statusLabel(m: DunkMetric): string {
   switch (m.status) {
     case 'low':
-      return m.key === 'contact' ? '偏慢' : '偏低';
+      return m.key === 'contact' ? tr('偏慢') : tr('偏低');
     case 'mid':
-      return m.key === 'fv' ? '不均衡' : '接近';
+      return m.key === 'fv' ? tr('不均衡') : tr('接近');
     case 'good':
-      return '过线';
+      return tr('过线');
     case 'missing':
-      return '未测';
+      return tr('未测');
   }
 }
 
@@ -29,11 +30,11 @@ function valueText(m: DunkMetric): string {
 }
 
 function targetText(m: DunkMetric): string {
-  if (m.key === 'fv') return `均衡 ${m.low}–${m.threshold}%`;
+  if (m.key === 'fv') return tr('均衡 {low}–{threshold}%', { low: m.low, threshold: m.threshold });
   const unit = m.unit === '×' ? '×' : m.unit ? ` ${m.unit}` : '';
-  if (m.lowerIsBetter) return `目标 ≤ ${m.threshold}${unit}`;
+  if (m.lowerIsBetter) return tr('目标 ≤ {threshold}{unit}', { threshold: m.threshold, unit });
   const fixed = (x: number) => x.toFixed(Math.min(m.decimals, 1));
-  return m.low === m.threshold ? `目标 ≥ ${fixed(m.threshold)}${unit}` : `目标 ≥ ${fixed(m.threshold)}${unit}，< ${fixed(m.low)}${unit} 偏低`;
+  return m.low === m.threshold ? tr('目标 ≥ {threshold}{unit}', { threshold: fixed(m.threshold), unit }) : tr('目标 ≥ {threshold}{unit}，< {low}{unit} 偏低', { threshold: fixed(m.threshold), unit, low: fixed(m.low) });
 }
 
 /**
@@ -63,11 +64,11 @@ export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagn
 
   return (
     <Card style={styles.hero}>
-      {!ruler && <Text style={text.muted}>扣篮线 {d.line} cm</Text>}
+      {!ruler && <Text style={text.muted}>{tr('扣篮线 {line} cm', { line: d.line })}</Text>}
       {d.gapCm == null ? (
         <>
-          <Text style={text.heading}>还不知道离扣篮多远</Text>
-          <Text style={text.muted}>测一次助跑摸高，或者在「我的」填站立摸高、再测一次 CMJ。</Text>
+          <Text style={text.heading}>{tr('还不知道离扣篮多远')}</Text>
+          <Text style={text.muted}>{tr('测一次助跑摸高，或者在「我的」填站立摸高、再测一次 CMJ。')}</Text>
         </>
       ) : (
         <>
@@ -80,13 +81,13 @@ export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagn
             <View
               accessible
               accessibilityRole="progressbar"
-              accessibilityLabel="离扣篮线的进度"
+              accessibilityLabel={tr('离扣篮线的进度')}
               accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }}
               style={styles.ruler}
             >
               {rim != null && (
                 <View style={styles.rimRow}>
-                  <Text style={[styles.rulerText, styles.rimLabel, { left: `${rim * 100}%` }]}>篮筐 {RIM_CM}</Text>
+                  <Text style={[styles.rulerText, styles.rimLabel, { left: `${rim * 100}%` }]}>{tr('篮筐 {RIM_CM}', { RIM_CM })}</Text>
                 </View>
               )}
               <View style={styles.track}>
@@ -94,8 +95,8 @@ export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagn
                 {rim != null && <View style={[styles.rimTick, { left: `${rim * 100}%` }]} />}
               </View>
               <View style={styles.rulerLabels}>
-                <Text style={styles.rulerText}>站立 {standingReach!.toFixed(0)}</Text>
-                <Text style={styles.rulerText}>扣篮线 {d.line}</Text>
+                <Text style={styles.rulerText}>{tr('站立 {standingReach}', { standingReach: standingReach!.toFixed(0) })}</Text>
+                <Text style={styles.rulerText}>{tr('扣篮线 {line}', { line: d.line })}</Text>
               </View>
             </View>
           )}
@@ -104,8 +105,8 @@ export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagn
         </>
       )}
       {!d.missing.includes('approach') && (
-        <Pressable accessibilityRole="button" accessibilityLabel="测助跑摸高" hitSlop={8} onPress={() => openDunkTest('approach')} style={styles.retest}>
-          <Text style={styles.retestText}>再测助跑摸高</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr('测助跑摸高')} hitSlop={8} onPress={() => openDunkTest('approach')} style={styles.retest}>
+          <Text style={styles.retestText}>{tr('再测助跑摸高')}</Text>
           <Icon name="chevronRight" size={14} color={colors.accent} />
         </Pressable>
       )}
@@ -114,12 +115,12 @@ export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagn
 }
 
 function LimiterHead({ d }: { d: DunkDiagnosis }) {
-  if (!d.limiter) return <Text style={text.body}>还缺数据，先做「下一步」里的测试。</Text>;
+  if (!d.limiter) return <Text style={text.body}>{tr('还缺数据，先做「下一步」里的测试。')}</Text>;
   return (
     <>
       <View style={styles.limiterRow}>
         <Text style={styles.limiter}>{BLOCKS[d.limiter].name}</Text>
-        <Text style={[styles.badge, d.confirmed ? styles.badgeConfirmed : styles.badgePending]}>{d.confirmed ? '两次测试一致' : '再测一次确认'}</Text>
+        <Text style={[styles.badge, d.confirmed ? styles.badgeConfirmed : styles.badgePending]}>{d.confirmed ? tr('两次测试一致') : tr('再测一次确认')}</Text>
       </View>
       <Text style={text.body}>{BLOCKS[d.limiter].focus}</Text>
     </>
@@ -166,19 +167,19 @@ export function DunkPanel({ diagnosis: d, standingReach }: { diagnosis: DunkDiag
       <DunkHero diagnosis={d} standingReach={standingReach} />
 
       <Card style={{ gap: 10 }}>
-        <Text style={text.muted}>当前短板</Text>
+        <Text style={text.muted}>{tr('当前短板')}</Text>
         <LimiterHead d={d} />
         <Reasons d={d} />
       </Card>
 
-      <Text style={text.section}>指标</Text>
+      <Text style={text.section}>{tr('指标')}</Text>
       {d.metrics.map((m) => (
         <MetricRow key={m.key} m={m} />
       ))}
 
       {d.missing.length > 0 && (
         <>
-          <Text style={text.section}>下一步</Text>
+          <Text style={text.section}>{tr('下一步')}</Text>
           {d.missing.map((k) => (
             <NextRow key={k} k={k} />
           ))}
@@ -203,7 +204,7 @@ export function DunkSummary({ diagnosis: d }: { diagnosis: DunkDiagnosis }) {
   return (
     <Card style={styles.summary}>
       <View style={styles.summaryHead}>
-        <Text style={text.muted}>当前短板</Text>
+        <Text style={text.muted}>{tr('当前短板')}</Text>
         <LimiterHead d={d} />
       </View>
 
@@ -212,7 +213,7 @@ export function DunkSummary({ diagnosis: d }: { diagnosis: DunkDiagnosis }) {
           <Pressable
             key={m.key}
             accessibilityRole="button"
-            accessibilityLabel={`${m.name}，${statusLabel(m)}`}
+            accessibilityLabel={tr('{name}，{m}', { name: m.name, m: statusLabel(m) })}
             onPress={() => openDunkTest(m.key)}
             style={({ pressed }) => [styles.cell, pressed && styles.pressed]}
           >
@@ -231,7 +232,7 @@ export function DunkSummary({ diagnosis: d }: { diagnosis: DunkDiagnosis }) {
 
       {next && (
         <Pressable accessibilityRole="button" accessibilityLabel={MISSING_TEXT[next]} onPress={() => openDunkTest(next)} style={({ pressed }) => [styles.next, pressed && styles.pressed]}>
-          <Text style={styles.nextLabel}>下一步</Text>
+          <Text style={styles.nextLabel}>{tr('下一步')}</Text>
           <Text style={styles.nextText} numberOfLines={2}>
             {MISSING_TEXT[next]}
           </Text>
@@ -243,19 +244,19 @@ export function DunkSummary({ diagnosis: d }: { diagnosis: DunkDiagnosis }) {
         <View style={styles.more}>
           {d.reasons.length > 0 && (
             <View style={{ gap: 4 }}>
-              <Text style={styles.moreTitle}>为什么</Text>
+              <Text style={styles.moreTitle}>{tr('为什么')}</Text>
               <Reasons d={d} />
             </View>
           )}
           <View>
-            <Text style={styles.moreTitle}>各项目标</Text>
+            <Text style={styles.moreTitle}>{tr('各项目标')}</Text>
             {d.metrics.map((m) => (
               <MetricRow key={m.key} m={m} flat />
             ))}
           </View>
           {later.length > 0 && (
             <View>
-              <Text style={styles.moreTitle}>之后再测</Text>
+              <Text style={styles.moreTitle}>{tr('之后再测')}</Text>
               {later.map((k) => (
                 <NextRow key={k} k={k} flat />
               ))}
@@ -264,8 +265,8 @@ export function DunkSummary({ diagnosis: d }: { diagnosis: DunkDiagnosis }) {
         </View>
       )}
 
-      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={open ? '收起诊断详情' : '展开诊断详情'} onPress={toggle} style={[styles.toggle, open && { borderTopWidth: 0 }]}>
-        <Text style={styles.toggleText}>{open ? '收起' : later.length > 0 ? `理由、目标和另外 ${later.length} 项待测` : '理由和各项目标'}</Text>
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel={open ? tr('收起诊断详情') : tr('展开诊断详情')} onPress={toggle} style={[styles.toggle, open && { borderTopWidth: 0 }]}>
+        <Text style={styles.toggleText}>{open ? tr('收起') : later.length > 0 ? tr('理由、目标和另外 {length} 项待测', { length: later.length }) : tr('理由和各项目标')}</Text>
         <View style={open && { transform: [{ rotate: '180deg' }] }}>
           <Icon name="chevronDown" size={16} color={colors.textMuted} />
         </View>

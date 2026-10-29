@@ -7,24 +7,25 @@ import { countIn, useCues, useTimeline, type Cue } from '@/components/conditioni
 import { confirmStop, RunningScreen, runStyles, Steps, useSaveResult } from '@/components/conditioning/ui';
 import { Button, Chip } from '@/components/ui';
 import { clock, COOPER_SECONDS, cooperVo2max } from '@/domain/conditioning';
+import { localized, tr } from '@/i18n';
 import { colors, fonts, radius } from '@/theme';
 
 const LEAD_IN_S = 5;
 const LAPS = [400, 200, 0];
 
-const STEPS = [
+const STEPS = localized([
   '在 400 m 田径场或量好长度的环线上测。先慢跑热身 10 分钟。',
   '选好一圈多长。手机交给同伴，或者揣在身上。',
   '倒数后开跑，每过一圈点一下「+1 圈」。每分钟会报剩余时间，最后 10 秒倒数。',
   '时间到停在原地，量出最后一圈多跑的距离，在下一页补上。',
-];
+]);
 
 function buildCues(): Cue[] {
-  const cues: Cue[] = [{ at: -LEAD_IN_S, kind: 'say', text: '准备' }, ...countIn(0)];
-  for (let m = 1; m < 12; m++) cues.push({ at: m * 60, kind: 'say', text: m === 6 ? '过半，还剩 6 分钟' : `还剩 ${12 - m} 分钟` });
-  cues.push({ at: COOPER_SECONDS - 30, kind: 'say', text: '最后 30 秒' });
+  const cues: Cue[] = [{ at: -LEAD_IN_S, kind: 'say', text: tr('准备') }, ...countIn(0)];
+  for (let m = 1; m < 12; m++) cues.push({ at: m * 60, kind: 'say', text: m === 6 ? tr('过半，还剩 6 分钟') : tr('还剩 {p} 分钟', { p: 12 - m }) });
+  cues.push({ at: COOPER_SECONDS - 30, kind: 'say', text: tr('最后 30 秒') });
   for (let s = 10; s >= 1; s--) cues.push({ at: COOPER_SECONDS - s, kind: 'beep' });
-  cues.push({ at: COOPER_SECONDS, kind: 'go' }, { at: COOPER_SECONDS + 0.6, kind: 'say', text: '时间到，停在原地' });
+  cues.push({ at: COOPER_SECONDS, kind: 'go' }, { at: COOPER_SECONDS + 0.6, kind: 'say', text: tr('时间到，停在原地') });
   return cues;
 }
 
@@ -45,20 +46,20 @@ export default function CooperTest() {
   return (
     <SafeAreaView style={runStyles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.lead}>12 分钟内跑尽量远，按距离估算 VO2max。要匀速，开头别冲太快。</Text>
-        <Steps title="怎么测" steps={STEPS} />
+        <Text style={styles.lead}>{tr('12 分钟内跑尽量远，按距离估算 VO2max。要匀速，开头别冲太快。')}</Text>
+        <Steps title={tr('怎么测')} steps={STEPS} />
         <View style={{ gap: 10 }}>
-          <Text style={styles.label}>一圈多长</Text>
+          <Text style={styles.label}>{tr('一圈多长')}</Text>
           <View style={styles.chips}>
             {LAPS.map((m) => (
-              <Chip key={m} label={m ? `${m} m` : '不数圈'} selected={lapM === m} onPress={() => setLapM(m)} />
+              <Chip key={m} label={m ? `${m} m` : tr('不数圈')} selected={lapM === m} onPress={() => setLapM(m)} />
             ))}
           </View>
         </View>
       </ScrollView>
       <View style={runStyles.footer}>
         <Button
-          label={`开始（${LEAD_IN_S} 秒后起跑）`}
+          label={tr('开始（{LEAD_IN_S} 秒后起跑）', { LEAD_IN_S })}
           style={{ flex: 1 }}
           onPress={() => {
             setLaps(0);
@@ -87,13 +88,13 @@ function Running({ startAt, lapM, laps, onLap, onStop }: { startAt: number; lapM
     <RunningScreen>
       <SafeAreaView style={runStyles.screen}>
         <View style={[runStyles.body, { justifyContent: 'center' }]}>
-          <Text style={runStyles.label}>{t < 0 ? '准备起跑' : over ? '时间到' : '剩余时间'}</Text>
+          <Text style={runStyles.label}>{t < 0 ? tr('准备起跑') : over ? tr('时间到') : tr('剩余时间')}</Text>
           <Text style={[runStyles.huge, { color: t < 0 ? colors.good : colors.accent }]}>{t < 0 ? Math.ceil(-t) : clock(COOPER_SECONDS - t)}</Text>
           {lapM > 0 && (
             <View style={runStyles.stats}>
               <View style={runStyles.stat}>
                 <Text style={runStyles.statValue}>{laps}</Text>
-                <Text style={runStyles.statLabel}>圈</Text>
+                <Text style={runStyles.statLabel}>{tr('圈')}</Text>
               </View>
               <View style={runStyles.stat}>
                 <Text style={runStyles.statValue}>{laps * lapM}</Text>
@@ -103,17 +104,17 @@ function Running({ startAt, lapM, laps, onLap, onStop }: { startAt: number; lapM
           )}
           {lapM > 0 && (
             <View style={styles.lapRow}>
-              <Pressable accessibilityRole="button" accessibilityLabel="少记一圈" disabled={laps === 0} onPress={() => onLap(laps - 1)} style={[styles.undo, laps === 0 && { opacity: 0.3 }]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr('少记一圈')} disabled={laps === 0} onPress={() => onLap(laps - 1)} style={[styles.undo, laps === 0 && { opacity: 0.3 }]}>
                 <Text style={styles.undoText}>−1</Text>
               </Pressable>
               <Pressable accessibilityRole="button" disabled={t < 0} onPress={() => onLap(laps + 1)} style={({ pressed }) => [styles.lap, (pressed || t < 0) && { opacity: 0.6 }]}>
-                <Text style={styles.lapText}>+1 圈</Text>
+                <Text style={styles.lapText}>{tr('+1 圈')}</Text>
               </Pressable>
             </View>
           )}
         </View>
         <View style={runStyles.footer}>
-          <Button label="提前结束" variant="secondary" style={{ flex: 1 }} onPress={() => confirmStop(onStop, '不足 12 分钟的距离没法估算 VO2max，下一页可以手动填完整成绩。')} />
+          <Button label={tr('提前结束')} variant="secondary" style={{ flex: 1 }} onPress={() => confirmStop(onStop, tr('不足 12 分钟的距离没法估算 VO2max，下一页可以手动填完整成绩。'))} />
         </View>
       </SafeAreaView>
     </RunningScreen>
@@ -134,26 +135,24 @@ function Confirm({ laps, lapM }: { laps: number; lapM: number }) {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {lapM ? (
           <>
-            <Text style={styles.label}>
-              记了 {laps} 圈 × {lapM} m = {counted} m
-            </Text>
-            <Text style={styles.label}>最后一圈多跑了多少米</Text>
+            <Text style={styles.label}>{tr('记了 {laps} 圈 × {lapM} m = {counted} m', { laps, lapM, counted })}</Text>
+            <Text style={styles.label}>{tr('最后一圈多跑了多少米')}</Text>
             <TextInput style={styles.input} keyboardType="number-pad" value={extra} onChangeText={setExtra} placeholder="0" placeholderTextColor={colors.textFaint} />
           </>
         ) : (
           <>
-            <Text style={styles.label}>12 分钟跑了多少米</Text>
-            <TextInput style={styles.input} keyboardType="number-pad" value={total} onChangeText={setTotal} placeholder="例如 2800" placeholderTextColor={colors.textFaint} autoFocus />
+            <Text style={styles.label}>{tr('12 分钟跑了多少米')}</Text>
+            <TextInput style={styles.input} keyboardType="number-pad" value={total} onChangeText={setTotal} placeholder={tr('例如 2800')} placeholderTextColor={colors.textFaint} autoFocus />
           </>
         )}
         <View style={{ alignItems: 'center', gap: 4 }}>
-          <Text style={runStyles.label}>总距离</Text>
+          <Text style={runStyles.label}>{tr('总距离')}</Text>
           <Text style={runStyles.big}>{distance} m</Text>
           {plausible && <Text style={styles.vo2}>VO2max ≈ {cooperVo2max(distance).toFixed(1)}</Text>}
         </View>
       </ScrollView>
       <View style={runStyles.footer}>
-        <Button label="保存成绩" style={{ flex: 1 }} busy={busy} disabled={!plausible} onPress={() => save([distance])} />
+        <Button label={tr('保存成绩')} style={{ flex: 1 }} busy={busy} disabled={!plausible} onPress={() => save([distance])} />
       </View>
     </SafeAreaView>
   );

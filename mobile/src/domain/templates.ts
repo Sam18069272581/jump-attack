@@ -1,3 +1,5 @@
+import { localized } from '@/i18n';
+
 import type { BlockType } from './dunk';
 import type { BlockTemplate, PlanTemplate, Prescription, SessionTemplate, WeekSpec } from './plan';
 
@@ -5,9 +7,9 @@ import type { BlockTemplate, PlanTemplate, Prescription, SessionTemplate, WeekSp
 // tag and a place in a session; the plan logic doesn't change.
 const SMITH = '没有深蹲架就用史密斯机';
 const BX = {
-  heavySquat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 4, reps: 4, rpe: 8, cue: `大重量，每次下到大腿平行。${SMITH}` },
+  heavySquat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 4, reps: 4, rpe: 8, cue: '大重量，每次下到大腿平行。没有深蹲架就用史密斯机' },
   squat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 3, reps: 5, rpe: 7.5, cue: SMITH },
-  maintainSquat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 3, reps: 3, rpe: 8, cue: `维持力量，组数少但不轻。${SMITH}` },
+  maintainSquat: { code: 'back_squat', name: '杠铃后蹲', kind: 'strength', sets: 3, reps: 3, rpe: 8, cue: '维持力量，组数少但不轻。没有深蹲架就用史密斯机' },
   rdl: { code: 'rdl', name: '罗马尼亚硬拉', kind: 'strength', sets: 3, reps: 6, rpe: 7.5 },
   splitSquat: { code: 'split_squat', name: '保加利亚分腿蹲', kind: 'strength', sets: 3, reps: 6, perSide: true, rpe: 7.5 },
   depthJump: { code: 'depth_jump', name: '跳深', kind: 'reactive', sets: 4, reps: 5, intense: true, cue: '用跳深测试找到的最佳箱高，一触地就起跳，每次休息 1 分钟' },
@@ -152,6 +154,9 @@ export const TEMPLATES: PlanTemplate[] = [
     repeat: true,
   },
 ];
+
+// Names, cues and summaries are shown in the current language (i18n).
+localized([BX, EX, BLOCK_TEMPLATES, TEMPLATES], 'name', 'focus', 'summary', 'cue');
 
 export function getTemplate(code: string): PlanTemplate | undefined {
   return TEMPLATES.find((t) => t.code === code);

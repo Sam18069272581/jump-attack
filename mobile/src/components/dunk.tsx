@@ -7,6 +7,7 @@ import type { DayState, DunkDiagnosis, DunkMetric, MetricStatus } from '@/domain
 import { formatMetric, stateLine } from '@/domain/dunkSummary';
 import { changeTone, formatValue, type MetricDef } from '@/domain/metrics';
 import { previousSameTiming, TIMING_NOTE, type Timing } from '@/domain/timing';
+import { tr } from '@/i18n';
 import { colors, fonts, radius, text } from '@/theme';
 
 const STATE_COLOR: Record<DayState, string> = { good: colors.good, fair: colors.warn, poor: colors.record, unknown: colors.textMuted };
@@ -15,7 +16,7 @@ export const STATUS_COLOR: Record<MetricStatus, string> = { low: colors.record, 
 /** Today's state from CMJ and recovery, and how far it relaxes the strength targets. Opens today's training. */
 export function DayStateRow({ state }: { state: DayState }) {
   return (
-    <Pressable accessibilityRole="link" accessibilityLabel="今日状态" onPress={() => router.push('/train')} style={styles.state}>
+    <Pressable accessibilityRole="link" accessibilityLabel={tr('今日状态')} onPress={() => router.push('/train')} style={styles.state}>
       <View style={[styles.dot, { backgroundColor: STATE_COLOR[state] }]} />
       <Text style={[styles.stateText, { flex: 1 }]}>{stateLine(state)}</Text>
       <Icon name="chevronRight" size={18} color={colors.textMuted} />
@@ -31,8 +32,8 @@ type Sprint = { def: MetricDef; results: SessionResult[]; timings?: Record<strin
 export function LimiterTiles({ diagnosis, sprint }: { diagnosis: DunkDiagnosis; sprint: Sprint | null }) {
   const m = (key: DunkMetric['key']) => diagnosis.metrics.find((x) => x.key === key);
   const tiles: Tile[] = [
-    { label: '力量', metric: m('squat_ratio'), href: '/vbt' },
-    { label: '反应', metric: m('rsi'), href: { pathname: '/history/[metric]', params: { metric: 'dj_rsi' } } },
+    { label: tr('力量'), metric: m('squat_ratio'), href: '/vbt' },
+    { label: tr('反应'), metric: m('rsi'), href: { pathname: '/history/[metric]', params: { metric: 'dj_rsi' } } },
   ];
   return (
     <View style={styles.tiles}>
@@ -40,7 +41,7 @@ export function LimiterTiles({ diagnosis, sprint }: { diagnosis: DunkDiagnosis; 
         <Pressable key={label} accessibilityRole="button" accessibilityLabel={label} onPress={() => router.push(href)} style={styles.tile}>
           <Text style={text.caption}>{label}</Text>
           <Text style={[styles.tileValue, { color: STATUS_COLOR[metric?.status ?? 'missing'] }]}>{metric ? formatMetric(metric) : '—'}</Text>
-          <Text style={styles.tileNote}>{metric ? tileNote(metric) : '未测'}</Text>
+          <Text style={styles.tileNote}>{metric ? tileNote(metric) : tr('未测')}</Text>
         </Pressable>
       ))}
       <SprintTile sprint={sprint} />
@@ -49,17 +50,17 @@ export function LimiterTiles({ diagnosis, sprint }: { diagnosis: DunkDiagnosis; 
 }
 
 function tileNote(m: DunkMetric): string {
-  const name = m.key === 'squat_ratio' ? '深蹲 ÷ 体重' : m.name;
+  const name = m.key === 'squat_ratio' ? tr('深蹲 ÷ 体重') : m.name;
   const fmt = (v: number) => `${v.toFixed(1)}${m.unit === '×' ? '×' : ''}`;
   switch (m.status) {
     case 'low':
-      return `${name} · 低于 ${fmt(m.low)}`;
+      return tr('{name} · 低于 {low}', { name, low: fmt(m.low) });
     case 'mid':
-      return `${name} · 目标 ${fmt(m.threshold)}`;
+      return tr('{name} · 目标 {threshold}', { name, threshold: fmt(m.threshold) });
     case 'good':
-      return `${name} · 已过 ${fmt(m.threshold)}`;
+      return tr('{name} · 已过 {threshold}', { name, threshold: fmt(m.threshold) });
     default:
-      return `${name} · 未测`;
+      return tr('{name} · 未测', { name });
   }
 }
 
@@ -75,15 +76,15 @@ function SprintTile({ sprint }: { sprint: Sprint | null }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="速度"
+      accessibilityLabel={tr('速度')}
       onPress={() => router.push(sprint ? { pathname: '/history/[metric]', params: { metric: sprint.def.code } } : '/speed')}
       style={styles.tile}
     >
-      <Text style={text.caption}>速度</Text>
+      <Text style={text.caption}>{tr('速度')}</Text>
       <Text style={[styles.tileValue, { color: last ? colors.blue : colors.textMuted }]}>{last ? `${formatValue(sprint!.def, last.best)} s` : '—'}</Text>
       <Text style={[styles.tileNote, delta != null && { color: { good: colors.good, bad: colors.warn, flat: colors.textMuted }[tone] }]}>
         {!sprint || !last
-          ? '冲刺 · 未测'
+          ? tr('冲刺 · 未测')
           : otherTiming
             ? `${sprint.def.name} · ${TIMING_NOTE[last.timing]}`
             : delta == null

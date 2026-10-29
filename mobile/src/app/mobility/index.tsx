@@ -6,6 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { latestResults, type SessionResult } from '@/db/repo';
 import { formatValue, getCategory } from '@/domain/metrics';
 import { asymmetry, MOBILITY_PAIRS } from '@/domain/mobility';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
@@ -26,20 +27,20 @@ export default function Mobility() {
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.table}>
         <View style={[styles.row, styles.head]}>
-          <Text style={[text.caption, { flex: 1 }]}>测试项目</Text>
-          <Text style={[text.caption, styles.side]}>左</Text>
-          <Text style={[text.caption, styles.side]}>右</Text>
+          <Text style={[text.caption, { flex: 1 }]}>{tr('测试项目')}</Text>
+          <Text style={[text.caption, styles.side]}>{tr('左')}</Text>
+          <Text style={[text.caption, styles.side]}>{tr('右')}</Text>
         </View>
         {MOBILITY_PAIRS.map((t) => {
           const l = latest[t.left.code]?.best;
           const r = latest[t.right.code]?.best;
           const a = l != null && r != null ? asymmetry(t, l, r) : null;
-          const note = a?.flagged ? `左右差 ${a.pct != null ? `${Math.round(a.pct * 100)}%` : `${formatValue(t.left, a.diff)}${t.unit}`} · ${t.use}` : t.use;
+          const note = a?.flagged ? tr('左右差 {p} · {use}', { p: a.pct != null ? `${Math.round(a.pct * 100)}%` : `${formatValue(t.left, a.diff)}${t.unit}`, use: t.use }) : t.use;
           return (
             <Pressable
               key={t.key}
               accessibilityRole="button"
-              accessibilityLabel={`${t.name}，记录左右侧`}
+              accessibilityLabel={tr('{name}，记录左右侧', { name: t.name })}
               onPress={() => router.push({ pathname: '/mobility/[test]', params: { test: t.key } })}
               style={({ pressed }) => [styles.row, pressed && { opacity: 0.75 }]}
             >
@@ -53,7 +54,7 @@ export default function Mobility() {
           );
         })}
       </View>
-      <Text style={styles.foot}>左右差 ≥ 10% 标橙色提醒。点击项目记录左右两侧，角度可以用手机量角。</Text>
+      <Text style={styles.foot}>{tr('左右差 ≥ 10% 标橙色提醒。点击项目记录左右两侧，角度可以用手机量角。')}</Text>
     </ScrollView>
   );
 }

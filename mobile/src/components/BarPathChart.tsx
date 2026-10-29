@@ -3,6 +3,7 @@ import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 
 import type { PathPoint, Rep } from '@/domain/barPath';
+import { tr } from '@/i18n';
 import { colors, fonts } from '@/theme';
 
 const PAD = 8;
@@ -24,7 +25,7 @@ export function BarPathChart({ path, reps, included, color, height = 150 }: { pa
   const line = path.filter((_, i) => i % every === 0).map((p) => `${x(p.t).toFixed(1)},${y(p.h).toFixed(1)}`).join(' ');
 
   return (
-    <View style={{ height }} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={`杠铃高度曲线，找到 ${reps.length} 次`}>
+    <View style={{ height }} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={tr('杠铃高度曲线，找到 {length} 次', { length: reps.length })}>
       {width > 0 && (
         <Svg width={width} height={height} style={StyleSheet.absoluteFill}>
           {reps.map((r, i) => (

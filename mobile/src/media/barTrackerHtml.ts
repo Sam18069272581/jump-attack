@@ -1,3 +1,5 @@
+import { localizeHtml } from '@/i18n';
+
 /**
  * The page that tracks a barbell plate through a video, run in a WebView: Expo Go has no native module that hands
  * JavaScript the pixels of a video frame, but a web page can draw the frame into a canvas and read it back.
@@ -34,7 +36,7 @@ export type TrackerOptions = {
 
 export function barTrackerHtml(o: TrackerOptions): string {
   const config = JSON.stringify(o);
-  return `<!doctype html>
+  return localizeHtml(`<!doctype html>
 <html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -796,5 +798,5 @@ export function barTrackerHtml(o: TrackerOptions): string {
   video.src = CFG.video;
   video.load();
 })();
-</script></body></html>`;
+</script></body></html>`);
 }

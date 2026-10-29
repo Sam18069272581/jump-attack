@@ -19,6 +19,7 @@ import { addDays } from '@/domain/dates';
 import { attemptSummary, BALL_NAME, type AttemptSummary } from '@/domain/dunkAttempts';
 import { kneeStatus, PAIN_HINT, PAIN_LIMIT, type PainEntry } from '@/domain/pain';
 import { CATEGORIES, SUPPORT_CATEGORIES, type CategoryDef } from '@/domain/metrics';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadGoalSummary } from '@/state/goal';
 import { loadReadiness, todayISO } from '@/state/training';
@@ -82,15 +83,15 @@ export default function Home() {
         )}
 
         <Rise index={2} style={{ gap: 12 }}>
-          <Text style={text.section}>训练和测试</Text>
+          <Text style={text.section}>{tr('训练和测试')}</Text>
           {goal && <DayStateRow state={goal.state} />}
           <View style={styles.list}>
             {main.map((c) => (
               <ModuleRow key={c.key} category={c} />
             ))}
-            <PressScale accessibilityLabel="辅助" accessibilityState={{ expanded: supportOpen }} style={styles.support} onPress={() => setSupportOpen((open) => !open)}>
+            <PressScale accessibilityLabel={tr('辅助')} accessibilityState={{ expanded: supportOpen }} style={styles.support} onPress={() => setSupportOpen((open) => !open)}>
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={styles.supportTitle}>辅助</Text>
+                <Text style={styles.supportTitle}>{tr('辅助')}</Text>
                 <Text style={styles.moduleSub} numberOfLines={1}>
                   {support.map((c) => c.name).join(' · ')}
                 </Text>
@@ -116,13 +117,13 @@ function MorningKnee({ entries, today, onPick }: { entries: PainEntry[]; today: 
   const knee = morning != null ? kneeStatus(entries, today) : null;
   return (
     <Card style={{ gap: 8 }}>
-      <ScoreScale label="今早膝盖几分" value={morning} onPick={onPick} hint={PAIN_HINT} warnAbove={PAIN_LIMIT} />
+      <ScoreScale label={tr('今早膝盖几分')} value={morning} onPick={onPick} hint={tr(PAIN_HINT)} warnAbove={PAIN_LIMIT} />
       {knee?.reasons.map((r) => (
         <Text key={r} style={[text.muted, (knee.light === 'red' || knee.light === 'stop') && { color: colors.warn }]}>
           {r}
         </Text>
       ))}
-      {knee?.light === 'green' && <Text style={text.muted}>膝盖没问题，照常练。</Text>}
+      {knee?.light === 'green' && <Text style={text.muted}>{tr('膝盖没问题，照常练。')}</Text>}
     </Card>
   );
 }
@@ -132,7 +133,7 @@ type GoalText = { title: string; lines: string[] };
 /** The goal date: the countdown, when the touch trend reaches the line, and what that does to training. Set in 我的. */
 function GoalRow({ due }: { due: GoalText }) {
   return (
-    <PressScale accessibilityLabel="目标日" style={styles.module} onPress={() => router.push('/me')}>
+    <PressScale accessibilityLabel={tr('目标日')} style={styles.module} onPress={() => router.push('/me')}>
       <View style={[styles.tile, { backgroundColor: colors.surfaceRaised }]}>
         <Icon name="plan" size={22} color={colors.accent} />
       </View>
@@ -152,14 +153,14 @@ function GoalRow({ due }: { due: GoalText }) {
 /** The real result: recent dunk attempts, and the way into logging them. */
 function AttemptsRow({ summary: s }: { summary: AttemptSummary | null }) {
   return (
-    <PressScale accessibilityLabel="扣篮尝试" style={styles.module} onPress={() => router.push('/attempts')}>
+    <PressScale accessibilityLabel={tr('扣篮尝试')} style={styles.module} onPress={() => router.push('/attempts')}>
       <View style={[styles.tile, { backgroundColor: colors.surfaceRaised }]}>
         <Icon name="jump" size={22} color={colors.rim} />
       </View>
       <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.moduleTitle}>扣篮尝试</Text>
+        <Text style={styles.moduleTitle}>{tr('扣篮尝试')}</Text>
         <Text style={styles.moduleSub} numberOfLines={1}>
-          {s ? `${s.rimCm} cm ${BALL_NAME[s.ball]}：最近 ${s.total} 次扣进 ${s.made} 次` : '去篮下试扣，每试一次点一下'}
+          {s ? tr('{rimCm} cm {BALL_NAME}：最近 {total} 次扣进 {made} 次', { rimCm: s.rimCm, BALL_NAME: BALL_NAME[s.ball], total: s.total, made: s.made }) : tr('去篮下试扣，每试一次点一下')}
         </Text>
       </View>
       <Icon name="chevronRight" size={18} color={colors.textMuted} />
@@ -180,7 +181,7 @@ function ModuleRow({ category: c }: { category: CategoryDef }) {
           {c.subtitle}
         </Text>
       </View>
-      {href ? <Icon name="chevronRight" size={18} color={colors.textMuted} /> : <Text style={styles.moduleSub}>即将上线</Text>}
+      {href ? <Icon name="chevronRight" size={18} color={colors.textMuted} /> : <Text style={styles.moduleSub}>{tr('即将上线')}</Text>}
     </View>
   );
   return href ? (

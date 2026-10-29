@@ -4,6 +4,7 @@ import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 
 import { athleteFileName, backupFileName, type AthleteFile, type Backup } from '@/domain/backup';
+import { tr } from '@/i18n';
 
 /** Hands a JSON file to the share sheet (save to Files / iCloud Drive, AirDrop, mail); a download on the web. */
 async function shareJson(name: string, data: unknown, title: string): Promise<void> {
@@ -24,13 +25,13 @@ async function shareJson(name: string, data: unknown, title: string): Promise<vo
 }
 
 export function shareBackupFile(backup: Backup): Promise<void> {
-  return shareJson(backupFileName(new Date()), backup, '保存备份文件');
+  return shareJson(backupFileName(new Date()), backup, tr('保存备份文件'));
 }
 
 /** One athlete's data, to send to them or to another phone. */
 export function shareAthleteFile(file: AthleteFile): Promise<void> {
   const name = file.tables.athlete[0]?.name;
-  return shareJson(athleteFileName(typeof name === 'string' ? name : '', new Date()), file, '发送运动员数据');
+  return shareJson(athleteFileName(typeof name === 'string' ? name : '', new Date()), file, tr('发送运动员数据'));
 }
 
 /** The text of a file the person picks, or null if they cancel. */

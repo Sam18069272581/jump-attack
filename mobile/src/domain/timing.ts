@@ -1,3 +1,5 @@
+import { localized } from '@/i18n';
+
 /**
  * How a sprint was timed. Video starts the clock at first movement, timing gates when the body breaks a beam past the
  * start line, and a hand stopwatch carries the timer's reaction time: the methods differ by 0.1–0.3 s (Haugen &
@@ -6,10 +8,10 @@
  */
 export type Timing = 'video' | 'gates' | 'stopwatch' | 'manual';
 
-export const TIMING_NAME: Record<Timing, string> = { video: '录像', gates: '光电门', stopwatch: '秒表', manual: '手填' };
+export const TIMING_NAME: Record<Timing, string> = localized({ video: '录像', gates: '光电门', stopwatch: '秒表', manual: '手填' });
 
 /** How a result's timing reads next to it. */
-export const TIMING_NOTE: Record<Timing, string> = { video: '录像计时', gates: '光电门计时', stopwatch: '秒表计时', manual: '手填（未注明计时方式）' };
+export const TIMING_NOTE: Record<Timing, string> = localized({ video: '录像计时', gates: '光电门计时', stopwatch: '秒表计时', manual: '手填（未注明计时方式）' });
 
 /** The methods a typed-in time can name. */
 export const TYPED_TIMINGS = ['gates', 'stopwatch'] as const;

@@ -1,6 +1,8 @@
 import { LIB_FROM_PAGE, POSE_CDN } from './poseLib';
 import { POSE_SHARED_JS } from './poseShared';
 
+import { localizeHtml } from '@/i18n';
+
 /**
  * The page that watches the phone's camera while a run-up jump is set up and filmed, run in a WebView
  * (components/PoseCamera.tsx). It shows the camera's picture with the skeletons the pose model finds in it, says what
@@ -73,7 +75,7 @@ export function poseCameraHtml(o: PoseCameraOptions): string {
     readEvery: READ_EVERY_MS,
     searchEvery: SEARCH_EVERY,
   });
-  return `<!doctype html>
+  return localizeHtml(`<!doctype html>
 <html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -343,5 +345,5 @@ ${POSE_SHARED_JS}
   Promise.all([model, camera]).then(loop, function () {});
 })();
 </script>
-</body></html>`;
+</body></html>`);
 }

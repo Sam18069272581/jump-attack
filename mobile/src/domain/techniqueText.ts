@@ -4,6 +4,8 @@
  */
 import type { Measured, MetricKey, QualityFlag, TechniqueProblem } from './technique';
 
+import { localized, tr } from '@/i18n';
+
 export type MetricText = { name: string; unit: string; decimals: number; hint: string };
 
 /** In the order they are shown: the take-off first, then the run-up and the plant that make it. */
@@ -33,7 +35,7 @@ export function formatMeasured(key: MetricKey, m: Measured): string {
   const t = METRIC_TEXT[key];
   const sep = t.unit === '°' ? '' : ' ';
   const text = `${m.value.toFixed(t.decimals)} ± ${formatError(key, m.error)}${sep}${t.unit}`;
-  return m.status === 'ok' ? text : `${text}（不够准）`;
+  return m.status === 'ok' ? text : tr('{text}（不够准）', { text });
 }
 
 export const FLAG_TEXT: Record<QualityFlag, string> = {
@@ -55,3 +57,8 @@ export const PROBLEM_TEXT: Record<TechniqueProblem, { what: string; advice: stri
   'no-plant': { what: '找到了腾空，但起跳那一步不在视频里', advice: '从最后两步之前就开始拍，起跳点放在画面中间偏落地那边。' },
   markers: { what: '两条线点得太近', advice: '起跳线点在起跳点的胶带上，3 米线点在往回 3 米的那条胶带上；没贴线就点「没贴线，跳过」。' },
 };
+
+// Shown in the current language (i18n).
+localized(METRIC_TEXT, 'name', 'hint');
+localized(FLAG_TEXT);
+localized(PROBLEM_TEXT);

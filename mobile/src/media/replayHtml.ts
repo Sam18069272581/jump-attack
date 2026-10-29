@@ -1,3 +1,5 @@
+import { localizeHtml } from '@/i18n';
+
 /**
  * The replay and export page, run in a WebView like the frame reader (media/frameGrabberHtml.ts): Expo Go has no
  * native module that composes video, but a web page can draw each frame into a canvas with the numbers on top and
@@ -50,7 +52,7 @@ export type ReplayConfig = {
 export function replayHtml(c: ReplayConfig): string {
   // `<` can't close the script it sits in once escaped.
   const config = JSON.stringify(c).replace(/</g, '\\u003c');
-  return `<!doctype html>
+  return localizeHtml(`<!doctype html>
 <html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -301,5 +303,5 @@ export function replayHtml(c: ReplayConfig): string {
   video.src = C.video;
   video.load();
 })();
-</script></body></html>`;
+</script></body></html>`);
 }

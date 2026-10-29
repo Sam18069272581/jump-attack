@@ -12,6 +12,7 @@ import type { ISODate } from '@/domain/dates';
 import { dunkLine } from '@/domain/dunk';
 import { APPROACH_TOUCH, changeTone, formatValue, getMetric, metricColor, resultNote } from '@/domain/metrics';
 import { previousSameTiming, TIMING_NOTE, type Timing } from '@/domain/timing';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadPoorDaysOf } from '@/state/training';
 import { colors, fonts } from '@/theme';
@@ -55,16 +56,16 @@ export default function MetricHistory() {
     }, [db, current, def]),
   );
 
-  if (!def) return <Empty title="找不到这个指标" />;
+  if (!def) return <Empty title={tr('找不到这个指标')} />;
   // A load only for sets lifted with one: a tested 1RM is itself the load.
   const timed = results.map((r) => ({ ...r, timing: timings[r.session_id] ?? 'video' }));
   const previous = previousSameTiming(timed);
   const mixed = new Set(timed.map((r) => r.timing)).size > 1;
   // A test of several jumps reports the mean of the best three; older single-jump records stay, marked as such.
-  const topNote = (r: SessionResult) => (def.aggregate !== 'top3' ? null : r.trials === 1 ? '单次' : `最好 ${Math.min(3, r.trials)} 跳均值`);
+  const topNote = (r: SessionResult) => (def.aggregate !== 'top3' ? null : r.trials === 1 ? tr('单次') : tr('最好 {p} 跳均值', { p: Math.min(3, r.trials) }));
   const baseNote = (r: SessionResult) => resultNote(def, r.best, attempts[r.session_id]) ?? topNote(r) ?? (loads[r.session_id] ? `@ ${loads[r.session_id]} kg` : null);
   const note = (r: (typeof timed)[number]) =>
-    [baseNote(r), mixed ? TIMING_NOTE[r.timing] : null, onPoorDay(r, poor) ? '状态差，不计入趋势' : null].filter(Boolean).join(' · ') || null;
+    [baseNote(r), mixed ? TIMING_NOTE[r.timing] : null, onPoorDay(r, poor) ? tr('状态差，不计入趋势') : null].filter(Boolean).join(' · ') || null;
 
   const latest = timed.at(-1);
   // Change, verdict and trend only against results timed the same way as the latest.
@@ -79,9 +80,7 @@ export default function MetricHistory() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: def.name }} />
-      <Text style={styles.count}>
-        {results.length} 条记录{verdict && verdict.swc > 0 ? ` · 最小有意义变化 ${verdict.swc.toFixed(def.decimals)} ${def.unit}` : ''}
-      </Text>
+      <Text style={styles.count}>{tr('{length} 条记录{p}', { length: results.length, p: verdict && verdict.swc > 0 ? tr(' · 最小有意义变化 {swc} {unit}', { swc: verdict.swc.toFixed(def.decimals), unit: def.unit }) : '' })}</Text>
 
       {latest ? (
         <>
@@ -89,32 +88,29 @@ export default function MetricHistory() {
             <Text style={[styles.big, { color }]}>{formatValue(def, latest.best)}</Text>
             <Text style={styles.unit}>{def.unit}</Text>
             {sinceFirst != null && (
-              <Text style={[styles.change, { color: tone(sinceFirst) }]}>
-                首次以来 {sinceFirst >= 0 ? '+' : '−'}
-                {Math.abs(sinceFirst).toFixed(def.decimals)} {def.unit}
-              </Text>
+              <Text style={[styles.change, { color: tone(sinceFirst) }]}>{tr('首次以来 {p}{sinceFirst} {unit}', { p: sinceFirst >= 0 ? '+' : '−', sinceFirst: Math.abs(sinceFirst).toFixed(def.decimals), unit: def.unit })}</Text>
             )}
           </View>
           {mixed ? (
             <Text style={styles.note}>
-              {[baseNote(latest), `${TIMING_NOTE[latest.timing]}，只和${TIMING_NOTE[latest.timing]}的成绩比较`, onPoorDay(latest, poor) ? '状态差，不计入趋势' : null].filter(Boolean).join(' · ')}
+              {[baseNote(latest), tr('{TIMING_NOTE}，只和{TIMING_NOTE}的成绩比较', { TIMING_NOTE: TIMING_NOTE[latest.timing] }), onPoorDay(latest, poor) ? tr('状态差，不计入趋势') : null].filter(Boolean).join(' · ')}
             </Text>
           ) : (
             note(latest) && <Text style={styles.note}>{note(latest)}</Text>
           )}
-          {line != null && <Text style={styles.note}>{latest.best < line ? `离扣篮线 ${line} cm 还差 ${(line - latest.best).toFixed(1)} cm` : `已过扣篮线 ${line} cm`}</Text>}
+          {line != null && <Text style={styles.note}>{latest.best < line ? tr('离扣篮线 {line} cm 还差 {line2} cm', { line, line2: (line - latest.best).toFixed(1) }) : tr('已过扣篮线 {line} cm', { line })}</Text>}
 
           <TrendChart
             color={color}
             points={recent.map((r) => ({ label: shortDate(r.started_at), value: r.best, display: formatValue(def, r.best) }))}
-            target={line != null ? { value: line, label: `扣篮线 ${line}` } : undefined}
+            target={line != null ? { value: line, label: tr('扣篮线 {line}', { line }) } : undefined}
           />
 
           <View>
             <View style={[styles.tableRow, styles.tableHead]}>
-              <Text style={styles.headCell}>日期</Text>
-              <Text style={[styles.headCell, styles.right]}>成绩</Text>
-              <Text style={[styles.headCell, styles.right]}>较上次</Text>
+              <Text style={styles.headCell}>{tr('日期')}</Text>
+              <Text style={[styles.headCell, styles.right]}>{tr('成绩')}</Text>
+              <Text style={[styles.headCell, styles.right]}>{tr('较上次')}</Text>
             </View>
             {timed
               .map((r, i) => ({ r, prev: previous[i] }))
@@ -126,8 +122,8 @@ export default function MetricHistory() {
                   <Pressable
                     key={r.session_id}
                     accessibilityRole="button"
-                    accessibilityLabel={`${fullDate(r.started_at)} 的记录`}
-                    accessibilityHint="查看每一次，改错或删除"
+                    accessibilityLabel={tr('{started_at} 的记录', { started_at: fullDate(r.started_at) })}
+                    accessibilityHint={tr('查看每一次，改错或删除')}
                     onPress={() => router.push({ pathname: '/measure/result', params: { metric: def.code, session: r.session_id, from: 'history' } })}
                     style={styles.tableRow}
                   >
@@ -147,7 +143,7 @@ export default function MetricHistory() {
           </View>
         </>
       ) : (
-        <Empty title="还没有记录" />
+        <Empty title={tr('还没有记录')} />
       )}
     </ScrollView>
   );

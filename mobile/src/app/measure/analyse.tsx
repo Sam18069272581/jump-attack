@@ -22,6 +22,7 @@ import { analyseJumps, FLAG_TEXT, type JumpEvents, type JumpResult } from '@/dom
 import { nextClip, queuedCount } from '@/domain/importQueue';
 import { returnsToLogger } from '@/domain/marking';
 import { best as bestOf, getMetric, type MetricDef } from '@/domain/metrics';
+import { localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -32,12 +33,12 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
   player.currentTime = frameToSeconds(frame, fps);
 }
 
-const PROBLEMS: Record<DetectProblem | 'error', { what: string; advice: string }> = {
+const PROBLEMS: Record<DetectProblem | 'error', { what: string; advice: string }> = localized({
   shaky: { what: '画面在晃，没法分析', advice: '下次把手机放在地上或三脚架上，别手持' },
   'no-jump': { what: '选中的片段里没认出跳跃', advice: '把片段拉宽到起跳前、落地后；旁边有人在动的话，点一下运动员再试' },
   unsure: { what: '认出了跳，但没把握定准起跳和落地帧', advice: '光线暗、脚被挡住或拍得太远时容易这样；可以手动逐帧标' },
   error: { what: '读不到视频画面', advice: '可以手动逐帧标' },
-};
+});
 
 type Phase = { name: 'setup' } | { name: 'running'; done: number; total: number; label: string } | { name: 'done' } | { name: 'failed'; problem: DetectProblem | 'error' };
 
@@ -137,7 +138,7 @@ export default function Analyse() {
     const req = coarseRequest(video, opts);
     // The fine pass usually asks for about as many frames again; the bar is honest once it is known.
     const guess = req.frames.length * 2;
-    const label0 = target ? '锁定运动员，粗扫整段' : '找运动员，粗扫整段';
+    const label0 = target ? tr('锁定运动员，粗扫整段') : tr('找运动员，粗扫整段');
     setPhase({ name: 'running', done: 0, total: guess, label: label0 });
     try {
       const coarseFrames = await reader.current.read(req, (n) => setPhase({ name: 'running', done: n, total: guess, label: label0 }));
@@ -145,7 +146,7 @@ export default function Analyse() {
       if (!c.ok) return setPhase({ name: 'failed', problem: c.problem });
       setBox(c.plan.box);
       const sum = req.frames.length + c.plan.request.frames.length;
-      const label = `认出 ${c.plan.jumps.length} 跳，逐帧定起跳和落地`;
+      const label = tr('认出 {length} 跳，逐帧定起跳和落地', { length: c.plan.jumps.length });
       const fine = await reader.current.read(c.plan.request, (n) => setPhase({ name: 'running', done: req.frames.length + n, total: sum, label }));
       const r = analyseFine(c.plan, fine);
       if (!r.ok) return setPhase({ name: 'failed', problem: r.problem });
@@ -181,7 +182,7 @@ export default function Analyse() {
       if (next) return router.replace(next);
       router.replace({ pathname: '/measure/result', params: { metric: def.code, session: params.session, ...(params.from ? { from: params.from } : {}) } });
     } catch (e) {
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
       setSaving(false);
     }
   }
@@ -214,7 +215,7 @@ export default function Analyse() {
     });
   }
 
-  if (!def || !kind) return <Empty title="这个项目不能自动分析" />;
+  if (!def || !kind) return <Empty title={tr('这个项目不能自动分析')} />;
   const queued = queuedCount(params.queue);
   const running = phase.name === 'running';
   const s = analysis?.summary;
@@ -229,12 +230,12 @@ export default function Analyse() {
             <FrameReader ref={reader} uri={params.uri} fileFps={fileFps} onReady={setClip} onError={() => setPhase((p) => (p.name === 'done' ? p : { name: 'failed', problem: 'error' }))} style={StyleSheet.absoluteFill} />
           </View>
           {phase.name === 'setup' && (
-            <Pressable accessibilityRole="button" accessibilityLabel="点一下运动员" style={StyleSheet.absoluteFill} onPress={(e) => tap(e.nativeEvent.locationX, e.nativeEvent.locationY)} />
+            <Pressable accessibilityRole="button" accessibilityLabel={tr('点一下运动员')} style={StyleSheet.absoluteFill} onPress={(e) => tap(e.nativeEvent.locationX, e.nativeEvent.locationY)} />
           )}
           {target && fit > 0 && phase.name === 'setup' && <View pointerEvents="none" style={[styles.target, { left: ox + target.x * fit - 18, top: oy + target.y * fit - 18 }]} />}
           {box && fit > 0 && phase.name === 'done' && (
             <View pointerEvents="none" style={[styles.lock, onScreen(box)]}>
-              <Text style={styles.lockText}>已锁定</Text>
+              <Text style={styles.lockText}>{tr('已锁定')}</Text>
             </View>
           )}
           {phase.name !== 'running' && (
@@ -247,9 +248,9 @@ export default function Analyse() {
 
         {phase.name === 'setup' && (
           <>
-            <Text style={styles.lead}>{target ? '已点选运动员。' : '点一下画面里的运动员（旁边有人在动时一定要点）。'}再把片段拉到第一次起跳前、最后一次落地后。</Text>
+            <Text style={styles.lead}>{tr('{p}再把片段拉到第一次起跳前、最后一次落地后。', { p: target ? tr('已点选运动员。') : tr('点一下画面里的运动员（旁边有人在动时一定要点）。') })}</Text>
             <RangeRow
-              label="开始"
+              label={tr('开始')}
               value={span.from}
               max={Math.max(1, total - 1)}
               fps={fps}
@@ -259,7 +260,7 @@ export default function Analyse() {
               }}
             />
             <RangeRow
-              label="结束"
+              label={tr('结束')}
               value={span.to}
               max={Math.max(1, total - 1)}
               fps={fps}
@@ -269,14 +270,14 @@ export default function Analyse() {
               }}
             />
             <View style={styles.fpsRow}>
-              <Text style={styles.muted}>拍摄帧率{detectedFps ? `（视频 ${detectedFps} fps）` : ''}</Text>
+              <Text style={styles.muted}>{tr('拍摄帧率{p}', { p: detectedFps ? tr('（视频 {detectedFps} fps）', { detectedFps }) : '' })}</Text>
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 {fpsChoices.map((f) => (
                   <Chip key={f} label={String(f)} selected={f === fps} onPress={() => setCaptureOverride(f)} />
                 ))}
               </View>
             </View>
-            {looksSlowMo && fps <= fileFps && <Text style={styles.warn}>这个视频是 {detectedFps} fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。</Text>}
+            {looksSlowMo && fps <= fileFps && <Text style={styles.warn}>{tr('这个视频是 {detectedFps} fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。', { detectedFps })}</Text>}
           </>
         )}
 
@@ -285,7 +286,7 @@ export default function Analyse() {
         {phase.name === 'failed' && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{PROBLEMS[phase.problem].what}</Text>
-            <Text style={styles.muted}>建议：{PROBLEMS[phase.problem].advice}</Text>
+            <Text style={styles.muted}>{tr('建议：{advice}', { advice: PROBLEMS[phase.problem].advice })}</Text>
           </View>
         )}
 
@@ -309,25 +310,25 @@ export default function Analyse() {
               </Rise>
             ))}
             {verdict && <HistoryCard def={def} previous={history!.previous} today={today!} verdict={verdict} te={history!.te} />}
-            {def.plusReach && current?.standing_reach_cm == null && <Text style={styles.warn}>先在「我的」填站立摸高，才能把跳高换算成摸高并保存。</Text>}
+            {def.plusReach && current?.standing_reach_cm == null && <Text style={styles.warn}>{tr('先在「我的」填站立摸高，才能把跳高换算成摸高并保存。')}</Text>}
           </>
         )}
       </ScrollView>
 
       <View style={styles.footer}>
-        {queued > 0 && <Text style={styles.queued}>还有 {queued} 段视频，保存后接着分析下一段</Text>}
-        {phase.name === 'setup' && <Button label={clip ? '开始分析' : '正在读取视频…'} onPress={analyse} disabled={!clip || total === 0} />}
+        {queued > 0 && <Text style={styles.queued}>{tr('还有 {queued} 段视频，保存后接着分析下一段', { queued })}</Text>}
+        {phase.name === 'setup' && <Button label={clip ? tr('开始分析') : tr('正在读取视频…')} onPress={analyse} disabled={!clip || total === 0} />}
         {phase.name === 'done' && (
           <>
-            <Button label={trials.length ? `保存${kind === 'repeat' ? '这一组' : ` ${trials.length} 跳`}` : '没有能保存的跳'} onPress={save} disabled={!trials.length} busy={saving} />
-            <Button label="回放 · 导出视频" variant="secondary" onPress={replay} />
+            <Button label={trials.length ? tr('保存{p}', { p: kind === 'repeat' ? tr('这一组') : tr(' {length} 跳', { length: trials.length }) }) : tr('没有能保存的跳')} onPress={save} disabled={!trials.length} busy={saving} />
+            <Button label={tr('回放 · 导出视频')} variant="secondary" onPress={replay} />
           </>
         )}
-        {phase.name === 'failed' && <Button label="重新选片段" variant="secondary" onPress={() => setPhase({ name: 'setup' })} />}
+        {phase.name === 'failed' && <Button label={tr('重新选片段')} variant="secondary" onPress={() => setPhase({ name: 'setup' })} />}
         {phase.name !== 'running' && def.capture.some((c) => c === 'flight' || c === 'contact') && (
-          <Button label="手动逐帧标" variant="ghost" onPress={markByHand} />
+          <Button label={tr('手动逐帧标')} variant="ghost" onPress={markByHand} />
         )}
-        {queued > 0 && phase.name !== 'running' && <Button label="跳过这段，看下一段" variant="ghost" onPress={skip} />}
+        {queued > 0 && phase.name !== 'running' && <Button label={tr('跳过这段，看下一段')} variant="ghost" onPress={skip} />}
       </View>
     </SafeAreaView>
   );
@@ -338,7 +339,7 @@ function RangeRow({ label, value, max, fps, onChange }: { label: string; value: 
     <View style={styles.rangeRow}>
       <Text style={styles.rangeLabel}>{label}</Text>
       <Slider
-        accessibilityLabel={`片段${label}`}
+        accessibilityLabel={tr('片段{label}', { label })}
         style={{ flex: 1 }}
         minimumValue={0}
         maximumValue={max}
@@ -368,18 +369,16 @@ function Summary({ def, kind, analysis, fps }: { def: MetricDef; kind: 'jump' | 
     if (s.gctCv != null) cells.push({ label: 'GCT-CV', value: s.gctCv.toFixed(1), unit: '%' });
     if (s.driCv != null) cells.push({ label: 'DRI-CV', value: s.driCv.toFixed(1), unit: '%' });
   } else if (kind === 'drop') {
-    if (s.rsi) cells.push({ label: '最好 RSI', value: s.rsi.best.toFixed(2), unit: '', main: true });
-    if (s.gctS) cells.push({ label: '最短触地', value: ms(s.gctS.best), unit: 'ms' });
+    if (s.rsi) cells.push({ label: tr('最好 RSI'), value: s.rsi.best.toFixed(2), unit: '', main: true });
+    if (s.gctS) cells.push({ label: tr('最短触地'), value: ms(s.gctS.best), unit: 'ms' });
   } else if (s.jhCm) {
-    cells.push({ label: '最高', value: cm(s.jhCm.best), unit: 'cm', main: true });
-    if (s.counted > 1) cells.push({ label: '平均', value: cm(s.jhCm.mean), unit: 'cm' });
+    cells.push({ label: tr('最高'), value: cm(s.jhCm.best), unit: 'cm', main: true });
+    if (s.counted > 1) cells.push({ label: tr('平均'), value: cm(s.jhCm.mean), unit: 'cm' });
   }
-  if (kind !== 'jump' && s.jhCm) cells.push({ label: '平均跳高', value: cm(s.jhCm.mean), unit: 'cm' });
+  if (kind !== 'jump' && s.jhCm) cells.push({ label: tr('平均跳高'), value: cm(s.jhCm.mean), unit: 'cm' });
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>
-        {def.name} · 认出 {s.total} 跳，计入 {s.counted} 跳
-      </Text>
+      <Text style={styles.cardTitle}>{tr('{name} · 认出 {total} 跳，计入 {counted} 跳', { name: def.name, total: s.total, counted: s.counted })}</Text>
       <View style={styles.cells}>
         {cells.map((c) => (
           <View key={c.label} style={styles.cell}>
@@ -392,19 +391,16 @@ function Summary({ def, kind, analysis, fps }: { def: MetricDef; kind: 'jump' | 
         ))}
       </View>
       {kind === 'repeat' && s.rsi105 == null && (
-        <Text style={styles.muted}>计入的反弹只有 {counted.filter((j) => j.rsi != null).length} 次，10/5 RSI 要至少 5 次。把片段拉到整组 10 跳，或核对被剔除的跳。</Text>
+        <Text style={styles.muted}>{tr('计入的反弹只有 {length} 次，10/5 RSI 要至少 5 次。把片段拉到整组 10 跳，或核对被剔除的跳。', { length: counted.filter((j) => j.rsi != null).length })}</Text>
       )}
       {kind !== 'jump' && (s.rsr || s.dri) && (
         <Text style={styles.muted}>
-          {s.rsr ? `平均 RSR ${s.rsr.mean.toFixed(2)}` : ''}
-          {s.dri ? ` · 平均 DRI ${s.dri.mean.toFixed(2)}（新指标，还没有常模，只看自己的变化）` : ''}
+          {s.rsr ? tr('平均 RSR {mean}', { mean: s.rsr.mean.toFixed(2) }) : ''}
+          {s.dri ? tr(' · 平均 DRI {mean}（新指标，还没有常模，只看自己的变化）', { mean: s.dri.mean.toFixed(2) }) : ''}
         </Text>
       )}
       {err && (
-        <Text style={styles.muted}>
-          误差：每个关键帧 ±1 帧（{Math.round(1000 / fps)} ms），跳高约 ±{err.jhCm.toFixed(1)} cm
-          {err.gctS ? `，触地 ±${Math.round(err.gctS * 1000)} ms` : ''}
-        </Text>
+        <Text style={styles.muted}>{tr('误差：每个关键帧 ±1 帧（{p} ms），跳高约 ±{jhCm} cm{p2}', { p: Math.round(1000 / fps), jhCm: err.jhCm.toFixed(1), p2: err.gctS ? tr('，触地 ±{gctS} ms', { gctS: Math.round(err.gctS * 1000) }) : '' })}</Text>
       )}
     </View>
   );
@@ -431,41 +427,39 @@ function JumpCard({
 }) {
   const e = jump.events;
   const keys: { key: 'touchdown' | 'takeoff' | 'landing'; name: string; color: string }[] = [
-    ...(e.touchdown != null ? [{ key: 'touchdown' as const, name: '触地', color: colors.purple }] : []),
-    { key: 'takeoff', name: '起跳', color: colors.accent },
-    { key: 'landing', name: '落地', color: colors.rim },
+    ...(e.touchdown != null ? [{ key: 'touchdown' as const, name: tr('触地'), color: colors.purple }] : []),
+    { key: 'takeoff', name: tr('起跳'), color: colors.accent },
+    { key: 'landing', name: tr('落地'), color: colors.rim },
   ];
-  const line = [`${cm(jump.jhCm)} cm`, `滞空 ${ms(jump.ftS)} ms`, ...(jump.gctS != null ? [`触地 ${ms(jump.gctS)} ms`, `RSI ${jump.rsi!.toFixed(2)}`, `RSR ${jump.rsr!.toFixed(2)}`] : []), ...(jump.dri != null ? [`DRI ${jump.dri.toFixed(2)}`] : [])];
+  const line = [`${cm(jump.jhCm)} cm`, tr('滞空 {ftS} ms', { ftS: ms(jump.ftS) }), ...(jump.gctS != null ? [tr('触地 {gctS} ms', { gctS: ms(jump.gctS) }), `RSI ${jump.rsi!.toFixed(2)}`, `RSR ${jump.rsr!.toFixed(2)}`] : []), ...(jump.dri != null ? [`DRI ${jump.dri.toFixed(2)}`] : [])];
   const excludable = jump.flags.some((f) => f === 'edge' || f === 'outlier');
   return (
     <View style={[styles.card, !jump.counted && styles.dimmed]}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`第 ${jump.index + 1} 跳`} onPress={onToggle} style={styles.jumpHead}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('第 {index} 跳', { index: jump.index + 1 })} onPress={onToggle} style={styles.jumpHead}>
         <Text style={styles.jumpNo}>{jump.index + 1}</Text>
         <Text style={styles.jumpLine}>{line.join(' · ')}</Text>
-        {!jump.counted && <Text style={styles.out}>未计入</Text>}
+        {!jump.counted && <Text style={styles.out}>{tr('未计入')}</Text>}
       </Pressable>
       {jump.flags.map((f) => (
-        <Text key={f} style={styles.flag}>
-          {FLAG_TEXT[f].what}。建议：{FLAG_TEXT[f].advice}
-        </Text>
+        <Text key={f} style={styles.flag}>{tr('{what}。建议：{advice}', { what: FLAG_TEXT[f].what, advice: FLAG_TEXT[f].advice })}</Text>
       ))}
       {open && (
         <View style={{ gap: 8 }}>
           {keys.map((k) => (
             <View key={k.key} style={styles.keyRow}>
-              <Pressable accessibilityRole="button" accessibilityLabel={`看${k.name}帧`} onPress={() => onShow(e[k.key]!)} style={[styles.keyChip, { borderColor: k.color }]}>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr('看{name}帧', { name: k.name })} onPress={() => onShow(e[k.key]!)} style={[styles.keyChip, { borderColor: k.color }]}>
                 <Text style={[styles.keyName, { color: k.color }]}>{k.name}</Text>
                 <Text style={styles.keyFrame}>#{e[k.key]}</Text>
               </Pressable>
               {[-1, 1].map((by) => (
-                <Pressable key={by} accessibilityRole="button" accessibilityLabel={`${k.name}${by > 0 ? '后' : '前'}移一帧`} onPress={() => onNudge(k.key, by)} style={styles.nudge}>
+                <Pressable key={by} accessibilityRole="button" accessibilityLabel={tr('{name}{p}移一帧', { name: k.name, p: by > 0 ? tr('后') : tr('前') })} onPress={() => onNudge(k.key, by)} style={styles.nudge}>
                   <Text style={styles.nudgeText}>{by > 0 ? '+1' : '−1'}</Text>
                 </Pressable>
               ))}
             </View>
           ))}
-          {excludable && <Chip label={kept ? '已手动计入' : '核对过了，计入'} selected={kept} onPress={onKeep} />}
-          {kind === 'repeat' && jump.gctS == null && <Text style={styles.muted}>第一跳之前没有触地，不算 RSI。</Text>}
+          {excludable && <Chip label={kept ? tr('已手动计入') : tr('核对过了，计入')} selected={kept} onPress={onKeep} />}
+          {kind === 'repeat' && jump.gctS == null && <Text style={styles.muted}>{tr('第一跳之前没有触地，不算 RSI。')}</Text>}
         </View>
       )}
     </View>
@@ -477,21 +471,21 @@ function HistoryCard({ def, previous, today, verdict, te }: { def: MetricDef; pr
   const u = def.unit ? ` ${def.unit}` : '';
   const delta = `${verdict.delta >= 0 ? '+' : '−'}${Math.abs(verdict.delta).toFixed(d)}${u}`;
   const text = {
-    better: `比之前平均 ${delta}，超过最小可信变化 ${verdict.bar.toFixed(d)}${u}：是真进步`,
-    worse: `比之前平均 ${delta}，超过最小可信变化 ${verdict.bar.toFixed(d)}${u}：确实下降了`,
-    noise: `比之前平均 ${delta}，没超过最小可信变化 ${verdict.bar.toFixed(d)}${u}：还在噪声里`,
-    unknown: '再测几次（至少 3 次）就能判断是不是真进步',
+    better: tr('比之前平均 {delta}，超过最小可信变化 {bar}{u}：是真进步', { delta, bar: verdict.bar.toFixed(d), u }),
+    worse: tr('比之前平均 {delta}，超过最小可信变化 {bar}{u}：确实下降了', { delta, bar: verdict.bar.toFixed(d), u }),
+    noise: tr('比之前平均 {delta}，没超过最小可信变化 {bar}{u}：还在噪声里', { delta, bar: verdict.bar.toFixed(d), u }),
+    unknown: tr('再测几次（至少 3 次）就能判断是不是真进步'),
   }[verdict.verdict];
   const tone = verdict.verdict === 'better' ? colors.good : verdict.verdict === 'worse' ? colors.warn : colors.textSoft;
-  const points = [...previous.slice(-7), today].map((v, i, a) => ({ label: i === a.length - 1 ? '这次' : '', value: v, display: v.toFixed(d) }));
+  const points = [...previous.slice(-7), today].map((v, i, a) => ({ label: i === a.length - 1 ? tr('这次') : '', value: v, display: v.toFixed(d) }));
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>同动作历史</Text>
+      <Text style={styles.cardTitle}>{tr('同动作历史')}</Text>
       {points.length > 1 && <TrendChart points={points} height={140} />}
       <Text style={[styles.verdict, { color: tone }]}>{text}</Text>
       {verdict.verdict !== 'unknown' && (
         <Text style={styles.muted}>
-          {te == null ? '还没有一次测多跳的记录，测量噪声先按历史波动估。' : `测量噪声（同一次测多跳的波动）${te.toFixed(d)}${u}，单次重测要差 ${verdict.mdc!.toFixed(d)}${u} 以上才不是噪声。`}
+          {te == null ? tr('还没有一次测多跳的记录，测量噪声先按历史波动估。') : tr('测量噪声（同一次测多跳的波动）{te}{u}，单次重测要差 {mdc}{u} 以上才不是噪声。', { te: te.toFixed(d), u, mdc: verdict.mdc!.toFixed(d) })}
         </Text>
       )}
     </View>

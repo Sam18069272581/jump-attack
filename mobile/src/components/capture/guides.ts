@@ -1,4 +1,5 @@
 import type { Category } from '@/domain/metrics';
+import { localized } from '@/i18n';
 
 /** Filming instructions for one kind of test, shared by in-app recording and the Expo Go slow-motion import. */
 export type CaptureGuide = {
@@ -109,6 +110,9 @@ const LIFT: CaptureGuide = {
   tips: '1. 三脚架放在侧面 1.5–2 米，正对杠铃一端。\n2. 外侧挂 45 cm 标准片。\n3. 杠铃片的整个行程都要在画面里。',
   maxSeconds: 60,
 };
+
+// Shown in the current language (i18n).
+localized([JUMP, DROP_JUMP, REPEATED_JUMP, APPROACH_TOUCH, SPRINT, LIFT_SETUP, LIFT], 'title', 'text', 'checks', 'recordingHint', 'doneHint', 'tips');
 
 export function captureGuide(category: Category, code?: string): CaptureGuide {
   if (code === 'dj_rsi') return DROP_JUMP;

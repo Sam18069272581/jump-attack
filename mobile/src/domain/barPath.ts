@@ -13,6 +13,8 @@
 
 import { velocityLoss } from './vbt';
 
+import { localized, tr } from '@/i18n';
+
 /** Diameter of a standard (IWF/IPF) bumper or competition plate, cm. */
 export const PLATE_CM = 45;
 
@@ -473,12 +475,12 @@ export function summariseReps(mvs: number[]): SetSummary | null {
 }
 
 /** Why a flagged rep was left out, as the athlete reads it under the rep. */
-export const REP_FLAG_REASONS: Record<RepFlag, string> = {
+export const REP_FLAG_REASONS: Record<RepFlag, string> = localized({
   truncated: '没拍全：视频在这一次中间开始或结束，或者中途跟丢了杠铃片',
   partial: '行程明显比这组其他几次短，可能没蹲到底或没站直',
   unsure: '这一次有不少画面没认准杠铃片',
   drift: '杠铃片左右移动太多，可能跟错了东西或手机动了',
-};
+});
 
 /** A rep counts towards the logged set unless something about it was flagged; the athlete can still put it back. */
 export function countsByDefault(r: Rep): boolean {
@@ -526,8 +528,8 @@ export function trackTimeScale(fileFps: number | null, captureFps: number | null
 /** Problems with a tracked set worth telling the athlete before they trust the numbers. */
 export function trackWarnings(a: BarAnalysis): string[] {
   const out: string[] = [];
-  if (a.reps.every((r) => r.flags.length > 0)) out.push('没有找到完整的一次向心：确认杠铃片整个行程都在画面里，圈套准杠铃片后重新分析。');
-  if (a.unsure > 0.15) out.push(`有 ${Math.round(a.unsure * 100)}% 的画面没认准杠铃片，结果可能不准：光线暗、杠铃片被挡住或手机晃动都会这样。`);
-  if (a.rate > 0 && a.rate < 50) out.push(`视频只有约 ${Math.round(a.rate)} fps，速度误差会变大。相机设置里把录制视频改成 60 fps 再拍。`);
+  if (a.reps.every((r) => r.flags.length > 0)) out.push(tr('没有找到完整的一次向心：确认杠铃片整个行程都在画面里，圈套准杠铃片后重新分析。'));
+  if (a.unsure > 0.15) out.push(tr('有 {unsure}% 的画面没认准杠铃片，结果可能不准：光线暗、杠铃片被挡住或手机晃动都会这样。', { unsure: Math.round(a.unsure * 100) }));
+  if (a.rate > 0 && a.rate < 50) out.push(tr('视频只有约 {rate} fps，速度误差会变大。相机设置里把录制视频改成 60 fps 再拍。', { rate: Math.round(a.rate) }));
   return out;
 }

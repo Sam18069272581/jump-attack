@@ -1,3 +1,5 @@
+import { localized, tr } from '@/i18n';
+
 /**
  * Real dunk attempts: the outcome the whole app works towards. Touch height says whether a dunk should be possible;
  * these say whether it happened. A lower rim or a smaller ball is practice and is counted on its own.
@@ -12,9 +14,9 @@ export type DunkAttempt = { id: number; at: string; rimCm: number; ball: Ball; o
 
 export type Setup = { rimCm: number; ball: Ball };
 
-export const BALL_NAME: Record<Ball, string> = { basketball: '篮球', volleyball: '排球' };
+export const BALL_NAME: Record<Ball, string> = localized({ basketball: '篮球', volleyball: '排球' });
 
-export const OUTCOME_NAME: Record<Outcome, string> = { made: '扣进', rim: '碰框没进', short: '没够到' };
+export const OUTCOME_NAME: Record<Outcome, string> = localized({ made: '扣进', rim: '碰框没进', short: '没够到' });
 
 /** Only the latest attempts at a setup count, so misses from weeks ago fade out as the athlete improves. */
 export const RECENT_ATTEMPTS = 10;
@@ -44,5 +46,5 @@ export function firstDunk(attempts: DunkAttempt[], rimCm: number): DunkAttempt |
 
 export function rimProblem(rimCm: number): string | null {
   const [lo, hi] = RIM_RANGE_CM;
-  return Number.isFinite(rimCm) && rimCm >= lo && rimCm <= hi ? null : `篮筐高度一般在 ${lo}–${hi} cm，标准篮筐是 305`;
+  return Number.isFinite(rimCm) && rimCm >= lo && rimCm <= hi ? null : tr('篮筐高度一般在 {lo}–{hi} cm，标准篮筐是 305', { lo, hi });
 }

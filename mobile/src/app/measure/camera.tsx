@@ -10,6 +10,7 @@ import { Icon } from '@/components/Icon';
 import { PoseCamera, type CameraErrorStage, type CameraInfo, type PoseCameraHandle, type Recorded } from '@/components/PoseCamera';
 import { Button } from '@/components/ui';
 import { getMetric } from '@/domain/metrics';
+import { tr } from '@/i18n';
 import { dropTake, dropTestTakes } from '@/media/takes';
 import { colors, fonts, radius } from '@/theme';
 
@@ -32,10 +33,10 @@ type Rec =
 
 function errorText(stage: CameraErrorStage, message: string, name: string): string {
   if (stage === 'camera') {
-    if (name === 'NotAllowedError') return '没有相机权限：到 iPhone「设置」里找到 Expo Go，打开「相机」，再回来点重试。';
-    if (name === 'NotFoundError' || name === 'OverconstrainedError') return '找不到能用的后置相机。';
-    if (name === 'NotSupportedError') return '这台手机的系统不能在 App 里用网页相机（要 iOS 14.3 以上）。可以用相机 App 拍，再导入。';
-    return `相机打不开：${message}`;
+    if (name === 'NotAllowedError') return tr('没有相机权限：到 iPhone「设置」里找到 Expo Go，打开「相机」，再回来点重试。');
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return tr('找不到能用的后置相机。');
+    if (name === 'NotSupportedError') return tr('这台手机的系统不能在 App 里用网页相机（要 iOS 14.3 以上）。可以用相机 App 拍，再导入。');
+    return tr('相机打不开：{message}', { message });
   }
   return message;
 }
@@ -138,15 +139,15 @@ export default function TestCamera() {
       />
       <SafeAreaView style={StyleSheet.absoluteFill} edges={['left', 'right', 'top', 'bottom']} pointerEvents="box-none">
         <View style={styles.top} pointerEvents="box-none">
-          <Pressable accessibilityRole="button" accessibilityLabel="关闭" onPress={() => router.back()} style={styles.close}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr('关闭')} onPress={() => router.back()} style={styles.close}>
             <Icon name="close" size={22} color="#FFFFFF" />
           </Pressable>
           <View style={styles.topRight}>
             <Text style={styles.title}>{title}</Text>
             {info && (
               <Text style={styles.info}>
-                {info.fps ? `${Math.round(info.fps)} fps` : '帧率未知'}
-                {info.physical ? '' : ' · 录的时候别缩放'}
+                {info.fps ? `${Math.round(info.fps)} fps` : tr('帧率未知')}
+                {info.physical ? '' : tr(' · 录的时候别缩放')}
               </Text>
             )}
           </View>
@@ -159,11 +160,11 @@ export default function TestCamera() {
                 · {c}
               </Text>
             ))}
-            {slow && <Text style={styles.warn}>这台手机的网页相机只有 {Math.round(info!.fps!)} 帧，测得会粗；用相机 App 拍了再导入更准。</Text>}
+            {slow && <Text style={styles.warn}>{tr('这台手机的网页相机只有 {fps} 帧，测得会粗；用相机 App 拍了再导入更准。', { fps: Math.round(info!.fps!) })}</Text>}
             <Text style={styles.note}>
               {lift
-                ? 'App 里拍是 60 帧，测杠铃速度够用。'
-                : 'App 里最多 60 帧：起跳或落地差一帧，跳高差约 2–3 cm、触地时间差 17 ms。要测准，用 iPhone 慢动作（240 帧）拍了再导入。'}
+                ? tr('App 里拍是 60 帧，测杠铃速度够用。')
+                : tr('App 里最多 60 帧：起跳或落地差一帧，跳高差约 2–3 cm、触地时间差 17 ms。要测准，用 iPhone 慢动作（240 帧）拍了再导入。')}
             </Text>
           </View>
         )}
@@ -172,7 +173,7 @@ export default function TestCamera() {
           {(live || rec.name === 'starting') && (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="开始录像"
+              accessibilityLabel={tr('开始录像')}
               accessibilityState={{ disabled: !canRecord }}
               disabled={!canRecord}
               onPress={record}
@@ -183,7 +184,7 @@ export default function TestCamera() {
           )}
           {recording && (
             <>
-              <Pressable accessibilityRole="button" accessibilityLabel="停止录像" disabled={rec.name === 'stopping'} onPress={stop} style={styles.shutter}>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr('停止录像')} disabled={rec.name === 'stopping'} onPress={stop} style={styles.shutter}>
                 <View style={styles.stopSquare} />
               </Pressable>
               <Text style={styles.timer}>
@@ -195,16 +196,16 @@ export default function TestCamera() {
 
         {recording && (
           <View style={[styles.banner, landscape ? styles.bannerSide : styles.bannerBottom]} pointerEvents="none">
-            <Text style={styles.bannerText}>录像中：{guide.recordingHint}（最长 {maxSeconds} 秒）</Text>
+            <Text style={styles.bannerText}>{tr('录像中：{hint}（最长 {maxSeconds} 秒）', { hint: guide.recordingHint, maxSeconds })}</Text>
           </View>
         )}
 
         {rec.name === 'recorded' && (
           <View style={styles.panelWrap}>
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>录好了 · {rec.take.seconds.toFixed(1)} 秒</Text>
-              <Button label="用这一段" onPress={() => use(rec.take)} />
-              <Button label="重拍" variant="secondary" onPress={retake} />
+              <Text style={styles.panelTitle}>{tr('录好了 · {seconds} 秒', { seconds: rec.take.seconds.toFixed(1) })}</Text>
+              <Button label={tr('用这一段')} onPress={() => use(rec.take)} />
+              <Button label={tr('重拍')} variant="secondary" onPress={retake} />
             </View>
           </View>
         )}
@@ -214,8 +215,8 @@ export default function TestCamera() {
             <View style={styles.panel}>
               <Text style={styles.panelText}>{rec.message}</Text>
               {/* After a failed take the page may still be holding it: a fresh page films the next one. */}
-              <Button label={fatal ? '重试' : '重拍'} onPress={retry} />
-              {fatal && <Button label="返回" variant="secondary" onPress={() => router.back()} />}
+              <Button label={fatal ? tr('重试') : tr('重拍')} onPress={retry} />
+              {fatal && <Button label={tr('返回')} variant="secondary" onPress={() => router.back()} />}
             </View>
           </View>
         )}

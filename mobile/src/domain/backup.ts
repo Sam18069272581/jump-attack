@@ -1,5 +1,7 @@
 import { toISODate } from './dates';
 
+import { localized, tr } from '@/i18n';
+
 /**
  * A copy of the whole local database, for moving to another phone, another computer's Expo Go or the
  * cloud. Rows are kept as stored (ids included) so the links between tables survive a restore. Every
@@ -31,10 +33,10 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const isValue = (v: unknown) => v === null || typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v));
 
 /** How a file's problems name it: a whole backup to restore, or one athlete's data to import. */
-const WORDS = {
+const WORDS = localized({
   [BACKUP_FORMAT]: { notOurs: '这不是 Jump Attack 的备份文件。', newer: '这份备份来自更新版本的 App，先更新 App 再恢复。', broken: '备份文件里的' },
   [ATHLETE_FORMAT]: { notOurs: '这不是 Jump Attack 的运动员数据文件。', newer: '这份文件来自更新版本的 App，先更新 App 再导入。', broken: '文件里的' },
-};
+});
 
 /** The tables of a file in `format`, checked row by row, or what is wrong with it. */
 function readTables(
@@ -58,7 +60,7 @@ function readTables(
 
   const tables = data.tables;
   for (const [name, rows] of Object.entries(tables)) {
-    if (!Array.isArray(rows) || !rows.every((r) => isObject(r) && Object.values(r).every(isValue))) return { ok: false, problem: `${words.broken} ${name} 有损坏的记录。` };
+    if (!Array.isArray(rows) || !rows.every((r) => isObject(r) && Object.values(r).every(isValue))) return { ok: false, problem: tr('{broken} {name} 有损坏的记录。', { broken: words.broken, name }) };
   }
   return { ok: true, schema_version: data.schema_version as number, exported_at: typeof data.exported_at === 'string' ? data.exported_at : '', tables: tables as Backup['tables'] };
 }
@@ -68,9 +70,9 @@ export function parseBackup(text: string, latestVersion: number): BackupParse {
   const read = readTables(text, BACKUP_FORMAT, latestVersion);
   if (!read.ok) {
     // Restoring one athlete's file would replace everyone else on the phone with that one athlete.
-    return read.format === ATHLETE_FORMAT ? { ok: false, problem: '这是单个运动员的数据文件，请在「我的 → 测试对象」里用「导入运动员」。' } : { ok: false, problem: read.problem };
+    return read.format === ATHLETE_FORMAT ? { ok: false, problem: tr('这是单个运动员的数据文件，请在「我的 → 测试对象」里用「导入运动员」。') } : { ok: false, problem: read.problem };
   }
-  if (!Array.isArray(read.tables.athlete) || read.tables.athlete.length === 0) return { ok: false, problem: '备份里没有测试对象。' };
+  if (!Array.isArray(read.tables.athlete) || read.tables.athlete.length === 0) return { ok: false, problem: tr('备份里没有测试对象。') };
   return { ok: true, backup: { format: BACKUP_FORMAT, schema_version: read.schema_version, exported_at: read.exported_at, tables: read.tables } };
 }
 
@@ -78,8 +80,8 @@ export type AthleteFile = Omit<Backup, 'format'> & { format: typeof ATHLETE_FORM
 
 export function parseAthleteFile(text: string, latestVersion: number): { ok: true; file: AthleteFile } | { ok: false; problem: string } {
   const read = readTables(text, ATHLETE_FORMAT, latestVersion);
-  if (!read.ok) return { ok: false, problem: read.format === BACKUP_FORMAT ? '这是整台手机的备份文件，请用「从备份文件恢复」。' : read.problem };
-  if (read.tables.athlete?.length !== 1) return { ok: false, problem: '文件里应该正好有一个运动员。' };
+  if (!read.ok) return { ok: false, problem: read.format === BACKUP_FORMAT ? tr('这是整台手机的备份文件，请用「从备份文件恢复」。') : read.problem };
+  if (read.tables.athlete?.length !== 1) return { ok: false, problem: tr('文件里应该正好有一个运动员。') };
   return { ok: true, file: { format: ATHLETE_FORMAT, schema_version: read.schema_version, exported_at: read.exported_at, tables: read.tables } };
 }
 
@@ -101,7 +103,7 @@ const count = (b: Pick<Backup, 'tables'>, table: string) => b.tables[table]?.len
 
 /** What a backup holds, in the terms the app uses, for the confirmation before replacing data. */
 export function describeBackup(b: Pick<Backup, 'tables'>): string {
-  return `${count(b, 'athlete')} 个测试对象、${count(b, 'test_session')} 次测试、${count(b, 'workout')} 次训练`;
+  return tr('{b} 个测试对象、{b2} 次测试、{b3} 次训练', { b: count(b, 'athlete'), b2: count(b, 'test_session'), b3: count(b, 'workout') });
 }
 
 export function backupFileName(now: Date): string {
@@ -132,6 +134,7 @@ export function backupHash(b: Backup): string {
 }
 
 /** The athlete the first migration creates. */
+// i18n-ignore: the name migration 1 stores, compared, never shown from here.
 const DEFAULT_ATHLETE = '我自己';
 const ATHLETE_KEYS = new Set(['id', 'name', 'created_at']);
 

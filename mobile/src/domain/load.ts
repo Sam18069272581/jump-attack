@@ -1,6 +1,8 @@
 import { daysBetween, type ISODate } from './dates';
 import { isJump, type Prescription } from './plan';
 
+import { tr } from '@/i18n';
+
 /**
  * Training load the way trackload (github.com/Sam18069272581/trackload) tracks it: a daily load, an acute and a
  * chronic exponentially weighted average, and their ratio (ACWR). Two loads use it: session RPE × minutes for
@@ -64,7 +66,7 @@ export function workoutMinutes(startedAt: string, finishedAt: string | null): nu
   return m >= 1 && m <= MAX_MINUTES ? m : null;
 }
 
-const change = (pct: number) => (Math.abs(pct) < SAME_PCT ? '差不多' : `${pct > 0 ? '高' : '低'} ${Math.abs(pct)}%`);
+const change = (pct: number) => (Math.abs(pct) < SAME_PCT ? tr('差不多') : `${pct > 0 ? tr('高') : tr('低')} ${Math.abs(pct)}%`);
 
 /**
  * One line on a load: against what the athlete is used to once there are 28 days, else the last 7 days against the
@@ -76,13 +78,13 @@ export function loadNote(name: string, loads: DailyLoad[], asOf: ISODate): { tex
   const ratio = acwrOn(loads, asOf);
   if (ratio != null) {
     const pct = Math.round((ratio - 1) * 100);
-    return { text: `${name}：这周${Math.abs(pct) < SAME_PCT ? '和你习惯的差不多' : `比你习惯的${change(pct)}`}`, high: ratio > ACWR_HIGH };
+    return { text: tr('{name}：这周{p}', { name, p: Math.abs(pct) < SAME_PCT ? tr('和你习惯的差不多') : tr('比你习惯的{pct}', { pct: change(pct) }) }), high: ratio > ACWR_HIGH };
   }
   const sum = (from: number, to: number) => series.slice(Math.max(0, series.length - to), series.length - from).reduce((a, b) => a + b, 0);
   const week = sum(0, 7);
   const before = sum(7, 14);
-  if (before === 0 || series.length < 14) return { text: `${name}：记满 ${MIN_LOAD_DAYS} 天后，再和你习惯的负荷比`, high: false };
-  return { text: `${name}：最近 7 天比之前 7 天${change(Math.round((week / before - 1) * 100))}`, high: false };
+  if (before === 0 || series.length < 14) return { text: tr('{name}：记满 {MIN_LOAD_DAYS} 天后，再和你习惯的负荷比', { name, MIN_LOAD_DAYS }), high: false };
+  return { text: tr('{name}：最近 7 天比之前 7 天{week}', { name, week: change(Math.round((week / before - 1) * 100)) }), high: false };
 }
 
 /** A logged set with the exercise it was prescribed as (undefined when no template has that code any more). */

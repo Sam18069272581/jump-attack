@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, Text, View, type LayoutChangeEvent } from
 import Svg, { Circle, Line, Path } from 'react-native-svg';
 
 import { useReduceMotion } from '@/components/motion';
+import { tr } from '@/i18n';
 import { colors, fonts } from '@/theme';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
@@ -73,7 +74,7 @@ export function PulseProgress({ progress, label }: { progress: number; label: st
     <View style={styles.panel} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width - 32)}>
       <View style={styles.head}>
         <Text style={styles.label}>{label}</Text>
-        <Text style={styles.pct} accessibilityLabel={`进度 ${Math.round(p * 100)}%`}>
+        <Text style={styles.pct} accessibilityLabel={tr('进度 {p}%', { p: Math.round(p * 100) })}>
           {Math.round(p * 100)}
           <Text style={styles.pctUnit}>%</Text>
         </Text>

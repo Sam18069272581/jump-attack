@@ -1,5 +1,7 @@
 import { Directory, File, Paths } from 'expo-file-system';
 
+import { tr } from '@/i18n';
+
 /**
  * The pose model and the MediaPipe library that the pose pages (media/posePage.ts) run in a WebView, downloaded once
  * and kept on the phone, so the analysis works without a connection and nothing is fetched each time. Videos never
@@ -87,7 +89,7 @@ export async function downloadPoseLib(onProgress?: (share: number) => void, sign
     if (dest.size !== f.bytes) {
       const got = dest.size;
       dest.delete();
-      throw new Error(`${f.name} 下载不完整（${got} / ${f.bytes} 字节）`);
+      throw new Error(tr('{name} 下载不完整（{got} / {bytes} 字节）', { name: f.name, got, bytes: f.bytes }));
     }
     done += f.bytes;
   }

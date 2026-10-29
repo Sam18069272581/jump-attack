@@ -1,6 +1,8 @@
 import { ALLOWANCE, type DayState, type DunkDiagnosis, type DunkMetric } from './dunk';
 import { TOUCH_TEST_JUMPS } from './touch';
 
+import { tr } from '@/i18n';
+
 /** "1.32×", "1.60", "280 ms". */
 export function formatMetric(m: Pick<DunkMetric, 'value' | 'unit' | 'decimals'>): string {
   if (m.value == null) return '—';
@@ -13,13 +15,13 @@ export function stateLine(s: DayState): string {
   const pct = Math.round(ALLOWANCE[s] * 100);
   switch (s) {
     case 'good':
-      return '今天状态好 · 按计划练';
+      return tr('今天状态好 · 按计划练');
     case 'fair':
-      return `今天状态一般 · 力量达标线放宽 ${pct}%`;
+      return tr('今天状态一般 · 力量达标线放宽 {pct}%', { pct });
     case 'poor':
-      return `今天状态差 · 力量达标线放宽 ${pct}%`;
+      return tr('今天状态差 · 力量达标线放宽 {pct}%', { pct });
     default:
-      return '测一次 CMJ 或记录恢复数据，判断今天的状态';
+      return tr('测一次 CMJ 或记录恢复数据，判断今天的状态');
   }
 }
 
@@ -39,17 +41,17 @@ export function touchSpread(d: DunkDiagnosis): string | null {
   const e = d.touchError;
   if (d.touch.source !== 'approach' || !e) return null;
   const err = e.errorCm != null ? ` ± ${e.errorCm.toFixed(1)}` : '';
-  if (e.jumps === 1) return `只有 1 跳${err}，测满 ${TOUCH_TEST_JUMPS} 跳更准`;
-  return `最好 ${e.jumps} 跳均值${e.errorCm != null ? err : '，录像估算的误差要校准 2 次后才知道'}`;
+  if (e.jumps === 1) return tr('只有 1 跳{err}，测满 {TOUCH_TEST_JUMPS} 跳更准', { err, TOUCH_TEST_JUMPS });
+  return tr('最好 {jumps} 跳均值{p}', { jumps: e.jumps, p: e.errorCm != null ? err : tr('，录像估算的误差要校准 2 次后才知道') });
 }
 
 /** What the touch the gap is measured from is made of, and how sure it is. Null without a touch. */
 export function touchNote(d: DunkDiagnosis): string | null {
   const t = d.touch;
-  if (t.source === 'standing') return `原地估算 ${t.standing!.toFixed(1)} cm（站立摸高 + CMJ），测一次助跑摸高更准`;
+  if (t.source === 'standing') return tr('原地估算 {standing} cm（站立摸高 + CMJ），测一次助跑摸高更准', { standing: t.standing!.toFixed(1) });
   if (t.source !== 'approach') return null;
   const spread = touchSpread(d);
-  return `助跑摸高 ${t.approach!.toFixed(1)} cm${spread ? `（${spread}）` : ''}`;
+  return tr('助跑摸高 {approach} cm{p}', { approach: t.approach!.toFixed(1), p: spread ? tr('（{spread}）', { spread }) : '' });
 }
 
 /** The words over the gap, and a hint under it while the line is inside the touch's error or once it is cleared. */
@@ -57,10 +59,10 @@ export function gapHeading(d: DunkDiagnosis): { label: string; hint: string | nu
   const reached = (d.gapCm ?? 1) <= 0;
   switch (d.verdict) {
     case 'over':
-      return { label: '已过扣篮线', hint: '下一步是比赛里稳定扣：累了也能摸到这个高度。' };
+      return { label: tr('已过扣篮线'), hint: tr('下一步是比赛里稳定扣：累了也能摸到这个高度。') };
     case 'close':
-      return { label: reached ? '摸到扣篮线了' : '离扣篮线还差', hint: '接近了，扣篮线在误差范围里，还不能确定' };
+      return { label: reached ? tr('摸到扣篮线了') : tr('离扣篮线还差'), hint: tr('接近了，扣篮线在误差范围里，还不能确定') };
     default:
-      return { label: '离扣篮线还差', hint: null };
+      return { label: tr('离扣篮线还差'), hint: null };
   }
 }

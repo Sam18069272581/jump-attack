@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { tr } from '@/i18n';
 import { colors, fonts } from '@/theme';
 
 const SCORES = Array.from({ length: 11 }, (_, i) => i);
@@ -30,7 +31,7 @@ export function ScoreScale({
             <Pressable
               key={n}
               accessibilityRole="button"
-              accessibilityLabel={`${label} ${n} 分`}
+              accessibilityLabel={tr('{label} {n} 分', { label, n })}
               accessibilityState={{ selected }}
               hitSlop={4}
               onPress={() => onPick(n)}

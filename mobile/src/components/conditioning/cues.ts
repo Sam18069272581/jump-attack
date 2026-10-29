@@ -3,6 +3,8 @@ import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { speechLanguage, tr } from '@/i18n';
+
 /** A sound or spoken line at `at` seconds on a test's clock (negative = before the start signal). */
 export type Cue = { at: number; kind: 'go' | 'beep' | 'say'; text?: string };
 
@@ -35,7 +37,7 @@ export function useCues(): Cues {
         replay(beepPlayer);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
       },
-      say: (text: string) => Speech.speak(text, { language: 'zh-CN', rate: 1.05 }),
+      say: (text: string) => Speech.speak(text, { language: speechLanguage(), rate: 1.05 }),
     }),
     [goPlayer, beepPlayer],
   );
@@ -81,9 +83,9 @@ export function useTimeline(zeroAt: number | null, cues: Cue[], player: Cues): n
 /** Spoken 3-2-1 and the start signal before `at`. */
 export function countIn(at = 0): Cue[] {
   return [
-    { at: at - 3, kind: 'say', text: '三' },
-    { at: at - 2, kind: 'say', text: '二' },
-    { at: at - 1, kind: 'say', text: '一' },
+    { at: at - 3, kind: 'say', text: tr('三') },
+    { at: at - 2, kind: 'say', text: tr('二') },
+    { at: at - 1, kind: 'say', text: tr('一') },
     { at, kind: 'go' },
   ];
 }

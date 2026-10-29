@@ -1,5 +1,7 @@
 import { MOBILITY_TESTS, type MetricDef } from './metrics';
 
+import { localized } from '@/i18n';
+
 /** Left/right difference that earns an orange flag, as a share of the better side. */
 export const ASYMMETRY_FLAG = 0.1;
 
@@ -12,7 +14,7 @@ const ABSOLUTE_FLAG: Record<string, number> = { mob_thomas: 5 };
 export type MobilityTest = { key: string; name: string; unit: string; use: string; how: string; left: MetricDef; right: MetricDef };
 
 /** How to measure each test; angles with the phone strapped or held flat on the moving limb. */
-const HOW: Record<string, string> = {
+const HOW: Record<string, string> = localized({
   mob_ankle: '弓步面对墙，脚跟不离地、膝盖碰到墙的前提下，脚尖尽量远离墙，量脚尖到墙的距离。',
   mob_hip_ir: '坐在床边，小腿自然下垂。手机贴在小腿上，小腿垂直时归零，再把小脚向外摆到最大（髋内旋）。',
   mob_hip_er: '坐在床边，小腿自然下垂。手机贴在小腿上，小腿垂直时归零，再把小脚向内摆到最大（髋外旋）。',
@@ -20,7 +22,7 @@ const HOW: Record<string, string> = {
   mob_thomas: '先把手机平放在床面归零。坐在床尾仰躺、抱住对侧膝，再把手机贴在被测大腿上读角度：大腿高于水平为正，低于水平请输入负数。',
   mob_tspine: '侧卧屈髋屈膝，双臂前伸叠放。手机贴在上侧上臂，起始位归零，上臂向后打开到最大（开书式）。',
   mob_shoulder: '仰卧屈膝，手机贴在上臂，手臂贴体侧时归零，伸直手臂举过头顶到最大。',
-};
+});
 
 /** The tests as left/right pairs, in table order. */
 export const MOBILITY_PAIRS: MobilityTest[] = MOBILITY_TESTS.filter((m) => m.code.endsWith('_l')).map((left) => {
