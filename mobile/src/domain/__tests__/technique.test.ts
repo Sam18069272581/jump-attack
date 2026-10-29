@@ -70,7 +70,7 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
 
   it('puts the plant, take-off and landing within a frame of where they are', () => {
     const plantDownFrame = t.contacts.find((c) => c.downS === t.plantDownS)!.downFrame;
-    expect(Math.abs(result.events.plantDown - plantDownFrame)).toBeLessThanOrEqual(1);
+    expect(Math.abs(result.events.plantDown! - plantDownFrame)).toBeLessThanOrEqual(1);
     expect(Math.abs(result.events.takeoff - t.takeoffFrame)).toBeLessThanOrEqual(1);
     expect(Math.abs(result.events.landing! - t.landingFrame!)).toBeLessThanOrEqual(1);
   });
@@ -248,6 +248,15 @@ describe('what the clip lacks or gets wrong', () => {
       expect([seed, into, missed, result.metrics.plant]).toEqual([seed, into, missed, undefined]);
       expect(result.flags).toContain('unseen');
     }
+  });
+
+  it('a clip that starts inside the plant: no touch-down frame is named for it', () => {
+    const scene = poseScene();
+    const cut = Math.ceil(scene.truth.plantDownS * 240) + 12;
+    const frames = scene.frames.slice(cut).map((f, k) => ({ ...f, frame: k, t: k / 240 }));
+    const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers: scene.markers }));
+    expect(result.flags).toContain('unseen');
+    expect(result.events.plantDown).toBeNull();
   });
 
   it('a clip that starts inside the plant: no trunk lean at a touch-down it can’t see', () => {

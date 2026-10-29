@@ -153,8 +153,8 @@ export type Contact = {
 
 export type TechniqueResult = {
   style: { kind: 'one' | 'two'; foot: Side | null };
-  /** File frames: the plant's first foot down, take-off (first frame airborne), landing (null when not in the clip). */
-  events: { plantDown: number; takeoff: number; landing: number | null };
+  /** File frames: the plant's first foot down, take-off (first frame airborne), landing (each null when not in the clip). */
+  events: { plantDown: number | null; takeoff: number; landing: number | null };
   contacts: Contact[];
   penultimate: Contact | null;
   metrics: Partial<Record<MetricKey, Measured>>;
@@ -1072,7 +1072,8 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     ok: true,
     result: {
       style,
-      events: { plantDown, takeoff, landing },
+      // A touch-down before the clip's first frame: the first frame down isn't it.
+      events: { plantDown: Number.isFinite(firstPlant.downErr) ? plantDown : null, takeoff, landing },
       contacts,
       penultimate,
       metrics,

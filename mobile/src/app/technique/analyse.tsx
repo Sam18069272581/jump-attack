@@ -351,7 +351,7 @@ export default function TechniqueAnalyse() {
             </Rise>
             <View style={styles.events}>
               {[
-                { name: '最后一步落地', f: result.events.plantDown },
+                ...(result.events.plantDown != null ? [{ name: '最后一步落地', f: result.events.plantDown }] : []),
                 { name: '起跳', f: result.events.takeoff },
                 ...(result.events.landing != null ? [{ name: '落地', f: result.events.landing }] : []),
               ].map((e) => (
