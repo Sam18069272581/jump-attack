@@ -511,7 +511,7 @@ function footTraces(s: Series, fps: number, scale: number): Record<Side, FootTra
  * foot's still points around it (a run-up that comes in at an angle has its floor at another height in the picture
  * than the take-off spot's); `c1` is the slope of the line through all of them.
  */
-type Floor = { c1: number; level: (x: number, side: Side) => number };
+type Floor = { c1: number; level: (x: number, side: Side) => number; on: number };
 
 /** Where the heels and toes stood still. */
 function stillPoints(traces: Record<Side, FootTrace>, sides: Side[]): { X: number[]; Y: number[] } {
@@ -562,7 +562,9 @@ function fitFloor(traces: Record<Side, FootTrace>, nearPx: number, offPx: number
     return null;
   };
   const level = (x: number, side: Side): number => (heightNear(side, x) ?? heightNear(side === 'left' ? 'right' : 'left', x) ?? c0) + c1 * x;
-  return { c1, level };
+  // How many still points it puts on the floor.
+  const on = (['left', 'right'] as const).reduce((n, side) => n + own[side].X.filter((x, i) => abs(own[side].Y[i] - level(x, side)) <= offPx).length, 0);
+  return { c1, level, on };
 }
 
 /**
@@ -846,16 +848,23 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   let floor = floor0;
   let turned = 0;
   for (let it = 0; it < 4 && !markers && abs(floor.c1) > 1e-3; it++) {
-    turned += Math.atan(floor.c1);
     const along = unit({ x: frame.xAxis.x + floor.c1 * frame.up.x, y: frame.xAxis.y + floor.c1 * frame.up.y });
-    up = { x: along.y, y: -along.x };
-    if (dot(up, frame.up) < 0) up = { x: -up.x, y: -up.y };
-    frame = { origin: frame.origin, xAxis: along, up };
-    s = seriesOf(athlete, frames, frame, maxGap);
-    traces = footTraces(s, fps, roughScale);
-    floor = fitFloor(traces, nearPx, offPx) ?? floor;
+    let turnedUp = { x: along.y, y: -along.x };
+    if (dot(turnedUp, frame.up) < 0) turnedUp = { x: -turnedUp.x, y: -turnedUp.y };
+    const turnedFrame = { origin: frame.origin, xAxis: along, up: turnedUp };
+    const turnedS = seriesOf(athlete, frames, turnedFrame, maxGap);
+    const turnedTraces = footTraces(turnedS, fps, roughScale);
+    const turnedFloor = fitFloor(turnedTraces, nearPx, offPx) ?? floor;
+    // A turn is kept only if it leaves as many still feet on the floor: a tilted phone turned level puts them on it, but
+    // a run-up that comes at the camera (its floor bends in the picture) isn't a tilt, and turning for it takes the
+    // feet of the plant off the floor. A further turn only while it levels the floor: feet hanging still from the rim
+    // keep the fit sloping however far it turns.
+    if (turnedFloor.on < floor.on || (it > 0 && abs(turnedFloor.c1) >= abs(floor.c1))) break;
+    turned += Math.atan(floor.c1);
+    [up, frame, s, traces, floor] = [turnedUp, turnedFrame, turnedS, turnedTraces, turnedFloor];
   }
-  const releveled = abs(turned);
+  // The floor's whole slope in the picture is in doubt, turned or not.
+  const releveled = max(abs(turned), abs(Math.atan(floor0.c1)));
   const contacts = contactsOf(traces, s, floor, fps, roughScale);
   const flight = flightOf(contacts, s, fps);
   if (!flight) return { ok: false, problem: 'no-jump' };

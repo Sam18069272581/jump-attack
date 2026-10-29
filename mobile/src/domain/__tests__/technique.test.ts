@@ -491,6 +491,26 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     }
   });
 
+  it('no lines, a hand on the rim, the phone level: the feet hanging from the rim aren’t taken for a landing', () => {
+    // Feet hanging still keep the floor fit sloping however far it turns: turning on for them tilts the frame.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ hangAfterS: 0.34, markers: null, seed });
+      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: null }));
+      expect([seed, result.events.landing, result.flags.includes('cut-off')]).toEqual([seed, null, true]);
+    }
+  });
+
+  it('no lines, a run-up that comes in at 18–25° to the picture on a level phone: the plant is the plant, and no figure misses', () => {
+    // Such a floor bends in the picture; turned for as if it were a tilt, the plant's feet leave it.
+    for (const curveDeg of [18, 20, 25]) {
+      for (const seed of [1, 2, 3]) {
+        const scene = poseScene({ curveDeg, markers: null, seed });
+        const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: null }));
+        expect([curveDeg, seed, Math.abs(result.events.plantDown! - touchDownOf(scene)) <= 2, misses(scene, result).filter((m) => /^(vz|vx|angle|plant):/.test(m))]).toEqual([curveDeg, seed, true, []]);
+      }
+    }
+  });
+
   it('lines each tapped TAP_PX in towards the other, filmed from 10 m: the last step, measured on their scale, still holds the truth', () => {
     // A 1.4 SD error in their gap: the scale is good only to the taps, a share that grows with the distance.
     for (const seed of [1, 2, 3, 4, 5]) {
