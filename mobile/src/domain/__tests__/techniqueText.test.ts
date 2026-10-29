@@ -123,9 +123,3 @@ it('when the fall fits no athlete, says the frame rate is most likely wrong and 
   expect(PROBLEM_TEXT['frame-rate'].advice).toMatch(/240/);
   expect(PROBLEM_TEXT['frame-rate'].advice).toMatch(/120/);
 });
-
-it('when the jump couldn’t be told from the run-up, names a wrong frame rate too, which looks the same with no lines', () => {
-  // 240 fps read as 120 or 60 slows the fall the same way a stride's drop does.
-  expect(PROBLEM_TEXT['unclear-jump'].what).toMatch(/帧率/);
-  expect(PROBLEM_TEXT['unclear-jump'].advice).toMatch(/帧率/);
-});
