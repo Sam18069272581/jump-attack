@@ -20,6 +20,8 @@ const mockWeb: { props: Record<string, any> | null; inject: jest.Mock; reload: j
 const mockState: { scene: PoseScene | null; fileFps: number; params: Record<string, string> } = { scene: null, fileFps: 240, params: {} };
 const mockAwake = jest.fn();
 const mockStaged = jest.fn();
+/** When set, the next page staged waits until the test settles it. */
+const mockStage: { hold: null | { resolve: (v: unknown) => void; reject: (e: unknown) => void }; holdNext: boolean } = { hold: null, holdNext: false };
 
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
 jest.mock('@/state/athlete', () => ({ useAthlete: () => ({ current: { id: 1, name: '我自己', standing_reach_cm: 240 } }) }));
@@ -50,6 +52,10 @@ jest.mock('@/media/poseLib', () => ({
   ...jest.requireActual('@/media/poseLib'),
   stagePosePage: async () => {
     mockStaged();
+    if (mockStage.holdNext) {
+      mockStage.holdNext = false;
+      await new Promise((resolve, reject) => (mockStage.hold = { resolve, reject }));
+    }
     return { page: 'file:///app/Documents/pose/run-1/page.html', dir: 'file:///app/Documents/pose/run-1', root: 'file:///app/Documents/pose' };
   },
   unstagePosePage: jest.fn(),
@@ -296,4 +302,29 @@ it('reads the clip on a fresh page after the model wouldn’t start there, and w
   expect(mockWeb.inject).toHaveBeenCalled();
   await answerReads();
   expect(texts(r.root)).toContain('起跳垂直速度');
+});
+
+it('keeps saying why when the fresh page can’t be set up while an analysis waits for it', async () => {
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0099.MOV', fps: '0', source: 'import', session: 'tt-99' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await press(r.root, '没贴线，跳过');
+  await post({ type: 'error', stage: 'model', message: 'Failed to create WebGL canvas context' });
+  jest.useFakeTimers();
+  try {
+    mockStage.holdNext = true;
+    await press(r.root, '重新点选');
+    await press(r.root, '开始分析');
+    await act(async () => mockStage.hold!.reject(new Error('Unable to copy file: no space left on device')));
+    expect(texts(r.root)).toContain('Unable to copy file');
+    // The wait for a page that never came isn't then taken for a page gone quiet.
+    await act(async () => {
+      jest.advanceTimersByTime(30_000);
+    });
+    const shown = texts(r.root);
+    expect(shown).toContain('Unable to copy file');
+    expect(shown).not.toContain('识别页面没有反应了');
+  } finally {
+    jest.useRealTimers();
+  }
 });

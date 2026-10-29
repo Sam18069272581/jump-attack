@@ -61,7 +61,7 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
           dir = s.dir;
           setStage(s);
         })
-        .catch((e) => !gone && handlers.current.onError(String(e)));
+        .catch((e) => !gone && fail(String(e)));
       return () => {
         gone = true;
         if (timer.current) clearTimeout(timer.current);
