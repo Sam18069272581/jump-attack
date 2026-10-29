@@ -694,9 +694,10 @@ function acrossGap(
     let to = b + 1;
     while (downAfter && to < lost.length && (lost[to] || downAfter(to))) to++;
     if (b > k && k - 1 - len <= e.t + e.err && b + 1 + len >= e.t - e.err) {
-      // Across a run too long to bridge, the edge was fitted on the frames before it alone: it is where the foot was
-      // last seen still, and with the foot still there after the run, the moment it left wasn't seen at all.
-      if (to > b + 1 && len > round(MAX_BRIDGE_S * fps)) return { t: e.t, err: Infinity };
+      // Across a run too long to bridge, an edge timed before its end was fitted on the frames before it alone: it is
+      // where the foot was last seen still, and with the foot still there after the run, the moment it left wasn't seen
+      // at all. One timed after the run was seen there.
+      if (to > b + 1 && len > round(MAX_BRIDGE_S * fps) && e.t < b + 1) return { t: e.t, err: Infinity };
       err = max(err, hypot(max(e.t - from, to - e.t), EVENT_FLOOR_FRAMES));
     }
     k = b;

@@ -404,6 +404,18 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('at 60 fps with 4 frames lost inside the plant and the take-off seen after them: its figures are given, and hold the truth', () => {
+    // The gap is too long to bridge, but the take-off is timed on the frames after it, which show the foot still down
+    // and then leaving: the moment it left was seen.
+    for (const seed of [1, 2, 3, 76000]) {
+      const scene = poseScene({ fps: 60, seed });
+      const to = scene.truth.takeoffFrame;
+      const result = resultOf(analyseTechnique({ frames: lose(scene, to - 7, to - 4), captureFps: 60, markers: scene.markers }));
+      const given = (['vz', 'angle', 'plant'] as const).filter((k) => result.metrics[k]);
+      expect([seed, result.flags.includes('unseen'), given, misses(scene, result)]).toEqual([seed, false, ['vz', 'angle', 'plant'], []]);
+    }
+  });
+
   it('a 24 or 25 fps clip (a phone’s video mode): the plant is found, and knee and trunk come out as angles', () => {
     for (const fps of [24, 25]) {
       const { scene, r } = analyse({ fps });
