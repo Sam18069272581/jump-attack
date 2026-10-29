@@ -8,13 +8,17 @@ import { isWeb } from '@/media/runtime';
 import { colors, fonts, radius } from '@/theme';
 
 
-/** Expo Go and web fallback: film with the system camera's slow-motion mode, then import the clip. */
-export default function SlowMoImport({ title, subtitle, guide, onClose, onImport, onManual }: CaptureProps) {
+/** Film the test in the app (at most 60 fps), or with the system camera's slow-motion mode and import the clip. */
+export default function SlowMoImport({ title, subtitle, guide, onClose, onImport, onFilm, onManual }: CaptureProps) {
   return (
     <SafeAreaView style={styles.screen}>
       <CaptureHeader title={title} subtitle={subtitle} onClose={onClose} />
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.lead}>用 iPhone 自带相机的慢动作拍，再导入这里测量。</Text>
+        <Text style={styles.lead}>
+          {onFilm
+            ? '可以在 App 里直接拍（最多 60 帧，省事），也可以用 iPhone 自带相机的慢动作（240 帧，更准）拍了再导入。下面是慢动作的拍法，在 App 里拍时手机的摆法一样。'
+            : '用 iPhone 自带相机的慢动作拍，再导入这里测量。'}
+        </Text>
         {guide.steps.map((s, i) => (
           <View key={s.title} style={styles.step}>
             <Text style={styles.stepNo}>{i + 1}</Text>
@@ -31,7 +35,8 @@ export default function SlowMoImport({ title, subtitle, guide, onClose, onImport
         </Text>
       </ScrollView>
       <View style={styles.footer}>
-        <Button label="从相册导入视频" onPress={onImport} />
+        {onFilm && <Button label="App 里直接拍" onPress={onFilm} />}
+        <Button label="从相册导入视频" variant={onFilm ? 'secondary' : 'primary'} onPress={onImport} />
         {onManual && <Button label="手动输入成绩" variant="secondary" onPress={onManual} />}
       </View>
     </SafeAreaView>
