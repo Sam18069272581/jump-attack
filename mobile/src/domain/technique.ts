@@ -257,6 +257,9 @@ function flightJitter(ts: number[], ys: number[], fps: number): number {
   return (1.4826 * median(d2.map((d) => abs(d - m)))) / sqrt(6);
 }
 
+/** Runs of frames where the model lost the athlete up to this long (s) are bridged (`bridge`); longer ones stay empty. */
+const MAX_BRIDGE_S = 0.05;
+
 /** Fills runs of NaN up to `maxGap` long by straight lines between their neighbours. */
 function bridge(xs: number[], maxGap: number): number[] {
   const out = [...xs];
@@ -661,7 +664,13 @@ function edgeTime(
  * anywhere inside. So its error reaches across a run of two or more lost frames next to it. One lost frame, bridged by
  * its neighbours' mean, stays within the fit's own error.
  */
-function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number, downBefore?: (k: number) => boolean): { t: number; err: number } {
+function acrossGap(
+  e: { t: number; err: number },
+  lost: boolean[],
+  fps: number,
+  downBefore?: (k: number) => boolean,
+  downAfter?: (k: number) => boolean,
+): { t: number; err: number } {
   if (!Number.isFinite(e.err)) return e;
   const reach = max(4, round(0.04 * fps));
   const c = round(e.t);
@@ -680,10 +689,24 @@ function acrossGap(e: { t: number; err: number }, lost: boolean[], fps: number, 
     // few to count as one; then the edge is before them.
     let from = k - 1;
     while (downBefore && from > 0 && (lost[from] || downBefore(from))) from--;
-    if (b > k && k - 1 - len <= e.t + e.err && b + 1 + len >= e.t - e.err) err = max(err, hypot(max(e.t - from, b + 1 - e.t), EVENT_FLOOR_FRAMES));
+    // A take-off: frames after the run that show the toe still where it stood may be the contact going on, too few to
+    // count as one (their stillness can't be read next to the run); then the edge is after them.
+    let to = b + 1;
+    while (downAfter && to < lost.length && (lost[to] || downAfter(to))) to++;
+    if (b > k && k - 1 - len <= e.t + e.err && b + 1 + len >= e.t - e.err) {
+      // Across a run too long to bridge, the edge was fitted on the frames before it alone: it is where the foot was
+      // last seen still, and with the foot still there after the run, the moment it left wasn't seen at all.
+      if (to > b + 1 && len > round(MAX_BRIDGE_S * fps)) return { t: e.t, err: Infinity };
+      err = max(err, hypot(max(e.t - from, to - e.t), EVENT_FLOOR_FRAMES));
+    }
     k = b;
   }
   return { t: e.t, err };
+}
+
+/** Where a heel or toe stood between two indices: the median of its smoothed height. */
+function standingHeight(pt: PointTrace, from: number, to: number): number {
+  return median(pt.sy.slice(from, to).filter((y) => !Number.isNaN(y)));
 }
 
 /** Two timings of one moment, weighted by their errors; the error is the better one's (their floor is shared). */
@@ -751,7 +774,11 @@ function contactsOf(traces: Record<Side, FootTrace>, s: Series, floor: Floor, fp
         // The heel or the toe, whichever comes down first.
         const atFloor = (k: number) => [heel, toe].some((pt) => pt.sy[k] - floor.level(pt.x[k], side) <= tol);
         const dn = acrossGap(downs.length ? downs.reduce((a, b) => (b.t < a.t ? b : a)) : { ...unknown, t: i - 0.5 }, s.lost, fps, atFloor);
-        const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: j - 0.5 }), s.lost, fps);
+        // The toe at the height it stood at in the contact's second half: its own floor, which holds where a floor fitted
+        // through feet hanging from the rim doesn't.
+        const toeY = standingHeight(toe, half, j);
+        const toeDown = (k: number) => abs(toe.sy[k] - toeY) <= tol;
+        const up = acrossGap(j === down.length ? { ...unknown, t: j } : (edgeTime(toe, j, 'up', fps, [i, j], at(toe, half, j), scale) ?? { ...unknown, t: j - 0.5 }), s.lost, fps, undefined, toeDown);
         const downAt = frameAt(s, dn.t);
         const upAt = frameAt(s, max(up.t, dn.t + 1));
         // The toe's place: the median over the part of the stance it is planted for, good to 1.25σ/√n (1 SD).
@@ -830,7 +857,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   if (labelledNearSide(athlete) !== near) athlete = athlete.map((p) => (p ? swapSides(p) : null));
 
   let frame: Frame = { origin: markers ? markers.a : { x: 0, y: 0 }, xAxis: runDir, up };
-  const maxGap = round(0.05 * fps);
+  const maxGap = round(MAX_BRIDGE_S * fps);
   let s = seriesOf(athlete, frames, frame, maxGap);
   let traces = footTraces(s, fps, roughScale);
   // The floor under a spot comes from the feet within a metre of it, and is within 10 cm of the line through them all.
@@ -903,13 +930,21 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
 
   // --- Flight parabola, on the raw centre of mass (the fit does the smoothing; a filter would bend the take-off).
   // A take-off that can't be timed is next to frames the model lost: the foot may still be down until they end, and the
-  // frame beside them isn't known to be in the air (its stillness can't be read next to the gap). The free fall is
-  // fitted from after them. The take-off itself stays where the foot was last seen down: moved past them, a two-foot
-  // take-off's foot would fall out of the plant.
+  // frame beside them isn't known to be in the air (its stillness can't be read next to the gap). One timed next to
+  // such frames, its error reaching across them (`acrossGap`), may be later than timed too. Either way the free fall is
+  // fitted from where every plant toe is seen off the height it stood at (within the take-off's error), after those
+  // frames. The take-off itself stays where the foot was last seen down: moved past them, a two-foot take-off's foot
+  // would fall out of the plant.
   let freeFrom = takeoffAt;
-  if (!Number.isFinite(off.err)) {
+  if (!Number.isFinite(off.err) || s.frame.some((f, k) => abs(f - takeoffAt) <= off.err && s.lost[k] && s.lost[k + 1])) {
+    const tol = FLOOR_TOL_M / roughScale;
+    const toes = plant.map((c) => ({
+      toe: traces[c.foot].toe,
+      y: standingHeight(traces[c.foot].toe, s.frame.findIndex((f) => f >= (c.downAt + c.upAt) / 2), s.frame.findIndex((f) => f >= c.upAt)),
+    }));
     let k = s.frame.findIndex((f) => f > takeoffAt);
-    while (k >= 0 && k < s.lost.length && (s.lost[k] || s.lost[k + 1])) k++;
+    if (!Number.isFinite(off.err)) while (k >= 0 && k < s.lost.length && (s.lost[k] || s.lost[k + 1])) k++;
+    while (k >= 0 && k < s.frame.length && s.frame[k] < takeoffAt + off.err && (s.lost[k] || toes.some(({ toe, y }) => !(toe.sy[k] - y > tol)))) k++;
     if (k >= 0) freeFrom = max(takeoffAt, frameAt(s, k - 0.5));
   }
   // Time runs from take-off, s.

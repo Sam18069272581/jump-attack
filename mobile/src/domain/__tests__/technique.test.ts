@@ -385,6 +385,25 @@ describe('what the clip lacks or gets wrong', () => {
     }
   });
 
+  it('at 120 fps with 7–8 frames lost across the take-off: the take-off figures hold the truth, or none is given', () => {
+    // The up edge is timed on the frames before the lost run, and its error reaches across it: the free fall can't be
+    // fitted from there, on frames where the foot may still be down. With the foot seen still down after a run too long
+    // to bridge, the moment it left wasn't seen: what rests on it is left out.
+    const cases: [Partial<PoseSceneOptions>, number, number, number][] = [
+      [{}, 1, -3, 4], // options, seed, first and last frame lost around the take-off
+      [{}, 2, -3, 4],
+      [{ markers: null, curveDeg: 20 }, 3, -5, 2],
+      [{}, 1, -9, -3],
+      [{}, 2, -8, -1],
+    ];
+    for (const [over, seed, from, to] of cases) {
+      const scene = poseScene({ ...over, fps: 120, seed });
+      const t = scene.truth.takeoffFrame;
+      const r = analyseTechnique({ frames: lose(scene, t + from, t + to), captureFps: 120, markers: scene.markers });
+      expect([seed, from, r.ok ? misses(scene, r.result).filter((m) => /^(vz|vx|angle|plant):/.test(m)) : []]).toEqual([seed, from, []]);
+    }
+  });
+
   it('a 24 or 25 fps clip (a phone’s video mode): the plant is found, and knee and trunk come out as angles', () => {
     for (const fps of [24, 25]) {
       const { scene, r } = analyse({ fps });
