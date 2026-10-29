@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * How far to trust the take-off technique figures (mobile/src/app/technique/analyse.tsx) before any real footage: each
- * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed nineteen ways. Everything runs the
+ * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed twenty-one ways. Everything runs the
  * app's own code: domain/testing/poseScene.ts builds a run-up jump with known take-off velocity, contacts, step and
  * knee angle and gives its landmarks the pose model's jitter, swaps and misses; domain/techniqueRead.ts reads it the way
  * the screen does (a coarse pass around a tap near the take-off, the jump's window, every frame in it), with the floor
@@ -42,6 +42,8 @@ const ALL_WAYS = [
   { key: 'curve-roll-bare', name: '没贴线、斜跑 15° 且手机反向歪 1.5°', over: { curveDeg: 15, rollDeg: -1.5, markers: null } },
   { key: 'hang-roll-bare', name: '挂了一下，没贴线，手机反向歪 3°', over: { hangAfterS: 0.34, rollDeg: -3, markers: null } },
   { key: 'slight-bare', name: '没贴线、助跑偏了 4°（不到算斜跑的程度）', over: { curveDeg: 4, markers: null } },
+  { key: 'lines-near', name: '两条线点得比运动员跑的地方近 0.5 米', over: { markers: { aM: -3, bM: 0, nearerM: 0.5 } } },
+  { key: 'lines-short', name: '3 米线其实贴在 2.6 米', over: { markers: { aM: -2.6, bM: 0, nearerM: 0 } } },
   { key: 'bystander', name: '旁边站着一个人', over: { bystanderM: 2 } },
   { key: 'dropout', name: '5% 的帧没认出人，起跳前左右腿认反几帧', over: { dropout: 0.05, swaps: [[200, 208]] } },
   { key: 'far', name: '离得远（10 米）、助跑慢（4.5 m/s）', over: { distanceM: 10, approachSpeed: 4.5 } },
@@ -73,13 +75,16 @@ function normals(seed) {
   return () => Math.sqrt(-2 * Math.log(Math.max(1e-12, next()))) * Math.cos(2 * Math.PI * next());
 }
 
-/** The floor lines as a finger taps them on the zoomed picture: each off by `TAP_PX` (1 SD) either way. */
-function tapped(T, scene) {
+/**
+ * The floor lines as a finger taps them on the zoomed picture: each off by `TAP_PX` (1 SD) either way. The screen takes
+ * them to be `MARKER_GAP_M` apart, wherever they really are.
+ */
+function tapped(T, R, scene) {
   const m = scene.markers;
   if (!m) return null;
   const normal = normals(scene.options.seed * 7919);
   const tap = (p) => ({ x: p.x + T.TAP_PX * normal(), y: p.y + T.TAP_PX * normal() });
-  return { a: tap(m.a), b: tap(m.b), distanceM: m.distanceM };
+  return { a: tap(m.a), b: tap(m.b), distanceM: R.MARKER_GAP_M };
 }
 
 /** Reads a scene the way the technique screen does, from a tap a quarter second before the take-off, and measures it. */
@@ -100,7 +105,7 @@ function measure(S, R, T, LM, scene) {
   if (!plan.ok) return { ok: false, problem: plan.problem };
   const dense = R.denseFrames(plan.win, total, coarse.map((f) => f.frame));
   const frames = R.windowOf(R.framesFromWire([...coarseWire, ...read(dense)], scene.width, scene.height, fps), plan.win);
-  return T.analyseTechnique({ frames, captureFps: fps, markers: tapped(T, scene), target: plan.win.target });
+  return T.analyseTechnique({ frames, captureFps: fps, markers: tapped(T, R, scene), target: plan.win.target });
 }
 
 function stats(rows) {

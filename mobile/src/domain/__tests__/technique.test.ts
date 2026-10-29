@@ -139,7 +139,7 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
 });
 
 describe('stated errors', () => {
-  // The full check is tools/pose-validation (19 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
+  // The full check is tools/pose-validation (21 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
   const WAYS: [string, Partial<PoseSceneOptions>][] = [
     ['as the guide asks', {}],
     ['twice the jitter', { noisePx: 3 }],
@@ -556,6 +556,22 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     for (const result of [wrongFps, wrongLine]) {
       expect(result.flags).toContain('scale-broken');
       expect(misses(scene, result)).toEqual([]);
+    }
+  });
+
+  it.each([
+    ['both lines tapped 0.5 m nearer the camera than where the athlete ran', { aM: -3, bM: 0, nearerM: 0.5 }],
+    ['both lines tapped 1 m nearer the camera than where the athlete ran', { aM: -3, bM: 0, nearerM: 1 }],
+    ['the 3 m line laid 2.6 m back', { aM: -2.6, bM: 0, nearerM: 0 }],
+  ])('%s: the scales disagree, and the last step, braking and run-up speed still hold the truth', (_, m) => {
+    // The frame rate can't be off by less than twice (`SCALE_BROKEN`), so it is the lines' scale that is off.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ seed, markers: m });
+      // The screen takes the lines to be 3 m apart, wherever they are.
+      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { ...scene.markers!, distanceM: 3 } }));
+      expect(result.flags).toContain('off-line');
+      for (const k of ['approach', 'brake', 'step'] as const) expect([seed, k, result.metrics[k] != null]).toEqual([seed, k, true]);
+      expect([seed, misses(scene, result).filter((x) => /^(approach|brake|step):/.test(x))]).toEqual([seed, []]);
     }
   });
 

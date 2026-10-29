@@ -14,9 +14,9 @@
  * 4. The centre of mass in flight is a free-fall parabola: fitted, it gives the vertical and horizontal take-off
  *    velocity. Its curvature is gravity, which sets the scale at the athlete's own distance from the lens
  *    (pixel-to-metre from gravity, as in Aderinola et al. 2023, arXiv 2302.10749); with markers it doubles as a check
- *    of the markers and the frame rate.
+ *    of the markers and the frame rate, and where the markers alone are off, lengths go by it instead.
  * 5. Run-up speed follows the rule the athlete agreed: two floor markers 3 m apart, and the time the hips take
- *    between them.
+ *    between them (their gap at gravity's scale when the markers are off).
  *
  * Errors come from the fits themselves, from the timing of each event (its own jitter, plus `EVENT_FLOOR_FRAMES`),
  * and for joint angles from the published agreement of markerless pose with marker-based capture
@@ -114,7 +114,10 @@ export const MIN_FLIGHT_S = 0.25;
  */
 const SLIGHT_CURVE = 0.02;
 
-/** Markers and gravity disagree on the scale by more than this share: the athlete wasn't on the markers' line. */
+/**
+ * Markers and gravity disagree on the scale by more than this share: the lines aren't where the athlete ran, or aren't
+ * 3 m apart. A wrong frame rate is off by twice or more (`SCALE_BROKEN`), so it is the lines, and lengths go by gravity.
+ */
 export const SCALE_MISMATCH = 0.05;
 /** By more than this, the frame rate is wrong (a 120 fps clip read as 240 is off by four times). */
 export const SCALE_BROKEN = 0.3;
@@ -125,7 +128,8 @@ export type QualityFlag =
   | 'low-fps'
   /** No floor markers: no run-up speed, and lengths come from gravity's scale. */
   | 'no-markers'
-  /** The markers' scale and gravity's differ: the take-off wasn't on the markers' line. */
+  /** The markers' scale and gravity's differ: the lines weren't tapped where the athlete ran, or weren't 3 m apart.
+   *  Lengths and the run-up speed go by gravity's scale. */
   | 'off-line'
   /** They differ hugely: the frame rate is wrong, or the markers were tapped wrong. */
   | 'scale-broken'
@@ -1078,13 +1082,15 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const [a, b] = [...plant].sort((x, y) => x.downAt - y.downAt);
     metrics.gap = measured('gap', ms(b.downAt - a.downAt), ms(hypot(a.downErr, b.downErr)));
   }
-  const floorScale = markerScale ?? gravityScale;
+  // Lengths along the floor: on the lines' scale, or on gravity's where the lines are off (`SCALE_MISMATCH`).
+  const linesScale = flags.includes('off-line') ? null : markerScale;
+  const floorScale = linesScale ?? gravityScale;
   if (penultimate) {
     const step = abs(firstPlant.toeX - penultimate.toeX) * floorScale;
     // Each toe's place (a median over its stance); the feet stand a hand's breadth either side of the line the scale
     // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself: the lines
     // are laid to 1 %, and each is tapped to `TAP_PX`, a share of the gap between them that grows with the distance.
-    const scaleRel = markerScale != null ? hypot(0.01, (1.96 * sqrt(2) * TAP_PX) / markerPx!) : 1.96 * gravityScaleRel;
+    const scaleRel = linesScale != null ? hypot(0.01, (1.96 * sqrt(2) * TAP_PX) / markerPx!) : 1.96 * gravityScaleRel;
     const toes = hypot(firstPlant.toeErr, penultimate.toeErr) * floorScale;
     metrics.step = measured('step', step, sqrt(toes ** 2 + 0.03 ** 2 + (step * (scaleRel + sizeChange)) ** 2));
   }
@@ -1103,11 +1109,15 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       }
       return null;
     };
-    const ca = crossing(toWorld(frame, markers.a).x);
-    const cb = crossing(toWorld(frame, markers.b).x);
+    const xa = toWorld(frame, markers.a).x;
+    const xb = toWorld(frame, markers.b).x;
+    const ca = crossing(xa);
+    const cb = crossing(xb);
     if (ca && cb && cb.t !== ca.t) {
       const dt = abs(cb.t - ca.t);
-      const v = markers.distanceM / dt;
+      // The hips cross the lines where they are in the picture: 3 m apart, or where the lines are off, as far apart as
+      // gravity's scale makes them along the athlete's path.
+      const v = (linesScale != null ? markers.distanceM : abs(xb - xa) * gravityScale) / dt;
       // Each crossing's place: the jitter a 10 Hz filter leaves (white noise keeps 2·10/fps of its variance), and the
       // tap (`TAP_PX`). Its time: that over the hips' speed there, which at the take-off line is the plant's, about
       // half the run-up's.
@@ -1115,7 +1125,12 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       const sdPx = hypot(jitter * sqrt((2 * 10) / fps), TAP_PX);
       const rel = hypot(sdPx / max(1, ca.speed), sdPx / max(1, cb.speed)) / dt;
       // A run-up at an angle to the picture is foreshortened, by about as much as the body's size changes along it.
-      metrics.approach = measured('approach', v, v * hypot(1.96 * rel, sizeChange));
+      // Where the lines are off, gravity's scale has its own error, and the stretch between the crossings isn't the
+      // lines': it is as much longer or shorter as the scales disagree, about the picture's middle, so each end moves
+      // along the run-up, the take-off line's through the plant's braking. With the take-off line within 3 m of the
+      // middle, that moves the mean speed by up to the same share.
+      const offBy = linesScale != null ? 0 : hypot(1.96 * gravityScaleRel, gravityScale / markerScale! - 1);
+      metrics.approach = measured('approach', v, v * hypot(1.96 * rel, sizeChange, offBy));
     }
   }
 
