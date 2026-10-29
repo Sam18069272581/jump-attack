@@ -139,7 +139,7 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
 });
 
 describe('stated errors', () => {
-  // The full check is tools/pose-validation (21 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
+  // The full check is tools/pose-validation (22 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
   const WAYS: [string, Partial<PoseSceneOptions>][] = [
     ['as the guide asks', {}],
     ['twice the jitter', { noisePx: 3 }],
@@ -631,6 +631,37 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       }
     }
     expect(Object.entries(tally).filter(([, c]) => c.n < 120 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
+  });
+
+  it('lines tapped at the runner’s feet, a hand’s breadth nearer or further than the hips’ path: run-up speed, braking and the last step still cover the truth in 95 % of clips', () => {
+    // A line tapped 8 cm (1 SD) nearer or further along its tape than where the hips crossed it: in the picture it moves
+    // away from or towards the middle by that share of the distance, 2 cm at 1.8 m off the middle from 7 m (4 px), on
+    // top of the finger's `TAP_PX`. Read as the screen reads it, six ways of tapping each of 40 clips: the run-up speed
+    // falls short by a few in a hundred, which 120 can't tell from chance.
+    const finger = normals(36);
+    const depth = normals(37);
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (let seed = 11; seed <= 50; seed++) {
+      const scene = poseScene({ seed });
+      const { aM, bM } = scene.options.markers!;
+      const { frames, target } = readAsTheScreen(scene);
+      for (let draw = 0; draw < 6; draw++) {
+        const tap = (xM: number) => {
+          const p = scene.floorPoint(xM, 0.08 * depth());
+          return { x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() };
+        };
+        const markers = { a: tap(aM), b: tap(bM), distanceM: 3, picture: { width: scene.width, height: scene.height } };
+        const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['approach', 'brake', 'step'] as const) {
+          if (!result.metrics[k]) continue;
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
+      }
+    }
+    expect(Object.entries(tally).filter(([k, c]) => (k !== 'brake' && c.n < 240) || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 
   it.each([

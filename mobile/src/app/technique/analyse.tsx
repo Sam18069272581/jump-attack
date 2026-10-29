@@ -110,7 +110,8 @@ export default function TechniqueAnalyse() {
   const total = frameCount(duration || clip?.duration || 0, fileFps);
   const looksSlowMo = !camera && detectedFps != null && detectedFps < 100;
   const fpsChoices = detectedFps == null ? FPS_CHOICES : [fileFps, ...FPS_CHOICES.filter((f) => f > fileFps)];
-  const markers: Markers | null = !skipLines && lines.takeoff && lines.back ? { a: lines.back, b: lines.takeoff, distanceM: MARKER_GAP_M } : null;
+  const markers: Markers | null =
+    !skipLines && clip && lines.takeoff && lines.back ? { a: lines.back, b: lines.takeoff, distanceM: MARKER_GAP_M, picture: { width: clip.width, height: clip.height } } : null;
   const linesDone = skipLines || markers != null;
 
   function show(f: number) {
@@ -294,13 +295,13 @@ export default function TechniqueAnalyse() {
             </View>
             <Text style={styles.lead}>
               {zoom
-                ? '放大了：点准胶带上运动员跑过的那一点。'
+                ? '放大了：点准运动员脚下的胶带。'
                 : step === 'athlete'
                   ? '拖动进度条到起跳前后，点一下运动员。'
                   : step === 'takeoff'
-                    ? '点起跳线：先点胶带大概的位置，放大后再点准运动员跑过的那一点。'
+                    ? '点起跳线：拖到运动员跑到这条胶带上的那一帧，先点个大概，放大后点准脚下的胶带。'
                     : step === 'back'
-                      ? '点 3 米线（起跳线往回 3 米的那条），一样点两下。'
+                      ? '点 3 米线（起跳线往回 3 米那条）：同样拖到运动员跑到它上面的那一帧，点两下。'
                       : skipLines
                         ? '没点地上的线：不测助跑速度，长度按重力换算。'
                         : '都点好了。分析要读几百帧，大约半分钟到一分钟。'}

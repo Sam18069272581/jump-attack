@@ -32,8 +32,11 @@ const { abs, atan2, ceil, hypot, max, min, PI, round, sqrt } = Math;
 /** One frame's people, as the page found them. `t` is real time, s (a slow-motion clip's file frames over its capture rate). */
 export type PoseFrame = { frame: number; t: number; poses: Pose[] };
 
-/** Two marks on the floor along the run-up, `distanceM` apart, where the athlete tapped them in the picture. */
-export type Markers = { a: Pt; b: Pt; distanceM: number };
+/**
+ * Two marks on the floor along the run-up, `distanceM` apart, where the athlete tapped them in the picture, and the
+ * picture's size (px): where its middle is, and its long side for the lens's angle of view (`LENS_FOV_DEG`).
+ */
+export type Markers = { a: Pt; b: Pt; distanceM: number; picture?: { width: number; height: number } };
 
 export type TechniqueInput = {
   /** Every frame of the stretch to analyse, in order, at the capture rate. */
@@ -103,6 +106,19 @@ export const MIN_CONTACT_FPS = 200;
 
 /** How well a floor marker is tapped (px of the clip, 1 SD): on a frame zoomed in to tap it. */
 export const TAP_PX = 4;
+
+/**
+ * How far nearer the lens or further a line is tapped than where the hips crossed it (m, 1 SD): on the tape at the
+ * runner's feet, which land a hand's breadth either side of the hips' path.
+ */
+export const TAP_DEPTH_M = 0.08;
+
+/**
+ * The phone's angle of view across the picture's long side, degrees: the iPhone main camera's 26 mm-equivalent lens
+ * spans 2·atan(18/26) = 69° of a 36 mm frame (Apple's specifications), and video keeps its width. Zoomed in, the phone
+ * sees less, and the errors this sets are wider than need be; through the 0.5× lens it sees more, and they'd be narrow.
+ */
+export const LENS_FOV_DEG = 70;
 
 /** Shortest flight that is a jump rather than a running stride, s. */
 export const MIN_FLIGHT_S = 0.25;
@@ -1082,6 +1098,16 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const [a, b] = [...plant].sort((x, y) => x.downAt - y.downAt);
     metrics.gap = measured('gap', ms(b.downAt - a.downAt), ms(hypot(a.downErr, b.downErr)));
   }
+  // How far a line's tap is off along the run (px, 1 SD): the finger, and where along its tape it was tapped
+  // (`TAP_DEPTH_M`). Tapped δ nearer the lens than the hips' path, a point sits further from the picture's middle by δ/d
+  // of its offset there, d = f/k the distance: f the focal length (px), k the lines' px per m.
+  const tapAlong = (p: Pt): number => {
+    if (!markers?.picture || markerPx == null) return TAP_PX;
+    const { width, height } = markers.picture;
+    const f = max(width, height) / 2 / Math.tan((LENS_FOV_DEG * PI) / 360);
+    const off = abs(dot(sub(p, { x: width / 2, y: height / 2 }), frame.xAxis));
+    return hypot(TAP_PX, (off * TAP_DEPTH_M * markerPx) / markers.distanceM / f);
+  };
   // Lengths along the floor: on the lines' scale, or on gravity's where the lines are off (`SCALE_MISMATCH`).
   const linesScale = flags.includes('off-line') ? null : markerScale;
   const floorScale = linesScale ?? gravityScale;
@@ -1089,8 +1115,8 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     const step = abs(firstPlant.toeX - penultimate.toeX) * floorScale;
     // Each toe's place (a median over its stance); the feet stand a hand's breadth either side of the line the scale
     // holds for, which moves a toe a few metres off the picture's middle by up to 3 cm; and the scale itself: the lines
-    // are laid to 1 %, and each is tapped to `TAP_PX`, a share of the gap between them that grows with the distance.
-    const scaleRel = linesScale != null ? hypot(0.01, (1.96 * sqrt(2) * TAP_PX) / markerPx!) : 1.96 * gravityScaleRel;
+    // are laid to 1 %, and each is tapped to `tapAlong`, a share of the gap between them that grows with the distance.
+    const scaleRel = linesScale != null ? hypot(0.01, (1.96 * hypot(tapAlong(markers!.a), tapAlong(markers!.b))) / markerPx!) : 1.96 * gravityScaleRel;
     const toes = hypot(firstPlant.toeErr, penultimate.toeErr) * floorScale;
     metrics.step = measured('step', step, sqrt(toes ** 2 + 0.03 ** 2 + (step * (scaleRel + sizeChange)) ** 2));
   }
@@ -1119,11 +1145,11 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       // gravity's scale makes them along the athlete's path.
       const v = (linesScale != null ? markers.distanceM : abs(xb - xa) * gravityScale) / dt;
       // Each crossing's place: the jitter a 10 Hz filter leaves (white noise keeps 2·10/fps of its variance), and the
-      // tap (`TAP_PX`). Its time: that over the hips' speed there, which at the take-off line is the plant's, about
+      // tap (`tapAlong`). Its time: that over the hips' speed there, which at the take-off line is the plant's, about
       // half the run-up's.
       const jitter = median(s.hip.x.flatMap((x, i) => (Number.isNaN(x) || Number.isNaN(hx[i]) ? [] : [abs(x - hx[i])]))) * 1.4826;
-      const sdPx = hypot(jitter * sqrt((2 * 10) / fps), TAP_PX);
-      const rel = hypot(sdPx / max(1, ca.speed), sdPx / max(1, cb.speed)) / dt;
+      const sdPx = (p: Pt) => hypot(jitter * sqrt((2 * 10) / fps), tapAlong(p));
+      const rel = hypot(sdPx(markers.a) / max(1, ca.speed), sdPx(markers.b) / max(1, cb.speed)) / dt;
       // A run-up at an angle to the picture is foreshortened, by about as much as the body's size changes along it.
       // Where the lines are off, gravity's scale has its own error, and the stretch between the crossings isn't the
       // lines': it is as much longer or shorter as the scales disagree, about the picture's middle, so each end moves

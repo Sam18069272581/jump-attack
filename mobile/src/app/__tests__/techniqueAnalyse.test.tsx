@@ -200,6 +200,28 @@ it('measures a slow-motion run-up jump from the athlete and the two floor lines 
   expect(mockRouter.back).toHaveBeenCalled();
 });
 
+it('asks for each line on the frame the athlete runs over it, tapped right at their feet', async () => {
+  // Where along the tape the athlete ran is where the hips cross the line: a guess at it moves the line in the picture.
+  const scene = poseScene();
+  await open(scene, { uri: 'file:///picked/IMG_0015.MOV', fps: '0', source: 'import', session: 'tt-8' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  expect(texts(r.root)).toContain('点起跳线：拖到运动员跑到这条胶带上的那一帧');
+  const g = geometry(scene);
+  await tapScreen(g.toScreen(scene.markers!.b));
+  expect(texts(r.root)).toContain('放大了：点准运动员脚下的胶带。');
+  await tapScreen({ x: g.w / 2, y: g.h / 2 });
+  expect(texts(r.root)).toContain('点 3 米线');
+  expect(texts(r.root)).toContain('同样拖到运动员跑到它上面的那一帧');
+  await tapLine(scene, scene.markers!.a);
+
+  // How far a tap a little off along the tape moves the line depends on where it is in the picture, and its size.
+  await press(r.root, '开始分析');
+  await answerReads();
+  await press(r.root, '保存');
+  const [trial] = await listTrials(mockDb, 'tt-8');
+  expect((trial.detail as { markers: { picture: unknown } }).markers.picture).toEqual({ width: 1920, height: 1080 });
+});
+
 it('measures a take filmed in the app without the floor lines, says what that leaves out, and keeps its video', async () => {
   const scene = poseScene({ fps: 60 });
   const uri = 'file:///app/Documents/technique/take-1.mp4';
