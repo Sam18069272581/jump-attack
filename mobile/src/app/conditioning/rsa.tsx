@@ -7,7 +7,7 @@ import { countIn, useCues, useTimeline, type Cue } from '@/components/conditioni
 import { confirmStop, RunningScreen, runStyles, Steps, useSaveResult } from '@/components/conditioning/ui';
 import { Button, Chip } from '@/components/ui';
 import { RSA_PROTOCOL, rsaSummary } from '@/domain/conditioning';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { colors, fonts, radius } from '@/theme';
 
 const { sprints: SPRINTS, recoveryS: RECOVERY_S } = RSA_PROTOCOL;
@@ -105,12 +105,12 @@ function Running({ onDone }: { onDone: (times: number[]) => void }) {
       <SafeAreaView style={runStyles.screen}>
         <View style={runStyles.body}>
           <Text style={runStyles.label}>{tr('第 {sprintNo} / {SPRINTS} 趟 · {p}', { sprintNo, SPRINTS, p: sprinting ? tr('冲刺中') : times.length ? tr('间歇') : tr('准备') })}</Text>
-          <Text style={[runStyles.huge, { color: sprinting ? colors.accent : colors.good }]}>{sprinting ? t.toFixed(2) : Math.ceil(-t)}</Text>
+          <Text style={[runStyles.huge, { color: sprinting ? colors.accent : colors.good }]}>{sprinting ? decimal(t, 2) : Math.ceil(-t)}</Text>
           <View style={styles.splits}>
             {Array.from({ length: SPRINTS }, (_, i) => (
               <View key={i} style={styles.split}>
                 <Text style={styles.splitN}>{i + 1}</Text>
-                <Text style={[styles.splitValue, i === times.length && { color: colors.accent }]}>{times[i] != null ? times[i].toFixed(2) : '—'}</Text>
+                <Text style={[styles.splitValue, i === times.length && { color: colors.accent }]}>{times[i] != null ? decimal(times[i], 2) : '—'}</Text>
               </View>
             ))}
           </View>
@@ -133,7 +133,7 @@ function Running({ onDone }: { onDone: (times: number[]) => void }) {
 
 function Confirm({ initial }: { initial: number[] }) {
   const { save, busy } = useSaveResult('rsa');
-  const [entries, setEntries] = useState<string[]>(() => Array.from({ length: SPRINTS }, (_, i) => (initial[i] != null ? initial[i].toFixed(2) : '')));
+  const [entries, setEntries] = useState<string[]>(() => Array.from({ length: SPRINTS }, (_, i) => (initial[i] != null ? decimal(initial[i], 2) : '')));
   const values = entries.map(parse).filter(valid);
   const complete = values.length === SPRINTS;
   const summary = values.length >= 2 ? rsaSummary(values) : null;
@@ -160,15 +160,15 @@ function Confirm({ initial }: { initial: number[] }) {
         {summary && (
           <View style={runStyles.stats}>
             <View style={runStyles.stat}>
-              <Text style={runStyles.statValue}>{summary.mean.toFixed(2)}</Text>
+              <Text style={runStyles.statValue}>{decimal(summary.mean, 2)}</Text>
               <Text style={runStyles.statLabel}>{tr('平均 s')}</Text>
             </View>
             <View style={runStyles.stat}>
-              <Text style={runStyles.statValue}>{summary.best.toFixed(2)}</Text>
+              <Text style={runStyles.statValue}>{decimal(summary.best, 2)}</Text>
               <Text style={runStyles.statLabel}>{tr('最快 s')}</Text>
             </View>
             <View style={runStyles.stat}>
-              <Text style={runStyles.statValue}>{summary.sdec.toFixed(1)}%</Text>
+              <Text style={runStyles.statValue}>{decimal(summary.sdec, 1)}%</Text>
               <Text style={runStyles.statLabel}>{tr('递减')}</Text>
             </View>
           </View>

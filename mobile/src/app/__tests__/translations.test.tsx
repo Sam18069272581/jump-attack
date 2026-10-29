@@ -1,6 +1,6 @@
 // The main screens in English and German, with data in them: no Chinese is left on screen or in what VoiceOver reads.
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
-import { Text } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 
 import { addDropJump } from '@/db/jumps';
 import { migrate } from '@/db/migrations';
@@ -115,9 +115,27 @@ describe.each<[string, Lang]>([
     // The language picker names each language in itself, 中文 included.
     expect(lines.filter((l) => CHINESE.test(l) && l !== '中文')).toEqual([]);
   });
+
+  if (lang === 'de') {
+    it.each(screens)('writes decimal commas on the %s screen', async (_name, screen) => {
+      mockParams = { date: today };
+      setLang(lang);
+      const r = await render(screen());
+      // A decimal point between digits, but not a date like 29.10.
+      expect(shown(r.root).filter((l) => /\d\.\d+\b(?!\.)/.test(l))).toEqual([]);
+    });
+  }
 });
 
 it('shows the same screens in Chinese by default', async () => {
   const r = await render(<Home />);
   expect(shown(r.root).some((l) => CHINESE.test(l))).toBe(true);
+});
+
+it('wraps the touch chart legend, which is wider than a phone in German', async () => {
+  setLang('de');
+  const r = await render(<History />);
+  // The row holding all three entries.
+  const legend = r.root.find((n) => typeof n.type === 'string' && ['Anlauf, gemessen', 'Aus dem Stand geschätzt', 'Dunk-Linie 320'].every((l) => shown(n).includes(l)) && n.children.length === 3);
+  expect(StyleSheet.flatten(legend.props.style)).toMatchObject({ flexDirection: 'row', flexWrap: 'wrap' });
 });

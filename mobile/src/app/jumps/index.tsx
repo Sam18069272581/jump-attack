@@ -8,7 +8,7 @@ import { loadDiagnosis } from '@/db/dunk';
 import { newSessionId } from '@/db/repo';
 import { BLOCKS, type DunkDiagnosis } from '@/domain/dunk';
 import { APPROACH_TOUCH, DROP_JUMP, JUMP_TESTS, LOADED_SJ, REPEATED_JUMP } from '@/domain/metrics';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 import { isWeb } from '@/media/runtime';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
@@ -31,7 +31,7 @@ function suggested(d: DunkDiagnosis | null): Set<string> {
 
 function gapLine(d: DunkDiagnosis | null): string {
   if (!d || d.gapCm == null) return tr('离扣篮还差多少、缺哪一块');
-  const gap = d.gapCm > 0 ? tr('还差 {gapCm} cm', { gapCm: d.gapCm.toFixed(1) }) : tr('够到扣篮线了');
+  const gap = d.gapCm > 0 ? tr('还差 {gapCm} cm', { gapCm: decimal(d.gapCm, 1) }) : tr('够到扣篮线了');
   return d.limiter ? tr('{gap} · 短板：{name}', { gap, name: BLOCKS[d.limiter].name }) : gap;
 }
 

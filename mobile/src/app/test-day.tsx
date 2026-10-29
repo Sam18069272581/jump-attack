@@ -10,7 +10,7 @@ import { athleteName } from '@/domain/athletes';
 import { toISODate } from '@/domain/dates';
 import { nextTurn } from '@/domain/team';
 import { nextStep } from '@/domain/testDay';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadTestDay, type TestDayRow } from '@/state/testDay';
 import { colors, fonts, radius, text } from '@/theme';
@@ -143,13 +143,13 @@ export default function TestDay() {
 /** E.g. "3 跳 · 41.5 cm", or the mean of the best three for run-up touches. */
 function result(row: TestDayRow): string {
   const top3 = row.def.aggregate === 'top3' && row.trials > 1;
-  return tr('{trials} 跳 · {p}{best} {unit}', { trials: row.trials, p: top3 ? tr('前 3 均值 ') : '', best: row.best!.toFixed(row.def.decimals), unit: row.def.unit }).trim();
+  return tr('{trials} 跳 · {p}{best} {unit}', { trials: row.trials, p: top3 ? tr('前 3 均值 ') : '', best: decimal(row.best!, row.def.decimals), unit: row.def.unit }).trim();
 }
 
 function Step({ n, row, current, onPress }: { n: number; row: TestDayRow; current: boolean; onPress: () => void }) {
   const done = row.trials > 0;
   const top3 = row.def.aggregate === 'top3' && row.trials > 1;
-  const value = row.best != null ? `${row.best.toFixed(row.def.decimals)} ${row.def.unit}`.trim() : '';
+  const value = row.best != null ? `${decimal(row.best, row.def.decimals)} ${row.def.unit}`.trim() : '';
   const status = done ? tr('已测 {trials} 跳 · {p} {value}', { trials: row.trials, p: top3 ? tr('最好 {p} 跳均值', { p: Math.min(3, row.trials) }) : tr('最好'), value }) : tr('{jumps} 跳', { jumps: row.jumps });
   return (
     <Pressable

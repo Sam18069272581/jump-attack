@@ -8,7 +8,7 @@ import { newSessionId } from '@/db/repo';
 import { latestEstimate, listVbtSets, type VbtSet } from '@/db/vbt';
 import { getCategory, VBT_LIFTS } from '@/domain/metrics';
 import { ZONES } from '@/domain/vbt';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
@@ -56,7 +56,7 @@ export default function Vbt() {
               <View style={{ alignItems: 'flex-end' }}>
                 <Text style={text.caption}>{tr('上次平均')}</Text>
                 <Text style={styles.v}>
-                  {last ? last.v.toFixed(2) : '—'} <Text style={styles.unit}>m/s{last?.load ? ` @ ${last.load} kg` : ''}</Text>
+                  {last ? decimal(last.v, 2) : '—'} <Text style={styles.unit}>m/s{last?.load ? ` @ ${last.load} kg` : ''}</Text>
                 </Text>
               </View>
             </View>

@@ -7,7 +7,7 @@ import { countIn, useCues, useTimeline, type Cue } from '@/components/conditioni
 import { confirmStop, RunningScreen, runStyles, Steps, useSaveResult } from '@/components/conditioning/ui';
 import { Button, Chip } from '@/components/ui';
 import { clock, COOPER_SECONDS, cooperVo2max } from '@/domain/conditioning';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 import { colors, fonts, radius } from '@/theme';
 
 const LEAD_IN_S = 5;
@@ -148,7 +148,7 @@ function Confirm({ laps, lapM }: { laps: number; lapM: number }) {
         <View style={{ alignItems: 'center', gap: 4 }}>
           <Text style={runStyles.label}>{tr('总距离')}</Text>
           <Text style={runStyles.big}>{distance} m</Text>
-          {plausible && <Text style={styles.vo2}>VO2max ≈ {cooperVo2max(distance).toFixed(1)}</Text>}
+          {plausible && <Text style={styles.vo2}>VO2max ≈ {decimal(cooperVo2max(distance), 1)}</Text>}
         </View>
       </ScrollView>
       <View style={runStyles.footer}>

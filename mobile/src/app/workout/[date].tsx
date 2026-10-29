@@ -20,7 +20,7 @@ import { jumpVolumeNote, kneeStatus, PAIN_HINT, PAIN_LIMIT } from '@/domain/pain
 import { formatPrescription, formatRpe, isLoaded, personalNote, planDay, summarizeWorkout, type LoggedSet, type PersonalNumbers, type Prescription } from '@/domain/plan';
 import { allowanceText, checkSet, setTarget, STATE_LABEL, usualWarmupLoad, type DayReading } from '@/domain/target';
 import { LOAD_FROM_VBT } from '@/domain/vbt';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { beginWorkout, loadDay, loadPersonalNumbers, loadSuggestions, loadTraining, sessionFor, type Day, type LoadSuggestion, type TrainingData } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
@@ -248,7 +248,7 @@ function SuggestionLine({ p, s }: { p: Prescription; s: LoadSuggestion }) {
   const eased = s.loadFactor < 1 ? tr('，今天按状态减到 {kg} kg', { kg: s.kg }) : '';
   const line =
     s.minV != null
-      ? tr(' · 达标线 {minV} m/s{p}', { minV: s.minV.toFixed(2), p: s.velocityTolerance > 0 && s.targetV != null ? tr('（目标 {targetV}，今天允许慢 {velocityTolerance}%）', { targetV: s.targetV.toFixed(2), velocityTolerance: Math.round(s.velocityTolerance * 100) }) : '' })
+      ? tr(' · 达标线 {minV} m/s{p}', { minV: decimal(s.minV, 2), p: s.velocityTolerance > 0 && s.targetV != null ? tr('（目标 {targetV}，今天允许慢 {velocityTolerance}%）', { targetV: decimal(s.targetV, 2), velocityTolerance: Math.round(s.velocityTolerance * 100) }) : '' })
       : '';
   return (
     <Text style={styles.suggest}>{tr('按{p} 1RM {oneRm} kg，{reps} 次 @ RPE {rpe} 建议 {baseKg} kg{eased}{line}', { p: s.source === 'tested' ? tr('实测') : tr(' VBT 估算'), oneRm: Math.round(s.oneRm), reps: p.reps, rpe: formatRpe(p.rpe ?? 8), baseKg: s.baseKg, eased, line })}</Text>
@@ -273,7 +273,7 @@ function WarmupRow({ usualKg, reading, onLog }: { usualKg: number | null; readin
     <View style={styles.warmup}>
       <Text style={text.caption}>
         {reading
-          ? tr('热身 {load} kg：{v} m/s，是 30 天均值 {mean} 的 {pct}%（{STATE_LABEL}）', { load: reading.load, v: reading.v.toFixed(2), mean: reading.mean.toFixed(2), pct: Math.round(reading.pct * 100), STATE_LABEL: STATE_LABEL[reading.state] })
+          ? tr('热身 {load} kg：{v} m/s，是 30 天均值 {mean} 的 {pct}%（{STATE_LABEL}）', { load: reading.load, v: decimal(reading.v, 2), mean: decimal(reading.mean, 2), pct: Math.round(reading.pct * 100), STATE_LABEL: STATE_LABEL[reading.state] })
           : tr('热身速度：用平时的热身重量做一组，填最快一次的平均速度，和 30 天均值比判断今天的状态')}
       </Text>
       <View style={styles.setRow}>
@@ -311,7 +311,7 @@ function SetRow({
   const [reps, setReps] = useState(entry ? String(entry.reps) : '');
   const [kg, setKg] = useState(entry?.load_kg != null ? String(entry.load_kg) : '');
   const [rpe, setRpe] = useState(entry?.rpe != null ? formatRpe(entry.rpe) : '');
-  const [v, setV] = useState(entry?.mean_velocity != null ? entry.mean_velocity.toFixed(2) : '');
+  const [v, setV] = useState(entry?.mean_velocity != null ? decimal(entry.mean_velocity, 2) : '');
   const checked = entry != null;
   const num = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
   const below = entry?.mean_velocity != null && minV != null && entry.mean_velocity < minV;
@@ -334,7 +334,7 @@ function SetRow({
       <Field value={reps} onChange={setReps} placeholder={String(p.reps)} unit={p.perSide ? tr('次/侧') : tr('次')} editable={!checked && !locked} />
       {loaded && <Field value={kg} onChange={setKg} placeholder={suggestedKg != null ? String(suggestedKg) : '—'} unit="kg" editable={!checked && !locked} decimal />}
       {p.rpe != null && <Field value={rpe} onChange={setRpe} placeholder={formatRpe(p.rpe)} unit="RPE" editable={!checked && !locked} decimal />}
-      {tracksVelocity && <Field value={v} onChange={setV} placeholder={minV != null ? minV.toFixed(2) : '—'} unit="m/s" editable={!checked && !locked} decimal />}
+      {tracksVelocity && <Field value={v} onChange={setV} placeholder={minV != null ? decimal(minV, 2) : '—'} unit="m/s" editable={!checked && !locked} decimal />}
       <View style={{ flex: 1 }} />
       <Pressable
         accessibilityRole="checkbox"

@@ -1,12 +1,12 @@
 import { ALLOWANCE, type DayState, type DunkDiagnosis, type DunkMetric } from './dunk';
 import { TOUCH_TEST_JUMPS } from './touch';
 
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 
 /** "1.32×", "1.60", "280 ms". */
 export function formatMetric(m: Pick<DunkMetric, 'value' | 'unit' | 'decimals'>): string {
   if (m.value == null) return '—';
-  const v = m.value.toFixed(m.decimals);
+  const v = decimal(m.value, m.decimals);
   return m.unit === '×' ? `${v}×` : m.unit ? `${v} ${m.unit}` : v;
 }
 
@@ -40,7 +40,7 @@ export function standingTouches(cmj: { started_at: string; best: number }[], sta
 export function touchSpread(d: DunkDiagnosis): string | null {
   const e = d.touchError;
   if (d.touch.source !== 'approach' || !e) return null;
-  const err = e.errorCm != null ? ` ± ${e.errorCm.toFixed(1)}` : '';
+  const err = e.errorCm != null ? ` ± ${decimal(e.errorCm, 1)}` : '';
   if (e.jumps === 1) return tr('只有 1 跳{err}，测满 {TOUCH_TEST_JUMPS} 跳更准', { err, TOUCH_TEST_JUMPS });
   return tr('最好 {jumps} 跳均值{p}', { jumps: e.jumps, p: e.errorCm != null ? err : tr('，录像估算的误差要校准 2 次后才知道') });
 }
@@ -48,10 +48,10 @@ export function touchSpread(d: DunkDiagnosis): string | null {
 /** What the touch the gap is measured from is made of, and how sure it is. Null without a touch. */
 export function touchNote(d: DunkDiagnosis): string | null {
   const t = d.touch;
-  if (t.source === 'standing') return tr('原地估算 {standing} cm（站立摸高 + CMJ），测一次助跑摸高更准', { standing: t.standing!.toFixed(1) });
+  if (t.source === 'standing') return tr('原地估算 {standing} cm（站立摸高 + CMJ），测一次助跑摸高更准', { standing: decimal(t.standing!, 1) });
   if (t.source !== 'approach') return null;
   const spread = touchSpread(d);
-  return tr('助跑摸高 {approach} cm{p}', { approach: t.approach!.toFixed(1), p: spread ? tr('（{spread}）', { spread }) : '' });
+  return tr('助跑摸高 {approach} cm{p}', { approach: decimal(t.approach!, 1), p: spread ? tr('（{spread}）', { spread }) : '' });
 }
 
 /** The words over the gap, and a hint under it while the line is inside the touch's error or once it is cleared. */

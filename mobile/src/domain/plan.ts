@@ -4,7 +4,7 @@ import type { BlockType } from './dunk';
 import { DUNK_TEST_SESSION, goalDay, TAPER } from './goal';
 import { roundLoad } from './vbt';
 
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 
 /**
  * What an exercise trains. Block plans tag every exercise strength, reactive, transfer or technique, so a block
@@ -334,7 +334,7 @@ export function adjustForReadiness(session: SessionTemplate, readiness: Readines
 }
 
 export function formatRpe(rpe: number): string {
-  return Number.isInteger(rpe) ? String(rpe) : rpe.toFixed(1);
+  return Number.isInteger(rpe) ? String(rpe) : decimal(rpe, 1);
 }
 
 /** What the athlete has tested that sets an exercise's dose. */

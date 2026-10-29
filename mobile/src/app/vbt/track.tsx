@@ -17,7 +17,7 @@ import { analyseBarPath, countsByDefault, REP_FLAG_REASONS, trackedSet, trackTim
 import { roundTo } from '@/domain/interval';
 import { getCategory, getMetric } from '@/domain/metrics';
 import { STOP_LOSS, zoneOf } from '@/domain/vbt';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { barTrackerHtml } from '@/media/barTrackerHtml';
 import { isWeb } from '@/media/runtime';
 import { persistVideo, stageForTracking } from '@/media/videos';
@@ -273,16 +273,16 @@ export default function TrackSet() {
                   key={i}
                   accessibilityRole="checkbox"
                   accessibilityState={{ checked: on }}
-                  accessibilityLabel={tr('第 {i} 次，{mv} 米每秒', { i: i + 1, mv: r.mv.toFixed(2) })}
+                  accessibilityLabel={tr('第 {i} 次，{mv} 米每秒', { i: i + 1, mv: decimal(r.mv, 2) })}
                   onPress={() => setIncluded((inc) => analysis.reps.map((_, j) => (j === i ? !on : (inc[j] ?? false))))}
                   style={[styles.rep, !on && { opacity: 0.4 }]}
                 >
                   <Text style={styles.repNo}>{on ? n : '–'}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.repV}>
-                      {r.mv.toFixed(2)} <Text style={styles.unit}>m/s</Text>
+                      {decimal(r.mv, 2)} <Text style={styles.unit}>m/s</Text>
                     </Text>
-                    <Text style={text.caption}>{tr('MPV {mpv} · 峰值 {pv} m/s · 行程 {romCm} cm · {end} ms', { mpv: r.mpv.toFixed(2), pv: r.pv.toFixed(2), romCm: Math.round(r.romCm), end: Math.round((r.end - r.start) * 1000) })}</Text>
+                    <Text style={text.caption}>{tr('MPV {mpv} · 峰值 {pv} m/s · 行程 {romCm} cm · {end} ms', { mpv: decimal(r.mpv, 2), pv: decimal(r.pv, 2), romCm: Math.round(r.romCm), end: Math.round((r.end - r.start) * 1000) })}</Text>
                     {r.flags.map((f) => (
                       <Text key={f} style={[text.caption, { color: colors.warn }]}>
                         {REP_FLAG_REASONS[f]}
@@ -294,7 +294,7 @@ export default function TrackSet() {
               );
             })}
             {summary && (
-              <Text style={text.caption}>{tr('记录最快一次 {best} m/s，共 {count} 次{p}。', { best: summary.best.toFixed(2), count: summary.count, p: summary.count > 1 ? tr('，最后一次比最快慢了 {loss}%', { loss: Math.round(summary.loss * 100) }) : '' })}</Text>
+              <Text style={text.caption}>{tr('记录最快一次 {best} m/s，共 {count} 次{p}。', { best: decimal(summary.best, 2), count: summary.count, p: summary.count > 1 ? tr('，最后一次比最快慢了 {loss}%', { loss: Math.round(summary.loss * 100) }) : '' })}</Text>
             )}
             {warnings.map((w) => (
               <Text key={w} style={styles.warn}>
@@ -307,7 +307,7 @@ export default function TrackSet() {
       <View style={styles.footer}>
         {analysis && summary ? (
           <>
-            <Button label={tr('保存这一组 · {best} m/s', { best: summary.best.toFixed(2) })} onPress={save} busy={saving} />
+            <Button label={tr('保存这一组 · {best} m/s', { best: decimal(summary.best, 2) })} onPress={save} busy={saving} />
             <Button label={tr('重新圈选再分析')} variant="secondary" onPress={() => setTracked(null)} />
           </>
         ) : (

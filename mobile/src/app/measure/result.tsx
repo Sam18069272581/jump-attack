@@ -13,7 +13,7 @@ import { manualProblem, parseNumber } from '@/domain/entry';
 import { getCategory, getMetric, sessionValue } from '@/domain/metrics';
 import { personalRecord, recordable } from '@/domain/record';
 import { assess, type Assessment } from '@/domain/verdict';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadPoorDaysOf, POOR_DAY_NOTE } from '@/state/training';
 import { colors, fonts, radius } from '@/theme';
@@ -92,15 +92,15 @@ export default function Result() {
         {record && best != null ? (
           <RecordHero
             label={label}
-            value={best.toFixed(def.decimals)}
+            value={decimal(best, def.decimals)}
             unit={def.unit}
-            gain={def.lowerIsBetter ? tr('快了 {by} {unit}', { by: record.by.toFixed(def.decimals), unit: def.unit }) : `+${record.by.toFixed(def.decimals)} ${def.unit}`}
+            gain={def.lowerIsBetter ? tr('快了 {by} {unit}', { by: decimal(record.by, def.decimals), unit: def.unit }) : `+${decimal(record.by, def.decimals)} ${def.unit}`}
           />
         ) : (
           <View style={styles.hero}>
             <Text style={styles.heroLabel}>{label}</Text>
             <Text style={styles.heroValue}>
-              {best != null ? best.toFixed(def.decimals) : '—'} <Text style={styles.heroUnit}>{def.unit}</Text>
+              {best != null ? decimal(best, def.decimals) : '—'} <Text style={styles.heroUnit}>{def.unit}</Text>
             </Text>
           </View>
         )}
@@ -112,7 +112,7 @@ export default function Result() {
               <View style={styles.barTrack}>
                 <View style={[styles.bar, { width: `${(t.value / scale) * 100}%`, backgroundColor: counted.has(t.id) ? colors.accent : colors.textFaint }]} />
               </View>
-              <Text style={styles.trialValue}>{t.value.toFixed(def.decimals)}</Text>
+              <Text style={styles.trialValue}>{decimal(t.value, def.decimals)}</Text>
               {editable(t) && (
                 <Pressable accessibilityRole="button" accessibilityLabel={tr('改第 {i} 次', { i: i + 1 })} onPress={() => setEditing({ id: t.id, n: i + 1, raw: String(t.value) })} style={styles.trash}>
                   <Icon name="edit" size={18} color={colors.textMuted} />

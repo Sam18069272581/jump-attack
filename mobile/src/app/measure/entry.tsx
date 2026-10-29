@@ -9,7 +9,7 @@ import { addTrial, ensureSession } from '@/db/repo';
 import { manualProblem, parseNumber } from '@/domain/entry';
 import { getMetric } from '@/domain/metrics';
 import { TIMING_NAME, TYPED_TIMINGS } from '@/domain/timing';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
@@ -63,7 +63,7 @@ export default function ManualEntry() {
             value={raw}
             onChangeText={setRaw}
             keyboardType="decimal-pad"
-            placeholder={(0).toFixed(def.decimals)}
+            placeholder={decimal((0), def.decimals)}
             placeholderTextColor={colors.textFaint}
             autoFocus
             style={styles.input}

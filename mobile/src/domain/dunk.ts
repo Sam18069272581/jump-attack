@@ -3,7 +3,7 @@ import { daysBetween, toISODate, type ISODate } from './dates';
 import type { DayReadiness } from './readiness';
 import { lineVerdict, type LineVerdict } from './touch';
 
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 
 /** Regulation rim height, cm. */
 export const RIM_CM = 305;
@@ -204,7 +204,7 @@ function rate(value: number | null, low: number, good: number, lowerIsBetter = f
   return 'good';
 }
 
-const fixed = (x: number, d: number) => x.toFixed(d);
+const fixed = (x: number, d: number) => decimal(x, d);
 
 export function diagnose(input: DunkInput): DunkDiagnosis {
   const line = dunkLine(input.rimCm, input.clearanceCm);

@@ -1,7 +1,7 @@
 import { mean, sd } from './assess';
 import { addDays, type ISODate } from './dates';
 
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 
 /** One day's recovery values; missing ones are null. */
 export type RecoveryDay = { date: ISODate; hrv: number | null; rhr: number | null; sleep: number | null; resp: number | null };
@@ -130,7 +130,7 @@ export function readRecovery(days: RecoveryDay[], date: ISODate): RecoveryRead {
   }
   if (today?.sleep != null && today.sleep < SHORT_SLEEP_H) {
     soft++;
-    warn(tr('睡眠只有 {sleep} 小时', { sleep: today.sleep.toFixed(1) }));
+    warn(tr('睡眠只有 {sleep} 小时', { sleep: decimal(today.sleep, 1) }));
   }
 
   const known = (today?.hrv != null && hrv != null) || (today?.rhr != null && rhr != null) || today?.sleep != null;

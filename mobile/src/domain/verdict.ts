@@ -1,7 +1,7 @@
 import { cmjReadiness, judgeChange, type ChangeVerdict, type Readiness } from './assess';
 import type { MetricDef } from './metrics';
 
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 
 export type Assessment = {
   change: { verdict: ChangeVerdict; text: string };
@@ -19,7 +19,7 @@ const VERDICT_TEXT: Record<ChangeVerdict, string> = localized({
 export function assess(metric: MetricDef, previousBests: number[], today: number): Assessment {
   const c = judgeChange(previousBests, today, metric.lowerIsBetter);
   const sign = c.delta >= 0 ? '+' : '−';
-  const deltaText = previousBests.length ? tr('较平均 {sign}{delta} {unit}，', { sign, delta: Math.abs(c.delta).toFixed(metric.decimals), unit: metric.unit }) : '';
+  const deltaText = previousBests.length ? tr('较平均 {sign}{delta} {unit}，', { sign, delta: decimal(Math.abs(c.delta), metric.decimals), unit: metric.unit }) : '';
   const out: Assessment = { change: { verdict: c.verdict, text: deltaText + VERDICT_TEXT[c.verdict] } };
 
   if (metric.code === 'cmj') {
@@ -29,7 +29,7 @@ export function assess(metric: MetricDef, previousBests: number[], today: number
         readiness: r.readiness,
         text:
           r.readiness === 'fatigued'
-            ? tr('比近期基线低 {dropPct}%，可能有疲劳，今天建议减量', { dropPct: (r.dropPct * 100).toFixed(0) })
+            ? tr('比近期基线低 {dropPct}%，可能有疲劳，今天建议减量', { dropPct: decimal((r.dropPct * 100), 0) })
             : tr('神经肌肉状态正常，可以按计划训练'),
       };
     }

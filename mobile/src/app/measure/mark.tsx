@@ -18,7 +18,7 @@ import { nextClip, queuedCount } from '@/domain/importQueue';
 import { markedTrial, markProfile, returnsToLogger } from '@/domain/marking';
 import { getMetric } from '@/domain/metrics';
 import { calibrationProblem } from '@/domain/touch';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { probeFrameRate } from '@/media/frameRate';
 import { isWeb } from '@/media/runtime';
 import { useAthlete } from '@/state/athlete';
@@ -246,7 +246,7 @@ export default function Mark() {
           <View style={styles.calibrate}>
             <Text style={styles.label}>
               {offset != null
-                ? tr('已按你的校准加 {offset} cm。这一跳有墙上或篮板上的刻度的话，填上会更准，也会更新校准。', { offset: offset.toFixed(1) })
+                ? tr('已按你的校准加 {offset} cm。这一跳有墙上或篮板上的刻度的话，填上会更准，也会更新校准。', { offset: decimal(offset, 1) })
                 : tr('录像算的摸高通常比实际摸到的低几厘米。这一跳有墙上或篮板上的刻度的话填上，用来校准以后的录像和原地估算。')}
             </Text>
             <TextInput

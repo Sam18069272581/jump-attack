@@ -13,7 +13,7 @@ import { manualProblem, parseNumber } from '@/domain/entry';
 import { getCategory, getMetric, SQUAT_1RM } from '@/domain/metrics';
 import { toISODate } from '@/domain/dates';
 import { loadAt, ONE_RM_PROBLEMS, parseRepVelocities, roundLoad, setVelocityLoss, STOP_LOSS, ZONES, zoneOf } from '@/domain/vbt';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
@@ -126,7 +126,7 @@ export default function VbtSession() {
                     {s.load} kg{s.reps ? ` × ${s.reps}` : ''}
                   </Text>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={styles.setV}>{s.v.toFixed(2)} m/s</Text>
+                    <Text style={styles.setV}>{decimal(s.v, 2)} m/s</Text>
                     <Text style={[text.caption, stop && { color: colors.warn }]}>{stop ? tr('速度损失 {loss}%，建议停组', { loss: Math.round(loss * 100) }) : zoneOf(s.v).name}</Text>
                   </View>
                   <Pressable accessibilityRole="button" accessibilityLabel={tr('删除第 {i} 组', { i: i + 1 })} onPress={() => remove(s, i + 1)} style={styles.trash}>
@@ -159,7 +159,7 @@ export default function VbtSession() {
             wide
           />
           {vProblem ? <Text style={styles.problem}>{vProblem}</Text> : null}
-          {repV && repV.length > 1 && !vProblem ? <Text style={text.caption}>{tr('{length} 次，按最快一次 {velocity} m/s 记这一组', { length: repV.length, velocity: velocity!.toFixed(2) })}</Text> : null}
+          {repV && repV.length > 1 && !vProblem ? <Text style={text.caption}>{tr('{length} 次，按最快一次 {velocity} m/s 记这一组', { length: repV.length, velocity: decimal(velocity!, 2) })}</Text> : null}
           <Button label={tr('记一组')} onPress={logManual} disabled={!loadOk || velocity == null || vProblem != null} busy={saving} />
           <Button label={tr('录像自动测速')} variant="secondary" onPress={measureVideo} />
           <Text style={text.caption}>{tr('录像测速：侧面拍一整组，圈出 45 cm 杠铃片，自动跟踪算出每一次的平均速度，不用逐帧标。')}</Text>

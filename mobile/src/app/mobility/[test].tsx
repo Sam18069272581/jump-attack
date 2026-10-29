@@ -10,7 +10,7 @@ import { addTrial, ensureSession, newSessionId } from '@/db/repo';
 import { manualProblem, parseNumber } from '@/domain/entry';
 import { formatValue, type MetricDef } from '@/domain/metrics';
 import { asymmetry, getMobilityTest } from '@/domain/mobility';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
@@ -67,7 +67,7 @@ export default function MobilityEntry() {
           value={side.raw}
           onChangeText={(raw) => set({ raw, measured: false })}
           keyboardType="numbers-and-punctuation"
-          placeholder={(0).toFixed(def.decimals)}
+          placeholder={decimal((0), def.decimals)}
           placeholderTextColor={colors.textFaint}
           style={styles.input}
           accessibilityLabel={tr('{name}（{unit}）', { name: def.name, unit: def.unit })}

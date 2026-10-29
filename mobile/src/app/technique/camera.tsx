@@ -11,7 +11,7 @@ import { PoseCamera, type CameraErrorStage, type CameraFrame, type CameraInfo, t
 import { Button } from '@/components/ui';
 import { decodePose } from '@/domain/pose';
 import { checkSetup, SETUP_CHECKS, type GravitySample, type SetupCheck, type SetupFrame, type SetupState } from '@/domain/poseSetup';
-import { speechLanguage, tr } from '@/i18n';
+import { decimal, speechLanguage, tr } from '@/i18n';
 import { startGravity, type Vec } from '@/media/gravity';
 import { MAX_TAKE_S } from '@/media/poseCameraHtml';
 import { dropTake } from '@/media/takes';
@@ -216,7 +216,7 @@ export default function TechniqueCamera() {
           <View style={styles.checks} pointerEvents="none">
             {SETUP_CHECKS.map(([key, name]) => {
               const c = setup.checks.find((x) => x.key === key);
-              const level = key === 'phone' && setup.level ? ` ${Math.abs(setup.level.roll).toFixed(1)}° / ${Math.abs(setup.level.pitch).toFixed(1)}°` : '';
+              const level = key === 'phone' && setup.level ? ` ${decimal(Math.abs(setup.level.roll), 1)}° / ${decimal(Math.abs(setup.level.pitch), 1)}°` : '';
               return (
                 <View key={key} style={styles.checkRow}>
                   <View style={[styles.dot, { backgroundColor: STATE_COLOR[c?.state ?? 'wait'] }]} />
@@ -281,7 +281,7 @@ export default function TechniqueCamera() {
         {rec.name === 'recorded' && (
           <View style={styles.panelWrap}>
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>{tr('录好了 · {seconds} 秒', { seconds: rec.take.seconds.toFixed(1) })}</Text>
+              <Text style={styles.panelTitle}>{tr('录好了 · {seconds} 秒', { seconds: decimal(rec.take.seconds, 1) })}</Text>
               <Button label={tr('分析这一段')} onPress={() => analyse(rec.take)} />
               <Button label={tr('重拍')} variant="secondary" onPress={retake} />
             </View>

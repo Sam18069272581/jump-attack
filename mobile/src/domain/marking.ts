@@ -3,7 +3,7 @@ import { intervalFromMarks, roundTo, sprintDistance, sprintLimits, type Interval
 import { measureFromMarks, type MarkProblem } from './jump';
 import type { MetricDef } from './metrics';
 
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 
 type Mark = { title: string; hint: string };
 
@@ -52,7 +52,7 @@ const jumpProfile: MarkProfile = {
       elapsedS: flightS,
       cells: [
         { label: tr('滞空'), value: String(Math.round(flightS * 1000)), unit: 'ms' },
-        { label: tr('跳高'), value: heightCm.toFixed(1), unit: 'cm', main: true },
+        { label: tr('跳高'), value: decimal(heightCm, 1), unit: 'cm', main: true },
       ],
     };
   },
@@ -78,8 +78,8 @@ function touchProfile(reachCm: number | undefined): MarkProfile {
         ...jump,
         value: roundTo(reachCm + jump.value, 1),
         cells: [
-          { label: tr('跳高'), value: jump.value.toFixed(1), unit: 'cm' },
-          { label: tr('摸高'), value: (reachCm + jump.value).toFixed(1), unit: 'cm', main: true },
+          { label: tr('跳高'), value: decimal(jump.value, 1), unit: 'cm' },
+          { label: tr('摸高'), value: decimal((reachCm + jump.value), 1), unit: 'cm', main: true },
         ],
         detail: { jump_cm: jump.value, standing_reach_cm: reachCm },
       };
@@ -92,8 +92,8 @@ function sprintProfile(metres: number): MarkProfile {
   const problems: Record<IntervalProblem, string> = {
     missing: tr('标记起跑帧和冲线帧后显示成绩'),
     order: tr('冲线帧要在起跑帧之后'),
-    'too-short': tr('{metres} m 不可能少于 {minS} s，检查是否标错帧', { metres, minS: limits.minS.toFixed(2) }),
-    'too-long': tr('超过 {maxS} s：检查是否标错帧；慢动作视频要把拍摄帧率选成 240', { maxS: limits.maxS.toFixed(0) }),
+    'too-short': tr('{metres} m 不可能少于 {minS} s，检查是否标错帧', { metres, minS: decimal(limits.minS, 2) }),
+    'too-long': tr('超过 {maxS} s：检查是否标错帧；慢动作视频要把拍摄帧率选成 240', { maxS: decimal(limits.maxS, 0) }),
   };
   return {
     marks: [
@@ -110,8 +110,8 @@ function sprintProfile(metres: number): MarkProfile {
         elapsedS: r.seconds,
         cells: [
           { label: tr('距离'), value: String(metres), unit: 'm' },
-          { label: tr('用时'), value: r.seconds.toFixed(2), unit: 's', main: true },
-          { label: tr('平均速度'), value: (metres / r.seconds).toFixed(2), unit: 'm/s' },
+          { label: tr('用时'), value: decimal(r.seconds, 2), unit: 's', main: true },
+          { label: tr('平均速度'), value: decimal((metres / r.seconds), 2), unit: 'm/s' },
         ],
       };
     },
@@ -144,8 +144,8 @@ const dropJumpProfile: MarkProfile = {
       elapsedS: flightS,
       cells: [
         { label: tr('触地'), value: String(Math.round(contactS * 1000)), unit: 'ms' },
-        { label: tr('跳高'), value: heightCm.toFixed(1), unit: 'cm' },
-        { label: 'RSI', value: rsi.toFixed(2), unit: '', main: true },
+        { label: tr('跳高'), value: decimal(heightCm, 1), unit: 'cm' },
+        { label: 'RSI', value: decimal(rsi, 2), unit: '', main: true },
       ],
       detail: { contact_frame: contact, contact_ms: Math.round(contactS * 1000), height_cm: roundTo(heightCm, 1) },
     };

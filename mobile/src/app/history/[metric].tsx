@@ -12,7 +12,7 @@ import type { ISODate } from '@/domain/dates';
 import { dunkLine } from '@/domain/dunk';
 import { APPROACH_TOUCH, changeTone, formatValue, getMetric, metricColor, resultNote } from '@/domain/metrics';
 import { previousSameTiming, TIMING_NOTE, type Timing } from '@/domain/timing';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadPoorDaysOf } from '@/state/training';
 import { colors, fonts } from '@/theme';
@@ -80,7 +80,7 @@ export default function MetricHistory() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: def.name }} />
-      <Text style={styles.count}>{tr('{length} 条记录{p}', { length: results.length, p: verdict && verdict.swc > 0 ? tr(' · 最小有意义变化 {swc} {unit}', { swc: verdict.swc.toFixed(def.decimals), unit: def.unit }) : '' })}</Text>
+      <Text style={styles.count}>{tr('{length} 条记录{p}', { length: results.length, p: verdict && verdict.swc > 0 ? tr(' · 最小有意义变化 {swc} {unit}', { swc: decimal(verdict.swc, def.decimals), unit: def.unit }) : '' })}</Text>
 
       {latest ? (
         <>
@@ -88,7 +88,7 @@ export default function MetricHistory() {
             <Text style={[styles.big, { color }]}>{formatValue(def, latest.best)}</Text>
             <Text style={styles.unit}>{def.unit}</Text>
             {sinceFirst != null && (
-              <Text style={[styles.change, { color: tone(sinceFirst) }]}>{tr('首次以来 {p}{sinceFirst} {unit}', { p: sinceFirst >= 0 ? '+' : '−', sinceFirst: Math.abs(sinceFirst).toFixed(def.decimals), unit: def.unit })}</Text>
+              <Text style={[styles.change, { color: tone(sinceFirst) }]}>{tr('首次以来 {p}{sinceFirst} {unit}', { p: sinceFirst >= 0 ? '+' : '−', sinceFirst: decimal(Math.abs(sinceFirst), def.decimals), unit: def.unit })}</Text>
             )}
           </View>
           {mixed ? (
@@ -98,7 +98,7 @@ export default function MetricHistory() {
           ) : (
             note(latest) && <Text style={styles.note}>{note(latest)}</Text>
           )}
-          {line != null && <Text style={styles.note}>{latest.best < line ? tr('离扣篮线 {line} cm 还差 {line2} cm', { line, line2: (line - latest.best).toFixed(1) }) : tr('已过扣篮线 {line} cm', { line })}</Text>}
+          {line != null && <Text style={styles.note}>{latest.best < line ? tr('离扣篮线 {line} cm 还差 {line2} cm', { line, line2: decimal((line - latest.best), 1) }) : tr('已过扣篮线 {line} cm', { line })}</Text>}
 
           <TrendChart
             color={color}
@@ -135,7 +135,7 @@ export default function MetricHistory() {
                       {rowNote && <Text style={[styles.rowNote, styles.right]}>{rowNote}</Text>}
                     </View>
                     <Text style={[styles.deltaCell, styles.right, { color: d == null ? colors.textMuted : tone(d) }]}>
-                      {d == null ? '—' : `${d >= 0 ? '+' : '−'}${Math.abs(d).toFixed(def.decimals)}`}
+                      {d == null ? '—' : `${d >= 0 ? '+' : '−'}${decimal(Math.abs(d), def.decimals)}`}
                     </Text>
                   </Pressable>
                 );

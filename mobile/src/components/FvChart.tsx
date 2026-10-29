@@ -3,7 +3,7 @@ import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Line, Text as SvgText } from 'react-native-svg';
 
 import { profileFromPower, type FvProfile } from '@/domain/fvp';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { colors, fonts } from '@/theme';
 
 const PAD_LEFT = 36;
@@ -27,7 +27,7 @@ export function FvChart({ profile, color = colors.accent, height = 220 }: { prof
   const fTicks = [0, maxF / 2, maxF];
 
   return (
-    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={tr('力-速度曲线：F0 {f0} N/kg，v0 {v0} m/s', { f0: profile.f0.toFixed(1), v0: profile.v0.toFixed(2) })}>
+    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={tr('力-速度曲线：F0 {f0} N/kg，v0 {v0} m/s', { f0: decimal(profile.f0, 1), v0: decimal(profile.v0, 2) })}>
       {width > 0 && (
         <Svg width={width} height={height}>
           {fTicks.map((f) => (

@@ -7,7 +7,7 @@ import { Card } from '@/components/ui';
 import { openDunkTest } from '@/components/dunkTests';
 import { BLOCKS, MISSING_TEXT, RIM_CM, reachRuler, type DunkDiagnosis, type DunkMetric, type Missing } from '@/domain/dunk';
 import { gapHeading, touchNote } from '@/domain/dunkSummary';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { colors, fonts, radius, text } from '@/theme';
 
 function statusLabel(m: DunkMetric): string {
@@ -25,7 +25,7 @@ function statusLabel(m: DunkMetric): string {
 
 function valueText(m: DunkMetric): string {
   if (m.value == null) return '—';
-  const v = m.value.toFixed(m.decimals);
+  const v = decimal(m.value, m.decimals);
   return m.unit === '×' || m.unit === '%' ? `${v}${m.unit}` : m.unit ? `${v} ${m.unit}` : v;
 }
 
@@ -33,7 +33,7 @@ function targetText(m: DunkMetric): string {
   if (m.key === 'fv') return tr('均衡 {low}–{threshold}%', { low: m.low, threshold: m.threshold });
   const unit = m.unit === '×' ? '×' : m.unit ? ` ${m.unit}` : '';
   if (m.lowerIsBetter) return tr('目标 ≤ {threshold}{unit}', { threshold: m.threshold, unit });
-  const fixed = (x: number) => x.toFixed(Math.min(m.decimals, 1));
+  const fixed = (x: number) => decimal(x, Math.min(m.decimals, 1));
   return m.low === m.threshold ? tr('目标 ≥ {threshold}{unit}', { threshold: fixed(m.threshold), unit }) : tr('目标 ≥ {threshold}{unit}，< {low}{unit} 偏低', { threshold: fixed(m.threshold), unit, low: fixed(m.low) });
 }
 
@@ -74,7 +74,7 @@ export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagn
         <>
           <View style={styles.gapRow}>
             <Text style={styles.gapLabel}>{gapHeading(d).label}</Text>
-            <Text style={styles.gap}>{d.gapCm > 0 ? d.gapCm.toFixed(1) : `+${(-d.gapCm).toFixed(1)}`}</Text>
+            <Text style={styles.gap}>{d.gapCm > 0 ? decimal(d.gapCm, 1) : `+${decimal((-d.gapCm), 1)}`}</Text>
             <Text style={styles.gapUnit}>cm</Text>
           </View>
           {ruler && (
@@ -95,7 +95,7 @@ export function DunkHero({ diagnosis: d, standingReach }: { diagnosis: DunkDiagn
                 {rim != null && <View style={[styles.rimTick, { left: `${rim * 100}%` }]} />}
               </View>
               <View style={styles.rulerLabels}>
-                <Text style={styles.rulerText}>{tr('站立 {standingReach}', { standingReach: standingReach!.toFixed(0) })}</Text>
+                <Text style={styles.rulerText}>{tr('站立 {standingReach}', { standingReach: decimal(standingReach!, 0) })}</Text>
                 <Text style={styles.rulerText}>{tr('扣篮线 {line}', { line: d.line })}</Text>
               </View>
             </View>

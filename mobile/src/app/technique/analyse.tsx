@@ -20,7 +20,7 @@ import type { Pt } from '@/domain/pose';
 import { analyseTechnique, type Markers, type TechniqueProblem, type TechniqueResult } from '@/domain/technique';
 import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, planWindow, TAP_REACH_S, windowOf } from '@/domain/techniqueRead';
 import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT } from '@/domain/techniqueText';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -263,7 +263,7 @@ export default function TechniqueAnalyse() {
           {!running && (
             <View style={styles.badge} pointerEvents="none">
               <Text style={styles.badgeText}>#{frame}</Text>
-              <Text style={styles.badgeTime}>{(frame / fps).toFixed(2)} s</Text>
+              <Text style={styles.badgeTime}>{decimal((frame / fps), 2)} s</Text>
             </View>
           )}
         </View>
@@ -399,7 +399,7 @@ function Summary({ result, fps, reach }: { result: TechniqueResult; fps: number;
             <View key={k} style={styles.cell}>
               <Text style={styles.muted}>{t.name}</Text>
               <Text style={[styles.cellValue, i === 0 && { color: colors.accent }, m.status !== 'ok' && { color: colors.textMuted }]}>
-                {m.value.toFixed(t.decimals)}
+                {decimal(m.value, t.decimals)}
                 <Text style={styles.unit}> {t.unit}</Text>
               </Text>
               <Text style={styles.muted}>
@@ -410,7 +410,7 @@ function Summary({ result, fps, reach }: { result: TechniqueResult; fps: number;
           );
         })}
       </View>
-      <Text style={styles.reach}>{reach != null ? tr('今天助跑摸高 {reach} cm', { reach: reach.toFixed(APPROACH_TOUCH.decimals) }) : tr('今天还没测助跑摸高')}</Text>
+      <Text style={styles.reach}>{reach != null ? tr('今天助跑摸高 {reach} cm', { reach: decimal(reach, APPROACH_TOUCH.decimals) }) : tr('今天还没测助跑摸高')}</Text>
     </View>
   );
 }

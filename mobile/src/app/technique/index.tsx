@@ -14,7 +14,7 @@ import { shortDate, toISODate } from '@/domain/dates';
 import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { MetricKey } from '@/domain/technique';
 import { FLAG_TEXT, formatMeasured, METRIC_ORDER, METRIC_TEXT } from '@/domain/techniqueText';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 import { clearPoseRuns, downloadPoseLib, POSE_DOWNLOAD_BYTES, poseLibReady } from '@/media/poseLib';
 import { pruneTakes } from '@/media/takes';
 import { useAthlete } from '@/state/athlete';
@@ -172,7 +172,7 @@ export default function Technique() {
                     {METRIC_TEXT[k].name} {formatMeasured(k, t.metrics[k]!)}
                   </Text>
                 ))}
-                <Text style={styles.reach}>{dayReach != null ? tr('当天助跑摸高 {dayReach} cm', { dayReach: dayReach.toFixed(APPROACH_TOUCH.decimals) }) : tr('当天没测助跑摸高')}</Text>
+                <Text style={styles.reach}>{dayReach != null ? tr('当天助跑摸高 {dayReach} cm', { dayReach: decimal(dayReach, APPROACH_TOUCH.decimals) }) : tr('当天没测助跑摸高')}</Text>
               </Pressable>
               {expanded && (
                 <View style={{ gap: 6 }}>

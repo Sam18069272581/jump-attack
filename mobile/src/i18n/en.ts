@@ -1604,8 +1604,8 @@ export const en: Record<string, string> = {
 
   // domain/team.ts
   '反应力量': 'Reactive strength',
-  '站立摸高': 'standing reach',
-  '跳深': 'drop jump',
+  '站立摸高': 'Standing reach',
+  '跳深': 'Drop jump',
   '还没测摸高': 'No touch tested yet',
   '过线 {gap} cm': 'Passed by {gap} cm',
   '正好摸到线': 'Right on the line',
