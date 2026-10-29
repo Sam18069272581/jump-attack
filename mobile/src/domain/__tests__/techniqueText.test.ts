@@ -49,6 +49,13 @@ it('says the lines are off in words a player knows, and that the take-off’s ho
   expect(FLAG_TEXT['short-fall']).not.toMatch(/截短|比例/);
 });
 
+it('off the line, says the take-off angle is less sure too, but not after a hand on the rim cut the fall short', () => {
+  // Over a whole flight the scales apart can mean the parabola is bent, which moves the angle: its error takes in the gap.
+  // After a short fall the fit's own errors already take that in, and the angle's error doesn't widen.
+  expect(FLAG_TEXT['off-line']).toMatch(/起跳角度.*误差|误差.*起跳角度/);
+  expect(FLAG_TEXT['short-fall']).not.toMatch(/角度/);
+});
+
 it('when a hand on the rim cut the fall short, says so rather than that the lines are off, and that the lengths stay on the lines', () => {
   // Gravity's scale then rests on the rise alone: apart from the lines', it is no sign they were laid or tapped wrong.
   expect(FLAG_TEXT['short-fall']).toMatch(/挂筐|篮筐/);

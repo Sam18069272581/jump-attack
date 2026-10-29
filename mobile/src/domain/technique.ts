@@ -1151,6 +1151,8 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // as for the lengths: then braking's two speeds are both on theirs.
   const vxScale = flags.includes('short-fall') ? markerScale! : gravityScale;
   const vx = fx.c[1] * vxScale;
+  // On gravity's scale, as the vertical velocity always is: the pair the take-off's direction is read from (below).
+  const vxG = fx.c[1] * gravityScale;
   // Which way is up, to 1 SD (rad). Two lines each tapped a little high or low tilt it: the finger, and where along its
   // tape each was tapped, which moves it up or down as well as along (`tapOff`, across the floor). Without lines, the
   // floor fit is turned level, and a floor that isn't straight in the picture leaves up off by its false slope.
@@ -1191,17 +1193,29 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // fitted stretch: nothing over a whole flight, whose rise and fall cancel, but not so when the fit stops at a hang.
   const tMid = (pts.ts[0] + pts.ts[pts.ts.length - 1]) / 2;
   const vzErr = sqrt((G * off.err) ** 2 / fps ** 2 + (G * 1.96 * seApex) ** 2 + drift ** 2 + (1.96 * tilt * vx) ** 2) + unlevelled * abs(vx);
-  const vxOwnErr =
-    sqrt((1.96 * fx.se[1] * vxScale) ** 2 + (vx * (vxScale === gravityScale ? 1.96 * gravityScaleRel : linesRel)) ** 2 + drift ** 2 + (1.96 * tilt * (vz - G * tMid)) ** 2) +
-    unlevelled * abs(vz - G * tMid);
+  // The horizontal velocity's own error on a scale whose share error is `rel` (95 %).
+  const vxOwnErrOn = (scale: number, rel: number) =>
+    sqrt((1.96 * fx.se[1] * scale) ** 2 + (fx.c[1] * scale * rel) ** 2 + drift ** 2 + (1.96 * tilt * (vz - G * tMid)) ** 2) + unlevelled * abs(vz - G * tMid);
+  const vxGErr = vxOwnErrOn(gravityScale, 1.96 * gravityScaleRel);
+  const vxOwnErr = vxScale === gravityScale ? vxGErr : vxOwnErrOn(vxScale, linesRel);
   // Where the two scales are apart by more than `SCALE_MISMATCH`, which of them is right can't be told: on either, the
   // horizontal velocity may be off by the whole gap, added outright as for the lengths. With gravity's 13 % off lines laid
   // where the athlete ran (its parabola bent by twice the usual jitter), it read 0.39 m/s off with 0.09 stated.
   const vxErr = vxOwnErr + (flags.includes('off-line') ? abs(vx) * gap : 0);
-  const angle = (atan2(vz, vx) * 180) / PI;
-  // The two velocities' errors added outright, not in quadrature: both lean on the same fit, and a take-off timed early
-  // pulls them the same way.
-  const angleErr = (((vx * vzErr + vz * vxErr) / (vx * vx + vz * vz)) * 180) / PI;
+  // The take-off's direction is the rise over the run, both in the picture's own units: read from the fit's own pair on
+  // one scale, which cancels, it doesn't move with whichever scale is right. With the run on the lines' scale and the
+  // rise on gravity's after a short fall, it moved by the gap between them: lines where the athlete ran, at 60 fps with
+  // a hand on the rim at 0.25 s, had it 2.3° off the truth (median), 0.8° on one scale. The gap can still say the
+  // parabola is bent, which moves the rise in the picture and not the run. Over a whole flight jitter bends it beyond
+  // what its fit says (13 % in a clip of the probes', with 1.2 % stated), and the angle on it was 3° off: which of the
+  // two is right can't be told, and its error takes in the gap as the horizontal velocity's does. After a short fall
+  // the rise alone sets the parabola, and the fit's own errors, wide over so short a stretch, already take in how
+  // loosely: read on one scale with no gap added, the angle held the truth in 616 of 619 such clips of the probes'.
+  // The two velocities' errors are added outright, not in quadrature: both lean on the same fit, and a take-off timed
+  // early pulls them the same way.
+  const vxGAngleErr = vxGErr + (flags.includes('off-line') && !flags.includes('short-fall') ? abs(vxG) * gap : 0);
+  const angle = (atan2(vz, vxG) * 180) / PI;
+  const angleErr = (((vxG * vzErr + vz * vxGAngleErr) / (vxG * vxG + vz * vz)) * 180) / PI;
   const metrics: Partial<Record<MetricKey, Measured>> = {
     vz: measured('vz', vz, vzErr),
     vx: measured('vx', vx, vxErr),

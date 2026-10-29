@@ -665,6 +665,21 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     expect(misses(scene, result).filter((x) => /^(vx|angle):/.test(x))).toEqual([]);
   });
 
+  it('lines that put the scale 10 % off, at 60 fps with a hand on the rim at 0.25 s: the take-off angle, which rests on no scale, reads and is as sure as with lines that agree', () => {
+    // The angle is the rise over the run at take-off, both in the picture's own units: any one scale for the two cancels.
+    // Read with the run on the lines' scale and the rise on gravity's after the fall was cut short, it moved by the gap
+    // between them, 2.7° here, and its error took in the gap too. The markers still set how closely the toes are looked
+    // at (`roughScale`), which moves it by a few hundredths of a degree.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ fps: 60, hangAfterS: 0.25, seed });
+      const angleWith = (distanceM: number) => resultOf(analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: { ...scene.markers!, distanceM } }));
+      const [agree, off] = [angleWith(3), angleWith(3.3)];
+      expect([seed, off.flags.includes('off-line')]).toEqual([seed, true]);
+      const [a, b] = [agree.metrics.angle!, off.metrics.angle!];
+      expect([seed, Math.abs(b.value - a.value) < 0.1, Math.abs(b.error / a.error - 1) < 0.05, b.status]).toEqual([seed, true, true, a.status]);
+    }
+  });
+
   it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
     const scene = poseScene();
     const b = scene.markers!.b;
