@@ -1,5 +1,5 @@
 import type { IconName } from '@/components/Icon';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 
 import { cooperVo2max, rsaSummary, yoyoVo2max } from './conditioning';
 import { sprintLimits } from './interval';
@@ -326,15 +326,15 @@ export function getMetric(code: string): MetricDef | undefined {
 }
 
 export function formatValue(metric: MetricDef, value: number): string {
-  return value.toFixed(metric.decimals);
+  return decimal(value, metric.decimals);
 }
 
 /** The secondary figure for a session: the VO2max a run distance implies, or how much a sprint set slowed down. */
 export function resultNote(metric: MetricDef, result: number, attempts: number[] = []): string | null {
-  if (metric.estimate) return `${metric.estimate.name} ≈ ${metric.estimate.from(result).toFixed(metric.estimate.decimals)}`;
+  if (metric.estimate) return `${metric.estimate.name} ≈ ${decimal(metric.estimate.from(result), metric.estimate.decimals)}`;
   if (metric.aggregate === 'mean' && attempts.length > 1) {
     const s = rsaSummary(attempts);
-    return tr('最快 {best} {unit} · 递减 {sdec}%', { best: s.best.toFixed(metric.decimals), unit: metric.unit, sdec: s.sdec.toFixed(1) });
+    return tr('最快 {best} {unit} · 递减 {sdec}%', { best: decimal(s.best, metric.decimals), unit: metric.unit, sdec: decimal(s.sdec, 1) });
   }
   return null;
 }

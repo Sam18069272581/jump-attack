@@ -6,7 +6,7 @@ import { dayReadiness } from './readiness';
 import type { RecoveryDay } from './recovery';
 import { roundLoad, STOP_LOSS, velocityLoss, type LvProfile } from './vbt';
 
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 
 /**
  * The day's pass line for strength work. A day is read from three signals and takes the worst of them:
@@ -77,7 +77,7 @@ export function readDay(inputs: DayInputs, date: ISODate, ignore?: 'cmj' | 'warm
   const reasons = [...r.signals];
   if (r.recovery.status === 'fair') reasons.push(...r.recovery.warnings);
   if (warmup && (warmup.state === 'fair' || warmup.state === 'poor')) {
-    reasons.push(tr('热身 {load} kg 速度 {v} m/s，是 30 天均值的 {pct}%', { load: warmup.load, v: warmup.v.toFixed(2), pct: Math.round(warmup.pct * 100) }));
+    reasons.push(tr('热身 {load} kg 速度 {v} m/s，是 30 天均值的 {pct}%', { load: warmup.load, v: decimal(warmup.v, 2), pct: Math.round(warmup.pct * 100) }));
   }
   const knee = kneeStatus(inputs.pain ?? [], date);
   const kneeBad = knee?.light === 'red' || knee?.light === 'stop';
@@ -132,9 +132,9 @@ export function setTarget(baseKg: number, profile: LvProfile | null, state: DayS
  * slower than today's fastest set of the exercise.
  */
 export function checkSet(v: number, minV: number | null, fastestToday: number | null): { stop: boolean; why: string | null } {
-  if (minV != null && v < minV) return { stop: true, why: tr('这组 {v} m/s，低于今天的达标线 {minV} m/s', { v: v.toFixed(2), minV: minV.toFixed(2) }) };
+  if (minV != null && v < minV) return { stop: true, why: tr('这组 {v} m/s，低于今天的达标线 {minV} m/s', { v: decimal(v, 2), minV: decimal(minV, 2) }) };
   if (fastestToday != null && velocityLoss(fastestToday, v) >= STOP_LOSS) {
-    return { stop: true, why: tr('比今天最快的一组（{fastestToday} m/s）慢了 {fastestToday2}%', { fastestToday: fastestToday.toFixed(2), fastestToday2: Math.round(velocityLoss(fastestToday, v) * 100) }) };
+    return { stop: true, why: tr('比今天最快的一组（{fastestToday} m/s）慢了 {fastestToday2}%', { fastestToday: decimal(fastestToday, 2), fastestToday2: Math.round(velocityLoss(fastestToday, v) * 100) }) };
   }
   return { stop: false, why: null };
 }

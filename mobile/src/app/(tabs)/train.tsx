@@ -19,7 +19,7 @@ import { loadNote } from '@/domain/load';
 import { kneeStatus, type PainEntry } from '@/domain/pain';
 import { DELOAD_STREAK } from '@/domain/readiness';
 import { STATUS_TEXT } from '@/domain/recovery';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { acceptBlockSuggestion, declineBlockSuggestion, loadBlockAdvice, type BlockAdvice } from '@/state/blocks';
 import { loadTrainingLoads } from '@/state/load';
@@ -345,7 +345,7 @@ function ReadinessCard({ readiness, loads }: { readiness: DayReadiness; loads: L
       ? tr('{signals}，今天已自动减量', { signals: readiness.signals.join(tr('；')) })
       : readiness.readiness === 'unknown'
         ? tr('至少要有 3 天的 CMJ 记录才能判断，先照计划练。')
-        : tr('CMJ 比近期均值{p} {dropPct}%', { p: readiness.dropPct > 0 ? tr('低') : tr('高'), dropPct: Math.abs(readiness.dropPct * 100).toFixed(1) });
+        : tr('CMJ 比近期均值{p} {dropPct}%', { p: readiness.dropPct > 0 ? tr('低') : tr('高'), dropPct: decimal(Math.abs(readiness.dropPct * 100), 1) });
 
   return (
     <Card style={styles.readiness}>
@@ -357,7 +357,7 @@ function ReadinessCard({ readiness, loads }: { readiness: DayReadiness; loads: L
       </View>
       <Pressable accessibilityRole="button" accessibilityLabel={tr('再测一次 CMJ')} onPress={testCmj} style={{ alignItems: 'flex-end' }}>
         <Text style={styles.cmj}>
-          {readiness.today.toFixed(1)}
+          {decimal(readiness.today, 1)}
           <Text style={styles.cmjUnit}> cm</Text>
         </Text>
         <Text style={text.caption}>{tr('今日 CMJ 均值')}</Text>

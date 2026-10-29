@@ -10,7 +10,7 @@ import { rsaRating, rsaSummary, vo2maxBand, yoyoLabel, YOYO_SHUTTLE_M } from '@/
 import { trendBaseline } from '@/domain/assess';
 import { CONDITIONING_TESTS, formatValue } from '@/domain/metrics';
 import { assess, type Assessment } from '@/domain/verdict';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadPoorDaysOf, POOR_DAY_NOTE } from '@/state/training';
 import { colors, fonts, radius } from '@/theme';
@@ -56,7 +56,7 @@ export default function ConditioningResult() {
           <Text style={styles.heroLabel}>{def.name}</Text>
           {vo2 != null ? (
             <>
-              <Text style={[styles.heroValue, { color: def.color }]}>{vo2.toFixed(1)}</Text>
+              <Text style={[styles.heroValue, { color: def.color }]}>{decimal(vo2, 1)}</Text>
               <Text style={styles.heroUnit}>{tr('VO2max 估算 · ml/kg/min')}</Text>
               <Text style={styles.sub}>
                 {formatValue(def, result!)} m{def.code === 'yoyo_ir1' ? tr(' · 第 {result} 趟', { result: yoyoLabel(result! / YOYO_SHUTTLE_M) }) : ''}
@@ -73,9 +73,9 @@ export default function ConditioningResult() {
         {rsa && (
           <View style={styles.card}>
             <View style={styles.stats}>
-              <Stat value={rsa.best.toFixed(2)} label={tr('最快 s')} />
-              <Stat value={rsa.total.toFixed(2)} label={tr('总时间 s')} />
-              <Stat value={`${rsa.sdec.toFixed(1)}%`} label={tr('递减')} />
+              <Stat value={decimal(rsa.best, 2)} label={tr('最快 s')} />
+              <Stat value={decimal(rsa.total, 2)} label={tr('总时间 s')} />
+              <Stat value={`${decimal(rsa.sdec, 1)}%`} label={tr('递减')} />
             </View>
             {values.map((v, i) => (
               <View key={i} style={styles.barRow}>
@@ -83,7 +83,7 @@ export default function ConditioningResult() {
                 <View style={styles.barTrack}>
                   <View style={[styles.bar, { width: `${(v / slowest) * 100}%`, backgroundColor: v === rsa.best ? def.color : colors.textFaint }]} />
                 </View>
-                <Text style={styles.barValue}>{v.toFixed(2)}</Text>
+                <Text style={styles.barValue}>{decimal(v, 2)}</Text>
               </View>
             ))}
           </View>

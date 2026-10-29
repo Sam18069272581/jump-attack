@@ -10,7 +10,7 @@ import { Icon } from '@/components/Icon';
 import { PoseCamera, type CameraErrorStage, type CameraInfo, type PoseCameraHandle, type Recorded } from '@/components/PoseCamera';
 import { Button } from '@/components/ui';
 import { getMetric } from '@/domain/metrics';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { dropTake, dropTestTakes } from '@/media/takes';
 import { colors, fonts, radius } from '@/theme';
 
@@ -203,7 +203,7 @@ export default function TestCamera() {
         {rec.name === 'recorded' && (
           <View style={styles.panelWrap}>
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>{tr('录好了 · {seconds} 秒', { seconds: rec.take.seconds.toFixed(1) })}</Text>
+              <Text style={styles.panelTitle}>{tr('录好了 · {seconds} 秒', { seconds: decimal(rec.take.seconds, 1) })}</Text>
               <Button label={tr('用这一段')} onPress={() => use(rec.take)} />
               <Button label={tr('重拍')} variant="secondary" onPress={retake} />
             </View>

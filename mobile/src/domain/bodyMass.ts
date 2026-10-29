@@ -1,7 +1,7 @@
 import { daysBetween, type ISODate } from './dates';
 import { maxJumpHeight } from './fvp';
 
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 
 /**
  * Body mass in centimetres: how much higher the athlete would jump a few kilos lighter. The athlete's own
@@ -21,7 +21,7 @@ export function massGainCm(p: MassProfile, lossKg: number): number | null {
   return (maxJumpHeight(force / (p.massKg - lossKg), p.v0, p.hpoM) - maxJumpHeight(p.f0, p.v0, p.hpoM)) * 100;
 }
 
-const cm = (x: number) => x.toFixed(1);
+const cm = (x: number) => decimal(x, 1);
 
 export function massGainText(oneKg: number, threeKg: number): string {
   return tr('体重 −1 kg ≈ 摸高 +{oneKg} cm，−3 kg ≈ +{threeKg} cm（按你的力-速度曲线估算，假设减的是脂肪、力量和速度不变）', { oneKg: cm(oneKg), threeKg: cm(threeKg) });

@@ -7,7 +7,7 @@ import { Icon } from '@/components/Icon';
 import { Button } from '@/components/ui';
 import { athleteName } from '@/domain/athletes';
 import type { TeamRow } from '@/domain/team';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadTeam } from '@/state/team';
 import { colors, fonts, radius, text } from '@/theme';
@@ -41,7 +41,7 @@ export default function Team() {
 }
 
 function Member({ row, onPress }: { row: TeamRow; onPress: () => void }) {
-  const change = row.change == null ? null : `${row.change > 0 ? '+' : ''}${row.change.toFixed(1)}`;
+  const change = row.change == null ? null : `${row.change > 0 ? '+' : ''}${decimal(row.change, 1)}`;
   return (
     <Pressable accessibilityRole="button" accessibilityLabel={tr('看 {name} 的扣篮诊断', { name: athleteName(row.name) })} onPress={onPress} style={({ pressed }) => [styles.row, pressed && { opacity: 0.75 }]}>
       <Text style={styles.rank}>{row.rank ?? '–'}</Text>
@@ -53,7 +53,7 @@ function Member({ row, onPress }: { row: TeamRow; onPress: () => void }) {
         <Text style={styles.detail}>{row.weakness.startsWith(tr('先测')) ? row.weakness : tr('短板：{weakness}', { weakness: row.weakness })}</Text>
         {row.recent.length > 0 && (
           <View style={styles.line}>
-            <Text style={styles.detail}>{row.recent.map((t) => t.value.toFixed(1)).join(' · ')}</Text>
+            <Text style={styles.detail}>{row.recent.map((t) => decimal(t.value, 1)).join(' · ')}</Text>
             {change && <Text style={[styles.detail, { color: row.change! > 0 ? colors.good : row.change! < 0 ? colors.warn : colors.textMuted }]}>{change}</Text>}
             <Text style={[styles.detail, { marginLeft: 'auto' }]}>{shortDate(row.lastAt!)}</Text>
           </View>

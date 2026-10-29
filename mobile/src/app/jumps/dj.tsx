@@ -12,7 +12,7 @@ import { deleteTrial } from '@/db/repo';
 import { BOX_HEIGHTS_CM, dropJump, FAST_CONTACT_S, flightFromHeight, ladder, type DropJumpProblem } from '@/domain/dropJump';
 import { parseNumber } from '@/domain/entry';
 import { DROP_JUMP } from '@/domain/metrics';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
@@ -95,9 +95,9 @@ export default function DropJumpLadder() {
                     <View style={[styles.bar, { width: `${(s.rsi / scale) * 100}%`, backgroundColor: isBest ? COLOR : colors.textFaint }]} />
                   </View>
                   <View style={{ width: 92, alignItems: 'flex-end' }}>
-                    <Text style={[styles.rsi, isBest && { color: COLOR }]}>{s.rsi.toFixed(2)}</Text>
+                    <Text style={[styles.rsi, isBest && { color: COLOR }]}>{decimal(s.rsi, 2)}</Text>
                     <Text style={[text.caption, s.contactMs > FAST_CONTACT_S * 1000 && { color: colors.warn }]}>
-                      {s.contactMs} ms · {s.heightCm.toFixed(1)} cm
+                      {s.contactMs} ms · {decimal(s.heightCm, 1)} cm
                     </Text>
                   </View>
                 </View>
@@ -105,9 +105,9 @@ export default function DropJumpLadder() {
             })}
             <View style={styles.jumps}>
               {today.map((j) => (
-                <Pressable key={j.id} accessibilityRole="button" accessibilityLabel={tr('删除 {boxCm} cm 的 RSI {rsi}', { boxCm: j.boxCm, rsi: j.rsi.toFixed(2) })} onPress={() => remove(j)} style={styles.jump}>
+                <Pressable key={j.id} accessibilityRole="button" accessibilityLabel={tr('删除 {boxCm} cm 的 RSI {rsi}', { boxCm: j.boxCm, rsi: decimal(j.rsi, 2) })} onPress={() => remove(j)} style={styles.jump}>
                   <Text style={styles.jumpText}>
-                    {j.boxCm}: {j.rsi.toFixed(2)}
+                    {j.boxCm}: {decimal(j.rsi, 2)}
                   </Text>
                   <Icon name="trash" size={12} color={colors.textMuted} />
                 </Pressable>
@@ -123,7 +123,7 @@ export default function DropJumpLadder() {
             <Text style={styles.bestBox}>
               {result.best.boxCm} <Text style={styles.unit}>cm</Text>
             </Text>
-            <Text style={text.body}>{tr('这个高度的 RSI 最高（{rsi}）。做跳深训练就用这个高度的箱子。', { rsi: result.best.rsi.toFixed(2) })}</Text>
+            <Text style={text.body}>{tr('这个高度的 RSI 最高（{rsi}）。做跳深训练就用这个高度的箱子。', { rsi: decimal(result.best.rsi, 2) })}</Text>
             {result.tryHigher && <Text style={text.muted}>{tr('RSI 在你试过的最高一级还在涨，下次可以再加一级看看。')}</Text>}
             {result.slowContact && (
               <Text style={[text.muted, { color: colors.warn }]}>{tr('最好那一跳触地 {contactMs} ms，超过 {FAST_CONTACT_S} ms，用的是慢速反弹。先降低箱高，练「一碰就走」的快速离地。', { contactMs: result.best.contactMs, FAST_CONTACT_S: FAST_CONTACT_S * 1000 })}</Text>

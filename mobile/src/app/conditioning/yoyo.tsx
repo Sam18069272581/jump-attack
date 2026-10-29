@@ -7,7 +7,7 @@ import { countIn, useCues, useTimeline, type Cue } from '@/components/conditioni
 import { confirmStop, RunningScreen, runStyles, Steps, Stepper, useSaveResult } from '@/components/conditioning/ui';
 import { Button } from '@/components/ui';
 import { clock, YOYO_IR1, yoyoCompletedAt, yoyoDistance, yoyoLabel, yoyoStateAt, yoyoVo2max } from '@/domain/conditioning';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 import { colors, fonts } from '@/theme';
 
 const LEAD_IN_S = 5;
@@ -92,7 +92,7 @@ function Running({ startAt, onStop }: { startAt: number; onStop: (completed: num
             {shuttle.level}.{shuttle.inLevel}
           </Text>
           <Text style={[runStyles.phase, { color: phaseColor }]}>{phaseText}</Text>
-          <Text style={styles.countdown}>{toBeep.toFixed(1)}</Text>
+          <Text style={styles.countdown}>{decimal(toBeep, 1)}</Text>
           <View style={runStyles.stats}>
             <View style={runStyles.stat}>
               <Text style={runStyles.statValue}>{yoyoDistance(yoyoCompletedAt(t))}</Text>
@@ -123,7 +123,7 @@ function Confirm({ completed, onChange }: { completed: number; onChange: (n: num
           <Text style={runStyles.label}>{tr('最后完成的一趟')}</Text>
           <Text style={runStyles.big}>{yoyoLabel(completed)}</Text>
           <Text style={styles.distance}>
-            {distance} m · VO2max ≈ {yoyoVo2max(distance).toFixed(1)}
+            {distance} m · VO2max ≈ {decimal(yoyoVo2max(distance), 1)}
           </Text>
         </View>
         <Stepper label={tr('完成趟数')} value={completed} onChange={onChange} max={YOYO_IR1.length} />

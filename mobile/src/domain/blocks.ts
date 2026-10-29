@@ -5,7 +5,7 @@ import { THRESHOLDS, type BlockType, type DunkDiagnosis, type Missing } from './
 import { DEFERRED_STRENGTH_REASON, defersStrength } from './goal';
 import { blockPosition, calendarDate, PHASE_NAMES, planPosition, withBlock, type BlockPosition, type PlanBlock, type PlanSettings, type PlanTemplate } from './plan';
 
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 
 /** The block template additions a diagnosis calls for (see BLOCK_TEMPLATES extras in templates.ts). */
 export function blockExtras(d: DunkDiagnosis | null, type: BlockType): string[] {
@@ -141,14 +141,14 @@ export function advanceSuggestion(t: PlanTemplate, plan: PlanSettings, today: IS
   if (during.length < 2 || !during.every((r) => clearlyBetter(before, r.value))) return null;
 
   const phase = weeks[target].retest ? tr('减量复测周') : PHASE_NAMES[weeks[target].phase];
-  const values = during.map((r) => r.value.toFixed(1)).join(tr('、'));
+  const values = during.map((r) => decimal(r.value, 1)).join(tr('、'));
   return {
     kind: 'advance',
     key,
     type: pos.type,
     week: target,
     phase,
-    reason: tr('摸高连续两次明显进步（{values} cm，之前平均 {before} cm），适应得比计划快，可以提前进入{phase}。', { values, before: mean(before).toFixed(1), phase }),
+    reason: tr('摸高连续两次明显进步（{values} cm，之前平均 {before} cm），适应得比计划快，可以提前进入{phase}。', { values, before: decimal(mean(before), 1), phase }),
   };
 }
 

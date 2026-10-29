@@ -9,7 +9,7 @@ import { greeting } from '@/domain/athletes';
 import { RIM_CM, reachRuler, type DunkDiagnosis } from '@/domain/dunk';
 import { gapHeading, touchSpread } from '@/domain/dunkSummary';
 import { reachVanes, type Vane } from '@/domain/vanes';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { colors, fonts, text } from '@/theme';
 
 /** Height of the hero; with the status bar above it, it stays within the top half of the screen. */
@@ -23,7 +23,7 @@ const VANE_SHORT = 140;
 const IDLE_OPACITY = 0.12;
 const SWEPT_OPACITY = 0.06;
 
-const cm = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+const cm = (v: number) => (Number.isInteger(v) ? String(v) : decimal(v, 1));
 
 /**
  * The top of the home screen: a jump-and-reach tester (Vertec) drawn faintly behind the numbers. On opening, the vanes
@@ -84,7 +84,7 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
         style={StyleSheet.absoluteFill}
         accessible
         accessibilityRole="image"
-        accessibilityLabel={known ? tr('摸高器：{touchLabel} {touch} cm，扣篮线 {line} cm，{p}', { touchLabel, touch: cm(touch!), line: d.line, p: d.gapCm! > 0 ? tr('还差 {gapCm} cm', { gapCm: d.gapCm!.toFixed(1) }) : tr('已过 {gapCm} cm', { gapCm: (-d.gapCm!).toFixed(1) }) }) : tr('摸高器：扣篮线 {line} cm，还没有摸高', { line: d.line })}
+        accessibilityLabel={known ? tr('摸高器：{touchLabel} {touch} cm，扣篮线 {line} cm，{p}', { touchLabel, touch: cm(touch!), line: d.line, p: d.gapCm! > 0 ? tr('还差 {gapCm} cm', { gapCm: decimal(d.gapCm!, 1) }) : tr('已过 {gapCm} cm', { gapCm: decimal((-d.gapCm!), 1) }) }) : tr('摸高器：扣篮线 {line} cm，还没有摸高', { line: d.line })}
       >
         {layout.vanes.map((v, i) => (
           <VaneBar key={v.cm} v={v} top={y(v.y) - 2} sweep={sweep} pulse={pulse} order={layout.vanes.length - 1 - i} swept={swept} />
@@ -139,7 +139,7 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
           <>
             <Text style={[text.muted, styles.gapLabel]}>{gapHeading(d).label}</Text>
             <View style={styles.gapRow}>
-              <Text style={styles.gap}>{d.gapCm! > 0 ? d.gapCm!.toFixed(1) : `+${(-d.gapCm!).toFixed(1)}`}</Text>
+              <Text style={styles.gap}>{d.gapCm! > 0 ? decimal(d.gapCm!, 1) : `+${decimal((-d.gapCm!), 1)}`}</Text>
               <Text style={styles.gapUnit}>cm</Text>
             </View>
             <View

@@ -1,6 +1,6 @@
 import type { BlockType, DunkDiagnosis, Missing } from './dunk';
 
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 
 /**
  * Several athletes on one phone: a coach's board of how far each is from their own dunk line and what holds them back,
@@ -39,10 +39,10 @@ function gapText(d: DunkDiagnosis): string {
   const gap = d.gapCm;
   if (gap == null) return tr('还没测摸高');
   let text: string;
-  if (d.verdict === 'over') text = gap < 0 ? tr('过线 {gap} cm', { gap: (-gap).toFixed(1) }) : tr('正好摸到线');
-  else if (d.verdict === 'close') text = gap <= 0 ? tr('摸到线 · 在误差内') : tr('差 {gap} cm · 在误差内', { gap: gap.toFixed(1) });
+  if (d.verdict === 'over') text = gap < 0 ? tr('过线 {gap} cm', { gap: decimal((-gap), 1) }) : tr('正好摸到线');
+  else if (d.verdict === 'close') text = gap <= 0 ? tr('摸到线 · 在误差内') : tr('差 {gap} cm · 在误差内', { gap: decimal(gap, 1) });
   // A touch a hair under the line rounds to a 0.0 cm gap.
-  else text = gap > 0 ? tr('差 {gap} cm', { gap: gap.toFixed(1) }) : tr('差不到 0.1 cm');
+  else text = gap > 0 ? tr('差 {gap} cm', { gap: decimal(gap, 1) }) : tr('差不到 0.1 cm');
   return d.touch.source === 'standing' ? tr('{text} · 原地估算', { text }) : text;
 }
 

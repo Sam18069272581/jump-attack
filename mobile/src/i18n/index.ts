@@ -53,7 +53,21 @@ export function langFromLocales(tags: string[]): Lang {
 export function tr(zh: string, params?: Record<string, unknown>): string {
   const text = current === 'zh' ? zh : (DICTIONARIES[current][zh] ?? zh);
   if (!params) return text;
-  return text.replace(/\{(\w+)\}/g, (whole, name: string) => (name in params ? String(params[name]) : whole));
+  return text.replace(/\{(\w+)\}/g, (whole, name: string) => (name in params ? value(params[name]) : whole));
+}
+
+/** A number, or text that is only a number like "1.75", is written with a decimal comma in German. */
+const NUMBER_TEXT = /^[-+−]?\d+\.\d+$/;
+
+function value(v: unknown): string {
+  const s = String(v);
+  return current === 'de' && (typeof v === 'number' || (typeof v === 'string' && NUMBER_TEXT.test(v))) ? s.replace('.', ',') : s;
+}
+
+/** `x.toFixed(digits)` with the decimal separator of the current language: 1.75 in Chinese and English, 1,75 in German. */
+export function decimal(x: number, digits: number): string {
+  const s = x.toFixed(digits);
+  return current === 'de' ? s.replace('.', ',') : s;
 }
 
 /**

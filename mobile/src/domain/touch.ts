@@ -7,7 +7,7 @@
  */
 import { APPROACH_TOUCH } from './metrics';
 
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 
 export type Calibration = { touchedCm: number; reachCm: number; jumpCm: number };
 
@@ -33,7 +33,7 @@ export function calibrationProblem(touchedCm: number, videoCm: number): string |
   const [lo, hi] = APPROACH_TOUCH.range!;
   if (touchedCm < lo || touchedCm > hi) return tr('摸高一般在 {lo}–{hi} cm，检查一下刻度', { lo, hi });
   const gap = Math.abs(touchedCm - videoCm);
-  if (gap > MAX_CALIBRATION_GAP_CM) return tr('和录像算出的 {videoCm} cm 差了 {gap} cm，不像同一跳，检查一下刻度', { videoCm: videoCm.toFixed(1), gap: Math.round(gap) });
+  if (gap > MAX_CALIBRATION_GAP_CM) return tr('和录像算出的 {videoCm} cm 差了 {gap} cm，不像同一跳，检查一下刻度', { videoCm: decimal(videoCm, 1), gap: Math.round(gap) });
   return null;
 }
 

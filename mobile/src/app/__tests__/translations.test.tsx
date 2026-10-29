@@ -115,6 +115,16 @@ describe.each<[string, Lang]>([
     // The language picker names each language in itself, 中文 included.
     expect(lines.filter((l) => CHINESE.test(l) && l !== '中文')).toEqual([]);
   });
+
+  if (lang === 'de') {
+    it.each(screens)('writes decimal commas on the %s screen', async (_name, screen) => {
+      mockParams = { date: today };
+      setLang(lang);
+      const r = await render(screen());
+      // A decimal point between digits, but not a date like 29.10.
+      expect(shown(r.root).filter((l) => /\d\.\d+\b(?!\.)/.test(l))).toEqual([]);
+    });
+  }
 });
 
 it('shows the same screens in Chinese by default', async () => {

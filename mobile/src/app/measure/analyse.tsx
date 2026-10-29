@@ -22,7 +22,7 @@ import { analyseJumps, FLAG_TEXT, type JumpEvents, type JumpResult } from '@/dom
 import { nextClip, queuedCount } from '@/domain/importQueue';
 import { returnsToLogger } from '@/domain/marking';
 import { best as bestOf, getMetric, type MetricDef } from '@/domain/metrics';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -350,12 +350,12 @@ function RangeRow({ label, value, max, fps, onChange }: { label: string; value: 
         maximumTrackTintColor={colors.border}
         thumbTintColor={colors.text}
       />
-      <Text style={styles.rangeTime}>{(value / fps).toFixed(2)} s</Text>
+      <Text style={styles.rangeTime}>{decimal((value / fps), 2)} s</Text>
     </View>
   );
 }
 
-const cm = (x: number) => x.toFixed(1);
+const cm = (x: number) => decimal(x, 1);
 const ms = (s: number) => String(Math.round(s * 1000));
 
 function Summary({ def, kind, analysis, fps }: { def: MetricDef; kind: 'jump' | 'drop' | 'repeat'; analysis: ReturnType<typeof analyseJumps>; fps: number }) {
@@ -365,11 +365,11 @@ function Summary({ def, kind, analysis, fps }: { def: MetricDef; kind: 'jump' | 
   const err = (counted.find((j) => j.gctS != null) ?? counted[0])?.error;
   const cells: { label: string; value: string; unit: string; main?: boolean }[] = [];
   if (kind === 'repeat') {
-    if (s.rsi105 != null) cells.push({ label: '10/5 RSI', value: s.rsi105.toFixed(2), unit: '', main: true });
-    if (s.gctCv != null) cells.push({ label: 'GCT-CV', value: s.gctCv.toFixed(1), unit: '%' });
-    if (s.driCv != null) cells.push({ label: 'DRI-CV', value: s.driCv.toFixed(1), unit: '%' });
+    if (s.rsi105 != null) cells.push({ label: '10/5 RSI', value: decimal(s.rsi105, 2), unit: '', main: true });
+    if (s.gctCv != null) cells.push({ label: 'GCT-CV', value: decimal(s.gctCv, 1), unit: '%' });
+    if (s.driCv != null) cells.push({ label: 'DRI-CV', value: decimal(s.driCv, 1), unit: '%' });
   } else if (kind === 'drop') {
-    if (s.rsi) cells.push({ label: tr('最好 RSI'), value: s.rsi.best.toFixed(2), unit: '', main: true });
+    if (s.rsi) cells.push({ label: tr('最好 RSI'), value: decimal(s.rsi.best, 2), unit: '', main: true });
     if (s.gctS) cells.push({ label: tr('最短触地'), value: ms(s.gctS.best), unit: 'ms' });
   } else if (s.jhCm) {
     cells.push({ label: tr('最高'), value: cm(s.jhCm.best), unit: 'cm', main: true });
@@ -395,12 +395,12 @@ function Summary({ def, kind, analysis, fps }: { def: MetricDef; kind: 'jump' | 
       )}
       {kind !== 'jump' && (s.rsr || s.dri) && (
         <Text style={styles.muted}>
-          {s.rsr ? tr('平均 RSR {mean}', { mean: s.rsr.mean.toFixed(2) }) : ''}
-          {s.dri ? tr(' · 平均 DRI {mean}（新指标，还没有常模，只看自己的变化）', { mean: s.dri.mean.toFixed(2) }) : ''}
+          {s.rsr ? tr('平均 RSR {mean}', { mean: decimal(s.rsr.mean, 2) }) : ''}
+          {s.dri ? tr(' · 平均 DRI {mean}（新指标，还没有常模，只看自己的变化）', { mean: decimal(s.dri.mean, 2) }) : ''}
         </Text>
       )}
       {err && (
-        <Text style={styles.muted}>{tr('误差：每个关键帧 ±1 帧（{p} ms），跳高约 ±{jhCm} cm{p2}', { p: Math.round(1000 / fps), jhCm: err.jhCm.toFixed(1), p2: err.gctS ? tr('，触地 ±{gctS} ms', { gctS: Math.round(err.gctS * 1000) }) : '' })}</Text>
+        <Text style={styles.muted}>{tr('误差：每个关键帧 ±1 帧（{p} ms），跳高约 ±{jhCm} cm{p2}', { p: Math.round(1000 / fps), jhCm: decimal(err.jhCm, 1), p2: err.gctS ? tr('，触地 ±{gctS} ms', { gctS: Math.round(err.gctS * 1000) }) : '' })}</Text>
       )}
     </View>
   );
@@ -431,7 +431,7 @@ function JumpCard({
     { key: 'takeoff', name: tr('起跳'), color: colors.accent },
     { key: 'landing', name: tr('落地'), color: colors.rim },
   ];
-  const line = [`${cm(jump.jhCm)} cm`, tr('滞空 {ftS} ms', { ftS: ms(jump.ftS) }), ...(jump.gctS != null ? [tr('触地 {gctS} ms', { gctS: ms(jump.gctS) }), `RSI ${jump.rsi!.toFixed(2)}`, `RSR ${jump.rsr!.toFixed(2)}`] : []), ...(jump.dri != null ? [`DRI ${jump.dri.toFixed(2)}`] : [])];
+  const line = [`${cm(jump.jhCm)} cm`, tr('滞空 {ftS} ms', { ftS: ms(jump.ftS) }), ...(jump.gctS != null ? [tr('触地 {gctS} ms', { gctS: ms(jump.gctS) }), `RSI ${decimal(jump.rsi!, 2)}`, `RSR ${decimal(jump.rsr!, 2)}`] : []), ...(jump.dri != null ? [`DRI ${decimal(jump.dri, 2)}`] : [])];
   const excludable = jump.flags.some((f) => f === 'edge' || f === 'outlier');
   return (
     <View style={[styles.card, !jump.counted && styles.dimmed]}>
@@ -469,15 +469,15 @@ function JumpCard({
 function HistoryCard({ def, previous, today, verdict, te }: { def: MetricDef; previous: number[]; today: number; verdict: RealChange; te: number | null }) {
   const d = def.decimals;
   const u = def.unit ? ` ${def.unit}` : '';
-  const delta = `${verdict.delta >= 0 ? '+' : '−'}${Math.abs(verdict.delta).toFixed(d)}${u}`;
+  const delta = `${verdict.delta >= 0 ? '+' : '−'}${decimal(Math.abs(verdict.delta), d)}${u}`;
   const text = {
-    better: tr('比之前平均 {delta}，超过最小可信变化 {bar}{u}：是真进步', { delta, bar: verdict.bar.toFixed(d), u }),
-    worse: tr('比之前平均 {delta}，超过最小可信变化 {bar}{u}：确实下降了', { delta, bar: verdict.bar.toFixed(d), u }),
-    noise: tr('比之前平均 {delta}，没超过最小可信变化 {bar}{u}：还在噪声里', { delta, bar: verdict.bar.toFixed(d), u }),
+    better: tr('比之前平均 {delta}，超过最小可信变化 {bar}{u}：是真进步', { delta, bar: decimal(verdict.bar, d), u }),
+    worse: tr('比之前平均 {delta}，超过最小可信变化 {bar}{u}：确实下降了', { delta, bar: decimal(verdict.bar, d), u }),
+    noise: tr('比之前平均 {delta}，没超过最小可信变化 {bar}{u}：还在噪声里', { delta, bar: decimal(verdict.bar, d), u }),
     unknown: tr('再测几次（至少 3 次）就能判断是不是真进步'),
   }[verdict.verdict];
   const tone = verdict.verdict === 'better' ? colors.good : verdict.verdict === 'worse' ? colors.warn : colors.textSoft;
-  const points = [...previous.slice(-7), today].map((v, i, a) => ({ label: i === a.length - 1 ? tr('这次') : '', value: v, display: v.toFixed(d) }));
+  const points = [...previous.slice(-7), today].map((v, i, a) => ({ label: i === a.length - 1 ? tr('这次') : '', value: v, display: decimal(v, d) }));
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>{tr('同动作历史')}</Text>
@@ -485,7 +485,7 @@ function HistoryCard({ def, previous, today, verdict, te }: { def: MetricDef; pr
       <Text style={[styles.verdict, { color: tone }]}>{text}</Text>
       {verdict.verdict !== 'unknown' && (
         <Text style={styles.muted}>
-          {te == null ? tr('还没有一次测多跳的记录，测量噪声先按历史波动估。') : tr('测量噪声（同一次测多跳的波动）{te}{u}，单次重测要差 {mdc}{u} 以上才不是噪声。', { te: te.toFixed(d), u, mdc: verdict.mdc!.toFixed(d) })}
+          {te == null ? tr('还没有一次测多跳的记录，测量噪声先按历史波动估。') : tr('测量噪声（同一次测多跳的波动）{te}{u}，单次重测要差 {mdc}{u} 以上才不是噪声。', { te: decimal(te, d), u, mdc: decimal(verdict.mdc!, d) })}
         </Text>
       )}
     </View>

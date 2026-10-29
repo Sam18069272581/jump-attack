@@ -4,7 +4,7 @@ import { Icon } from '@/components/Icon';
 import { weekdayNames, type ISODate } from '@/domain/dates';
 import { FATIGUE_DROP } from '@/domain/assess';
 import { formatPrescription, KIND_NAMES, type Adjustment, type SessionTemplate } from '@/domain/plan';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { colors, fonts, radius } from '@/theme';
 
 export type DayStatus = 'rest' | 'planned' | 'started' | 'done';
@@ -97,7 +97,7 @@ export function AdjustmentNote({
     ?.split(tr('；'))
     .filter((r) => !kneeReasons.includes(r))
     .join(tr('；'));
-  const why = fatigueReason || tr('CMJ 比近期均值低 {p}（超过 {FATIGUE_DROP}%）', { p: dropPct != null ? `${(dropPct * 100).toFixed(1)}%` : tr('较多'), FATIGUE_DROP: FATIGUE_DROP * 100 });
+  const why = fatigueReason || tr('CMJ 比近期均值低 {p}（超过 {FATIGUE_DROP}%）', { p: dropPct != null ? `${decimal((dropPct * 100), 1)}%` : tr('较多'), FATIGUE_DROP: FATIGUE_DROP * 100 });
   return (
     <>
       {fatigue.length > 0 && (

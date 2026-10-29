@@ -1,8 +1,8 @@
-import { getLang, htmlTexts, langFromLocales, localizeHtml, localized, setLang, speechLanguage, tr } from '..';
+import { decimal, getLang, htmlTexts, langFromLocales, localizeHtml, localized, setLang, speechLanguage, tr } from '..';
 
 // The mechanism, with dictionaries of its own; the real ones are checked in dictionaries.test.ts.
 jest.mock('../en', () => ({ en: { 我的: 'Me', '导出 {name} 的数据': 'Export {name}’s data', 引号: `it's <b>` } }));
-jest.mock('../de', () => ({ de: { 我的: 'Ich', '导出 {name} 的数据': 'Daten von {name} exportieren' } }));
+jest.mock('../de', () => ({ de: { 我的: 'Ich', '导出 {name} 的数据': 'Daten von {name} exportieren', '{r} 倍': 'das {r}-Fache' } }));
 
 afterEach(() => setLang('zh'));
 
@@ -34,6 +34,28 @@ describe('tr', () => {
   it('falls back to the Chinese text when a translation is missing', () => {
     setLang('en');
     expect(tr('这句没有翻译 {n}', { n: 1 })).toBe('这句没有翻译 1');
+  });
+});
+
+describe('decimal numbers', () => {
+  it('writes a decimal comma in German and a point otherwise', () => {
+    expect(decimal(1.754, 2)).toBe('1.75');
+    setLang('en');
+    expect(decimal(1.754, 2)).toBe('1.75');
+    setLang('de');
+    expect(decimal(1.754, 2)).toBe('1,75');
+    expect(decimal(-12.8, 1)).toBe('-12,8');
+    expect(decimal(305, 0)).toBe('305');
+  });
+
+  it('gives German placeholder values a decimal comma when they are numbers, and leaves other text alone', () => {
+    setLang('de');
+    expect(tr('{r} 倍', { r: '1.75' })).toBe('das 1,75-Fache');
+    expect(tr('{r} 倍', { r: 3.5 })).toBe('das 3,5-Fache');
+    expect(tr('{r} 倍', { r: '29.10.' })).toBe('das 29.10.-Fache');
+    expect(tr('{r} 倍', { r: 'v1.2' })).toBe('das v1.2-Fache');
+    setLang('en');
+    expect(tr('{a}{b}', { a: 3.5, b: '1.75' })).toBe('3.51.75');
   });
 });
 

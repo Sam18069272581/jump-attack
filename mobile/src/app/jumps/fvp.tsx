@@ -14,7 +14,7 @@ import { deleteTrial } from '@/db/repo';
 import { parseNumber } from '@/domain/entry';
 import { bandOf, EXERCISE_KINDS, fvProfile, heightPerLoad, MIN_R2, pushOff, suggestedLoads, suggestion, type FvProfile } from '@/domain/fvp';
 import { LOADED_SJ } from '@/domain/metrics';
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
@@ -120,13 +120,13 @@ export default function ForceVelocity() {
                   {today
                     .filter((j) => j.loadKg === p.loadKg)
                     .map((j) => (
-                      <Pressable key={j.id} accessibilityRole="button" accessibilityLabel={tr('删除 {loadKg} kg 的 {heightCm} cm', { loadKg: p.loadKg, heightCm: j.heightCm.toFixed(1) })} onPress={() => remove(j)} style={styles.jump}>
-                        <Text style={styles.jumpText}>{j.heightCm.toFixed(1)}</Text>
+                      <Pressable key={j.id} accessibilityRole="button" accessibilityLabel={tr('删除 {loadKg} kg 的 {heightCm} cm', { loadKg: p.loadKg, heightCm: decimal(j.heightCm, 1) })} onPress={() => remove(j)} style={styles.jump}>
+                        <Text style={styles.jumpText}>{decimal(j.heightCm, 1)}</Text>
                         <Icon name="trash" size={12} color={colors.textMuted} />
                       </Pressable>
                     ))}
                 </View>
-                <Text style={styles.mean}>{p.heightCm.toFixed(1)} cm</Text>
+                <Text style={styles.mean}>{decimal(p.heightCm, 1)} cm</Text>
               </View>
             ))}
             <Text style={text.caption}>{tr('右边是每级最好两跳的平均，用来算曲线。')}</Text>
@@ -181,7 +181,7 @@ export default function ForceVelocity() {
             <Text style={text.section}>{tr('历次测试 · FV%（100 = 均衡）')}</Text>
             <TrendChart color={COLOR} points={history.slice(-12).map((s) => ({ label: shortDate(s.startedAt), value: s.profile.fvPct, display: String(Math.round(s.profile.fvPct)) }))} />
             <Text style={text.section}>{tr('Pmax（W/kg）')}</Text>
-            <TrendChart color={colors.accent} points={history.slice(-12).map((s) => ({ label: shortDate(s.startedAt), value: s.profile.pmax, display: s.profile.pmax.toFixed(1) }))} />
+            <TrendChart color={colors.accent} points={history.slice(-12).map((s) => ({ label: shortDate(s.startedAt), value: s.profile.pmax, display: decimal(s.profile.pmax, 1) }))} />
             <Text style={text.caption}>{tr('按现在的体重和蹬伸距离重算。')}</Text>
           </Card>
         )}
@@ -207,16 +207,16 @@ function ProfileCard({ profile, isToday, date, hpo }: { profile: FvProfile; isTo
         <Text style={text.caption}>{tr('同样功率下跳得最高的曲线')}</Text>
       </View>
       <View style={styles.stats}>
-        <Stat label="F0" value={profile.f0.toFixed(1)} unit="N/kg" />
-        <Stat label="v0" value={profile.v0.toFixed(2)} unit="m/s" />
-        <Stat label="Pmax" value={profile.pmax.toFixed(1)} unit="W/kg" />
+        <Stat label="F0" value={decimal(profile.f0, 1)} unit="N/kg" />
+        <Stat label="v0" value={decimal(profile.v0, 2)} unit="m/s" />
+        <Stat label="Pmax" value={decimal(profile.pmax, 1)} unit="W/kg" />
         <Stat label="FV%" value={String(Math.round(profile.fvPct))} unit="" main />
       </View>
       <Text style={text.body}>{tr('{SIDE_TEXT}（{name}）。', { SIDE_TEXT: SIDE_TEXT[band.side], name: band.name })}</Text>
       {unloaded && profile.optimalHeightCm > unloaded.heightCm + 0.5 && (
-        <Text style={text.muted}>{tr('功率不变、只把曲线调到最优，徒手蹲跳约从 {heightCm} 到 {optimalHeightCm} cm；更大的进步要靠 Pmax 本身提高。', { heightCm: unloaded.heightCm.toFixed(1), optimalHeightCm: profile.optimalHeightCm.toFixed(1) })}</Text>
+        <Text style={text.muted}>{tr('功率不变、只把曲线调到最优，徒手蹲跳约从 {heightCm} 到 {optimalHeightCm} cm；更大的进步要靠 Pmax 本身提高。', { heightCm: decimal(unloaded.heightCm, 1), optimalHeightCm: decimal(profile.optimalHeightCm, 1) })}</Text>
       )}
-      {profile.r2 < MIN_R2 && <Text style={[text.muted, { color: colors.warn }]}>{tr('几个点不太在一条直线上（R² {r2}），检查有没有标错帧或跳之前往下顿了，可以把偏离的那级重跳。', { r2: profile.r2.toFixed(2) })}</Text>}
+      {profile.r2 < MIN_R2 && <Text style={[text.muted, { color: colors.warn }]}>{tr('几个点不太在一条直线上（R² {r2}），检查有没有标错帧或跳之前往下顿了，可以把偏离的那级重跳。', { r2: decimal(profile.r2, 2) })}</Text>}
       <Text style={text.caption}>{tr('按 {length} 级负重、蹬伸距离 {hpo} cm 计算（Samozino 简易法）。', { length: profile.points.length, hpo: Math.round(hpo * 100) })}</Text>
     </Card>
   );

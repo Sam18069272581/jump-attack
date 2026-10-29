@@ -4,7 +4,7 @@
  */
 import type { Measured, MetricKey, QualityFlag, TechniqueProblem } from './technique';
 
-import { localized, tr } from '@/i18n';
+import { decimal, localized, tr } from '@/i18n';
 
 export type MetricText = { name: string; unit: string; decimals: number; hint: string };
 
@@ -27,14 +27,14 @@ export const METRIC_ORDER = Object.keys(METRIC_TEXT) as MetricKey[];
 /** A figure's error to the figure's precision, never less than one unit of the last digit: "± 0" would claim it exact. */
 export function formatError(key: MetricKey, error: number): string {
   const d = METRIC_TEXT[key].decimals;
-  return Math.max(error, 10 ** -d).toFixed(d);
+  return decimal(Math.max(error, 10 ** -d), d);
 }
 
 /** "3.30 ± 0.04 m/s"; a figure less sure than its pass line says so instead of passing for a number to trust. */
 export function formatMeasured(key: MetricKey, m: Measured): string {
   const t = METRIC_TEXT[key];
   const sep = t.unit === '°' ? '' : ' ';
-  const text = `${m.value.toFixed(t.decimals)} ± ${formatError(key, m.error)}${sep}${t.unit}`;
+  const text = `${decimal(m.value, t.decimals)} ± ${formatError(key, m.error)}${sep}${t.unit}`;
   return m.status === 'ok' ? text : tr('{text}（不够准）', { text });
 }
 

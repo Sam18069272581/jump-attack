@@ -7,7 +7,7 @@ import type { DayState, DunkDiagnosis, DunkMetric, MetricStatus } from '@/domain
 import { formatMetric, stateLine } from '@/domain/dunkSummary';
 import { changeTone, formatValue, type MetricDef } from '@/domain/metrics';
 import { previousSameTiming, TIMING_NOTE, type Timing } from '@/domain/timing';
-import { tr } from '@/i18n';
+import { decimal, tr } from '@/i18n';
 import { colors, fonts, radius, text } from '@/theme';
 
 const STATE_COLOR: Record<DayState, string> = { good: colors.good, fair: colors.warn, poor: colors.record, unknown: colors.textMuted };
@@ -51,7 +51,7 @@ export function LimiterTiles({ diagnosis, sprint }: { diagnosis: DunkDiagnosis; 
 
 function tileNote(m: DunkMetric): string {
   const name = m.key === 'squat_ratio' ? tr('深蹲 ÷ 体重') : m.name;
-  const fmt = (v: number) => `${v.toFixed(1)}${m.unit === '×' ? '×' : ''}`;
+  const fmt = (v: number) => `${decimal(v, 1)}${m.unit === '×' ? '×' : ''}`;
   switch (m.status) {
     case 'low':
       return tr('{name} · 低于 {low}', { name, low: fmt(m.low) });
@@ -89,7 +89,7 @@ function SprintTile({ sprint }: { sprint: Sprint | null }) {
             ? `${sprint.def.name} · ${TIMING_NOTE[last.timing]}`
             : delta == null
               ? sprint.def.name
-              : `${sprint.def.name} · ${delta <= 0 ? '−' : '+'}${Math.abs(delta).toFixed(2)} s`}
+              : `${sprint.def.name} · ${delta <= 0 ? '−' : '+'}${decimal(Math.abs(delta), 2)} s`}
       </Text>
     </Pressable>
   );
