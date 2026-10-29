@@ -1151,7 +1151,10 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // of two answers, not a scatter that the others may cancel.
   const linesScale = flags.includes('off-line') ? null : markerScale;
   const floorScale = linesScale ?? gravityScale;
-  const scalesApart = linesScale == null && markerScale != null ? abs(gravityScale / markerScale - 1) : 0;
+  // A figure read on gravity's scale is 1/r of it on the lines' (r: gravity's over the lines'): the two answers are 1/r − 1
+  // of it apart, more than r − 1 where gravity's is the smaller (r = 0.83 puts them 20 % apart, not 17 %).
+  const scaleRatio = markerScale != null ? gravityScale / markerScale : 1;
+  const scalesApart = linesScale == null && markerScale != null ? max(abs(scaleRatio - 1), abs(1 / scaleRatio - 1)) : 0;
   // The lines' scale (95 %, share): they are laid to 1 %, and each is tapped to `tapAlong`, a share of the gap between
   // them that grows with the distance.
   const linesRel = linesScale != null ? hypot(0.01, (1.96 * hypot(tapAlong(markers!.a), tapAlong(markers!.b))) / markerPx!) : 0;

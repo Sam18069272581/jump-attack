@@ -618,6 +618,22 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     expect([seed, misses(scene, result).filter((x) => /^(brake|step):/.test(x))]).toEqual([seed, []]);
   });
 
+  it.each([
+    ['1.5 m', -1.5],
+    ['2 m', -2],
+  ])('both lines %s further from the camera than where the athlete ran: gravity’s scale a fifth below theirs, and the last step, braking and run-up speed reach what the lines would make them too', (_, nearerM) => {
+    // Which of the two scales is right can't be told, so each figure read on gravity's has to hold the lines' reading as
+    // well: 1/r of it, r = gravity's over the lines'. With r = 0.78 that is 28 % above it, further than 1 − r = 22 %.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ seed, markers: { aM: -3, bM: 0, nearerM } });
+      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { ...scene.markers!, distanceM: 3 } }));
+      const r = result.scale.gravity / result.scale.markers!;
+      expect([seed, result.flags.includes('off-line'), r < 0.85]).toEqual([seed, true, true]);
+      const short = (['step', 'approach', 'brake'] as const).filter((k) => Math.abs(result.metrics[k]!.value / r - result.metrics[k]!.value) > result.metrics[k]!.error);
+      expect([seed, short]).toEqual([seed, []]);
+    }
+  });
+
   it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
     const scene = poseScene();
     const b = scene.markers!.b;
