@@ -8,6 +8,7 @@ import { loadDiagnosis } from '@/db/dunk';
 import { newSessionId } from '@/db/repo';
 import { BLOCKS, type DunkDiagnosis } from '@/domain/dunk';
 import { APPROACH_TOUCH, DROP_JUMP, JUMP_TESTS, LOADED_SJ, REPEATED_JUMP } from '@/domain/metrics';
+import { isWeb } from '@/media/runtime';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -54,6 +55,8 @@ export default function JumpTests() {
       <Row icon="plan" color={colors.accent} name="测试日 · 按顺序测完三项" hint="CMJ → 跳深 → 助跑摸高，视频可以一次多选" onPress={() => router.push('/test-day')} />
       <Row code={APPROACH_TOUCH.short} color={APPROACH_TOUCH.color} name={APPROACH_TOUCH.name} hint="录像或手填摸到的高度" tag={todo.has(APPROACH_TOUCH.code)} onPress={() => capture(APPROACH_TOUCH.code)} />
       <Row icon="jump" color={colors.accent} name="扣篮诊断" hint={gapLine(diagnosis)} onPress={() => router.push('/dunk')} />
+      {/* Reads video with the pose model in a WebView: not in the web version. */}
+      {!isWeb && <Row code="起跳" color={colors.purple} name="起跳技术 · 骨架分析" hint="侧面拍一次助跑起跳，测起跳速度、角度和助跑速度" onPress={() => router.push('/technique')} />}
 
       <Text style={styles.heading}>纵跳</Text>
       {JUMP_TESTS.map((t) => (
