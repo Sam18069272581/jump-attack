@@ -366,26 +366,42 @@ function normals(seed: number): () => number {
   return () => Math.sqrt(-2 * Math.log(Math.max(1e-12, next()))) * Math.cos(2 * Math.PI * next());
 }
 
+/** The chance that a 95 % error covers the truth in `k` or fewer of `n` clips (binomial), as tools/pose-validation judges. */
+function chanceOfSoFew(k: number, n: number, p = 0.95): number {
+  const lg = (x: number) => {
+    let s = 0;
+    for (let i = 2; i <= x; i++) s += Math.log(i);
+    return s;
+  };
+  let sum = 0;
+  for (let i = 0; i <= k; i++) sum += Math.exp(lg(n) - lg(i) - lg(n - i) + i * Math.log(p) + (n - i) * Math.log(1 - p));
+  return Math.min(1, sum);
+}
+
 describe('lines tapped by hand, and no lines where the floor is hard to read', () => {
-  it('lines tapped as well as TAP_PX says: take-off velocity and angle, run-up speed and the last step still cover the truth in 95 % of clips', () => {
+  it('lines tapped as well as TAP_PX says: take-off velocities and angle, run-up speed and the last step still cover the truth in 95 % of clips', () => {
     // Each tap off by TAP_PX (1 SD) either way: a line tapped a little high or low tilts which way is up, and the
-    // run-up's horizontal speed then leaks into the vertical one.
+    // run-up's horizontal speed then leaks into the vertical one. Three ways of tapping each of 40 clips, so that a
+    // figure is judged on 120: short only where so few covered is unlikely by chance (p < 0.05). 40 clips judged one
+    // by one at 95 % would fail a third of the time on a figure whose error is right.
     const normal = normals(35);
     const tally: Record<string, { n: number; covered: number }> = {};
-    for (let seed = 11; seed <= 50; seed++) {
-      const scene = poseScene({ seed });
-      const { a, b } = scene.markers!;
-      const tap = (p: { x: number; y: number }) => ({ x: p.x + TAP_PX * normal(), y: p.y + TAP_PX * normal() });
-      const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { a: tap(a), b: tap(b), distanceM: 3 } }));
-      const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
-      for (const k of ['vz', 'angle', 'approach', 'step'] as const) {
-        if (!result.metrics[k]) continue;
-        tally[k] ??= { n: 0, covered: 0 };
-        tally[k].n++;
-        if (!missed.has(k)) tally[k].covered++;
+    for (let draw = 0; draw < 3; draw++) {
+      for (let seed = 11; seed <= 50; seed++) {
+        const scene = poseScene({ seed });
+        const { a, b } = scene.markers!;
+        const tap = (p: { x: number; y: number }) => ({ x: p.x + TAP_PX * normal(), y: p.y + TAP_PX * normal() });
+        const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: { a: tap(a), b: tap(b), distanceM: 3 } }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['vz', 'vx', 'angle', 'approach', 'step'] as const) {
+          if (!result.metrics[k]) continue;
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
       }
     }
-    expect(Object.entries(tally).filter(([, c]) => c.n < 40 || c.covered < 0.95 * c.n)).toEqual([]);
+    expect(Object.entries(tally).filter(([, c]) => c.n < 120 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 
   it.each([
