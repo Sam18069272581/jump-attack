@@ -40,6 +40,7 @@ export const FLAG_TEXT: Record<QualityFlag, string> = {
   'low-fps': '帧率不到 240：触地时间和起跳速度只能粗略算。要准就用 iPhone 慢动作（240 帧）拍，再导入。',
   'no-markers': '没点地上的两条线：没有助跑速度，长度按重力换算。',
   'off-line': '两条线算出的比例和重力差了一些：多半是线没点在运动员跑过的地方，或者两条线不是相隔 3 米。最后一步步长、助跑速度和踏跳刹车里的进板速度都改按重力换算；两边哪个对说不准，误差按两者之差放宽。',
+  'short-fall': '挂筐把下落截短了，按重力算出的比例靠不太住，和两条线算出的对不上，不一定是线的问题。最后一步步长、助跑速度、踏跳刹车和起跳水平速度都按两条线换算；两边哪个对说不准，误差按两者之差放宽。',
   'scale-broken': '两条线算出的比例和重力对不上：多半是拍摄帧率选错了，或者线点错了。速度、时间和长度先不给，改好再分析一次。',
   gaps: '中间有一段没认出运动员。',
   'far-foot': '起跳脚是离手机远的那只，挡得多，触地时间可能不够准。',
@@ -48,6 +49,14 @@ export const FLAG_TEXT: Record<QualityFlag, string> = {
   'cut-off': '视频在落地前就结束了。',
   unseen: '有的关键时刻视频里看不到（在视频开始之前，或者那几帧没认出人），靠它算的数就不给了。',
 };
+
+/**
+ * The flags to show, in order. After a hang that put gravity's scale apart from the lines' (`short-fall`), 'off-line'
+ * would say lengths went by gravity's: they stayed on the lines', as `short-fall` says.
+ */
+export function shownFlags(flags: QualityFlag[]): QualityFlag[] {
+  return flags.includes('short-fall') ? flags.filter((f) => f !== 'off-line') : flags;
+}
 
 export const PROBLEM_TEXT: Record<TechniqueProblem, { what: string; advice: string }> = {
   'no-athlete': { what: '没跟住运动员', advice: '点准运动员；人要全身在画面里，别太小（至少画面高度的五分之一）。' },

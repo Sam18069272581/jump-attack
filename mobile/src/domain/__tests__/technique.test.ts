@@ -634,6 +634,26 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     }
   });
 
+  it.each([
+    ['at 60 fps, a hand on the rim', { fps: 60, hangAfterS: 0.34 }, [64524, 64593], 0],
+    ['at 120 fps, the jitter taken for a hand on the rim', { fps: 120 }, [61766], 0],
+    ['the take-off line tapped 5 cm towards the planted foot, the jitter taken for a hand on the rim', {}, [63098], 0.05],
+  ])('lines where the athlete ran, tapped at their feet, %s: a fall cut short is no reason to leave the lines’ scale, and the flag says so', (_, over, seeds, leanM) => {
+    // Clips of the probes', read and tapped as tools/pose-validation does. Fitted on the rise alone, gravity's scale came
+    // out 8–24 % off the lines': moved onto it, the last step read 0.11–0.32 m off and passed a correct 准 one for
+    // 不够准, and the run-up speed 0.36–1.1 m/s off.
+    for (const seed of seeds) {
+      const scene = poseScene({ ...over, seed });
+      const { frames, target } = readAsTheScreen(scene);
+      const markers = tappedAtTheFeet(scene, 0.08, leanM);
+      const result = resultOf(analyseTechnique({ frames, captureFps: scene.options.fps, markers, target }));
+      expect([seed, result.flags.includes('hang'), result.flags.includes('short-fall')]).toEqual([seed, true, true]);
+      const truth = truthOf(scene);
+      const far = (['step', 'approach', 'vx', 'brake'] as const).filter((k) => result.metrics[k] && Math.abs(result.metrics[k]!.value - truth[k]!) > PASS_LINE[k]);
+      expect([seed, far, misses(scene, result).filter((x) => /^(vx|approach|brake|step):/.test(x))]).toEqual([seed, [], []]);
+    }
+  });
+
   it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
     const scene = poseScene();
     const b = scene.markers!.b;
@@ -652,6 +672,21 @@ function normals(seed: number): () => number {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
   return () => Math.sqrt(-2 * Math.log(Math.max(1e-12, next()))) * Math.cos(2 * Math.PI * next());
+}
+
+/**
+ * The two lines as tools/pose-validation taps them: on each tape `depthM` (1 SD) nearer the lens or further than where
+ * the hips crossed it, the take-off line `leanM` nearer on top, and the finger off by `tapPx` (1 SD) either way.
+ */
+function tappedAtTheFeet(scene: PoseScene, depthM: number, leanM = 0, tapPx = TAP_PX): Markers {
+  const finger = normals(scene.options.seed * 7919);
+  const depth = normals(scene.options.seed * 7919 + 1);
+  const { aM, bM, nearerM } = scene.options.markers!;
+  const tap = (xM: number, lean: number) => {
+    const p = scene.floorPoint(xM, nearerM + lean + depthM * depth());
+    return { x: p.x + tapPx * finger(), y: p.y + tapPx * finger() };
+  };
+  return { a: tap(aM, 0), b: tap(bM, leanM), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx };
 }
 
 /** The chance that a 95 % error covers the truth in `k` or fewer of `n` clips (binomial), as tools/pose-validation judges. */

@@ -19,7 +19,7 @@ import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { Pt } from '@/domain/pose';
 import { analyseTechnique, TAP_PT, TAP_PX, type Markers, type TechniqueProblem, type TechniqueResult } from '@/domain/technique';
 import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, planWindow, TAP_REACH_S, windowOf } from '@/domain/techniqueRead';
-import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT } from '@/domain/techniqueText';
+import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT, shownFlags } from '@/domain/techniqueText';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -363,7 +363,7 @@ export default function TechniqueAnalyse() {
                 <Chip key={e.name} label={`${e.name} #${e.f}`} selected={frame === e.f} onPress={() => show(e.f)} />
               ))}
             </View>
-            {result.flags.map((f) => (
+            {shownFlags(result.flags).map((f) => (
               <Text key={f} style={styles.warn}>
                 {FLAG_TEXT[f]}
               </Text>

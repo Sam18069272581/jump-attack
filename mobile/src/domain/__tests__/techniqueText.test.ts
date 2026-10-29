@@ -1,5 +1,5 @@
 import { PASS_LINE } from '../technique';
-import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT } from '../techniqueText';
+import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, shownFlags } from '../techniqueText';
 
 describe('formatMeasured', () => {
   it('writes the figure with its 95 % error, to the figure’s own precision', () => {
@@ -38,4 +38,13 @@ it('says which figures go by gravity’s scale when it and the lines’ differ, 
   // The last step, the run-up speed and the braking's run-in speed are all read on gravity's scale then.
   expect(FLAG_TEXT['off-line']).toMatch(/步长.*助跑速度.*刹车.*重力/);
   expect(FLAG_TEXT['off-line']).toMatch(/误差/);
+});
+
+it('when a hand on the rim cut the fall short, says so rather than that the lines are off, and that the lengths stay on the lines', () => {
+  // Gravity's scale then rests on the rise alone: apart from the lines', it is no sign they were laid or tapped wrong.
+  expect(FLAG_TEXT['short-fall']).toMatch(/挂筐|篮筐/);
+  expect(FLAG_TEXT['short-fall']).toMatch(/步长.*助跑速度.*刹车.*两条线/);
+  expect(FLAG_TEXT['short-fall']).toMatch(/误差/);
+  expect(shownFlags(['low-fps', 'hang', 'off-line', 'short-fall'])).toEqual(['low-fps', 'hang', 'short-fall']);
+  expect(shownFlags(['off-line'])).toEqual(['off-line']);
 });
