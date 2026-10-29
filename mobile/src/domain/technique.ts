@@ -1183,9 +1183,10 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const vxOwnErr =
     sqrt((1.96 * fx.se[1] * vxScale) ** 2 + (vx * (vxScale === gravityScale ? 1.96 * gravityScaleRel : linesRel)) ** 2 + drift ** 2 + (1.96 * tilt * (vz - G * tMid)) ** 2) +
     unlevelled * abs(vz - G * tMid);
-  // After a short fall, which of the two scales is right can't be told: the horizontal velocity may be off by the whole
-  // gap, added outright as for the lengths.
-  const vxErr = vxOwnErr + (flags.includes('short-fall') ? abs(vx) * gap : 0);
+  // Where the two scales are apart by more than `SCALE_MISMATCH`, which of them is right can't be told: on either, the
+  // horizontal velocity may be off by the whole gap, added outright as for the lengths. With gravity's 13 % off lines laid
+  // where the athlete ran (its parabola bent by twice the usual jitter), it read 0.39 m/s off with 0.09 stated.
+  const vxErr = vxOwnErr + (flags.includes('off-line') ? abs(vx) * gap : 0);
   const angle = (atan2(vz, vx) * 180) / PI;
   // The two velocities' errors added outright, not in quadrature: both lean on the same fit, and a take-off timed early
   // pulls them the same way.

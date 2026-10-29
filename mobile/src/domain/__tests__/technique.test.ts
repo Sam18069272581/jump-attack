@@ -654,6 +654,16 @@ describe('lines tapped wrong, or the wrong frame rate', () => {
     }
   });
 
+  it('lines where the athlete ran, twice the jitter bending gravity’s parabola 11 % off their scale: the horizontal velocity and the angle, read on gravity’s, hold the truth too', () => {
+    // Which of the two scales is right can't be told: the horizontal velocity on gravity's may be off by the whole gap.
+    const scene = poseScene({ noisePx: 3, seed: 40214 });
+    const { frames, target } = readAsTheScreen(scene);
+    const markers = { ...scene.markers!, distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+    const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+    expect([result.flags.includes('off-line'), result.flags.includes('hang')]).toEqual([true, false]);
+    expect(misses(scene, result).filter((x) => /^(vx|angle):/.test(x))).toEqual([]);
+  });
+
   it('both lines tapped on the same tape: says so, rather than that the plant isn’t in the clip', () => {
     const scene = poseScene();
     const b = scene.markers!.b;
