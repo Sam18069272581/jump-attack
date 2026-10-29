@@ -139,7 +139,7 @@ describe('a clip filmed as the guide asks (240 fps, side on, take-off foot towar
 });
 
 describe('stated errors', () => {
-  // The full check is tools/pose-validation (22 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
+  // The full check is tools/pose-validation (24 ways of filming, 40 clips each). Here a sample of it: 8 ways × 6 clips.
   const WAYS: [string, Partial<PoseSceneOptions>][] = [
     ['as the guide asks', {}],
     ['twice the jitter', { noisePx: 3 }],
@@ -759,6 +759,33 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
       const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers }));
       expect([seed, misses(scene, result).filter((m) => m.startsWith('step:'))]).toEqual([seed, []]);
     }
+  });
+
+  it('a 4K clip filmed from 10 m, its lines tapped as well as a finger can there: run-up speed, the last step and the take-off still cover the truth in 95 % of clips', () => {
+    // The finger misses by as many screen points whatever the clip: on a 3840-px clip across the portrait page's 360-pt
+    // box, zoomed 4×, a point is 3840 / 360 / 4 = 2.7 px, so the 3 pt that are `TAP_PX` on a 1920-px clip are 8 px here,
+    // and the screen says so with the lines. 120 fps, the most an iPhone films 4K at; the pose model reads a picture
+    // scaled down to its input, so its jitter in the clip's px doubles too. Three ways of tapping each of 40 clips.
+    const tapPx = 8;
+    const finger = normals(38);
+    const tally: Record<string, { n: number; covered: number }> = {};
+    for (let draw = 0; draw < 3; draw++) {
+      for (let seed = 11; seed <= 50; seed++) {
+        const scene = poseScene({ seed, width: 3840, height: 2160, focalPx: 2740, fps: 120, noisePx: 3, distanceM: 10, approachSpeed: 4.5 });
+        const { a, b } = scene.markers!;
+        const tap = (p: Pt) => ({ x: p.x + tapPx * finger(), y: p.y + tapPx * finger() });
+        const markers = { a: tap(a), b: tap(b), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx };
+        const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 120, markers }));
+        const missed = new Set(misses(scene, result).map((m) => m.split(':')[0]));
+        for (const k of ['vz', 'vx', 'angle', 'approach', 'step'] as const) {
+          if (!result.metrics[k]) continue;
+          tally[k] ??= { n: 0, covered: 0 };
+          tally[k].n++;
+          if (!missed.has(k)) tally[k].covered++;
+        }
+      }
+    }
+    expect(Object.entries(tally).filter(([, c]) => c.n < 120 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 });
 

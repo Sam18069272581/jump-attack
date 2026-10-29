@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /*
  * How far to trust the take-off technique figures (mobile/src/app/technique/analyse.tsx) before any real footage: each
- * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed twenty-two ways. Everything runs the
+ * figure's stated 95 % error must hold the truth in at least 95 % of clips, filmed twenty-four ways. Everything runs the
  * app's own code: domain/testing/poseScene.ts builds a run-up jump with known take-off velocity, contacts, step and
  * knee angle and gives its landmarks the pose model's jitter, swaps and misses; domain/techniqueRead.ts reads it the way
  * the screen does (a coarse pass around a tap near the take-off, the jump's window, every frame in it), with the floor
- * lines tapped as a finger does (off by `TAP_PX` either way, and with the picture's size, as the screen sends them); and
- * domain/technique.ts measures it.
+ * lines tapped as a finger does (off by `TAP_PT` on the zoomed screen either way, and with the picture's size and that
+ * miss in its px, as the screen sends them); and domain/technique.ts measures it.
  *
  *   node tools/pose-validation/validate.js [--seeds 40] [--ways guide,two] [--out <dir>]
  *
@@ -49,6 +49,10 @@ const ALL_WAYS = [
   { key: 'bystander', name: '旁边站着一个人', over: { bystanderM: 2 } },
   { key: 'dropout', name: '5% 的帧没认出人，起跳前左右腿认反几帧', over: { dropout: 0.05, swaps: [[200, 208]] } },
   { key: 'far', name: '离得远（10 米）、助跑慢（4.5 m/s）', over: { distanceM: 10, approachSpeed: 4.5 } },
+  // A 4K picture: the same lens on twice the px, and the pose model's jitter, read off a picture scaled down to its
+  // input, twice as many of them. 120 fps is the most an iPhone films 4K at.
+  { key: '4k', name: '4K 120 帧', over: { width: 3840, height: 2160, focalPx: 2740, fps: 120, noisePx: 3 } },
+  { key: '4k-far', name: '4K 120 帧，离得远（10 米）、助跑慢（4.5 m/s）', over: { width: 3840, height: 2160, focalPx: 2740, fps: 120, noisePx: 3, distanceM: 10, approachSpeed: 4.5 } },
 ];
 const WAYS = ONLY ? ALL_WAYS.filter((w) => ONLY.includes(w.key)) : ALL_WAYS;
 
@@ -78,9 +82,21 @@ function normals(seed) {
 }
 
 /**
- * The floor lines as a finger taps them on the zoomed picture: each off by `TAP_PX` (1 SD) either way, and with `depthM`,
- * on its tape that much (1 SD) nearer the lens or further than where the athlete ran. The screen takes them to be
- * `MARKER_GAP_M` apart, wherever they really are, and sends the picture's size with them.
+ * How far a finger misses on the screen's zoomed picture, px of the clip (1 SD), as the screen works it out: `TAP_PT`
+ * on a picture fitted into the portrait page's video box (360 pt wide, as tall as the clip's shape but no narrower than
+ * 3:4) and zoomed 4×, and no fewer than `TAP_PX`.
+ */
+function fingerPx(T, scene) {
+  const boxW = 360;
+  const boxH = boxW / Math.max(0.75, scene.width / scene.height);
+  const fit = Math.min(boxW / scene.width, boxH / scene.height);
+  return Math.max(T.TAP_PX, T.TAP_PT / (4 * fit));
+}
+
+/**
+ * The floor lines as a finger taps them on the zoomed picture: each off by `fingerPx` (1 SD) either way, and with
+ * `depthM`, on its tape that much (1 SD) nearer the lens or further than where the athlete ran. The screen takes them to
+ * be `MARKER_GAP_M` apart, wherever they really are, and sends the picture's size and the finger's miss with them.
  */
 function tapped(T, R, scene, depthM) {
   const m = scene.markers;
@@ -88,9 +104,10 @@ function tapped(T, R, scene, depthM) {
   const normal = normals(scene.options.seed * 7919);
   const depth = normals(scene.options.seed * 7919 + 1);
   const { aM, bM, nearerM } = scene.options.markers;
+  const tapPx = fingerPx(T, scene);
   const at = (xM, p) => (depthM ? scene.floorPoint(xM, nearerM + depthM * depth()) : p);
-  const tap = (p) => ({ x: p.x + T.TAP_PX * normal(), y: p.y + T.TAP_PX * normal() });
-  return { a: tap(at(aM, m.a)), b: tap(at(bM, m.b)), distanceM: R.MARKER_GAP_M, picture: { width: scene.width, height: scene.height } };
+  const tap = (p) => ({ x: p.x + tapPx * normal(), y: p.y + tapPx * normal() });
+  return { a: tap(at(aM, m.a)), b: tap(at(bM, m.b)), distanceM: R.MARKER_GAP_M, picture: { width: scene.width, height: scene.height }, tapPx };
 }
 
 /** Reads a scene the way the technique screen does, from a tap a quarter second before the take-off, and measures it. */

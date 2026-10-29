@@ -34,9 +34,10 @@ export type PoseFrame = { frame: number; t: number; poses: Pose[] };
 
 /**
  * Two marks on the floor along the run-up, `distanceM` apart, where the athlete tapped them in the picture, and the
- * picture's size (px): where its middle is, and its long side for the lens's angle of view (`LENS_FOV_DEG`).
+ * picture's size (px): where its middle is, and its long side for the lens's angle of view (`LENS_FOV_DEG`). `tapPx`:
+ * how well each could be tapped, px of the clip (1 SD), which grows with the clip's size (`TAP_PT`); `TAP_PX` if not given.
  */
-export type Markers = { a: Pt; b: Pt; distanceM: number; picture?: { width: number; height: number } };
+export type Markers = { a: Pt; b: Pt; distanceM: number; picture?: { width: number; height: number }; tapPx?: number };
 
 export type TechniqueInput = {
   /** Every frame of the stretch to analyse, in order, at the capture rate. */
@@ -106,6 +107,14 @@ export const MIN_CONTACT_FPS = 200;
 
 /** How well a floor marker is tapped (px of the clip, 1 SD): on a frame zoomed in to tap it. */
 export const TAP_PX = 4;
+
+/**
+ * The same finger on the screen (pt, 1 SD): `TAP_PX` on a 1920-px clip across the portrait page's 360-pt video box,
+ * zoomed 4×, is 4 × 4 × 360/1920 = 3 pt. The finger misses by as many points whatever the clip, so a 3840-px one packs
+ * twice the px under it: 8. The page sends the clip's px (`Markers.tapPx`), no fewer than `TAP_PX`, so that a smaller
+ * clip or a wider screen is never trusted beyond what this was set to.
+ */
+export const TAP_PT = 3;
 
 /**
  * How far nearer the lens or further a line is tapped than where the hips crossed it (m, 1 SD): on the tape at the
@@ -869,6 +878,8 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   if (markerPx != null && markerPx < legPx) return { ok: false, problem: 'markers' };
   const markerScale = markers && markerPx ? markers.distanceM / markerPx : null;
   const roughScale = markerScale ?? 0.9 / max(1, legPx);
+  // How well each line was tapped, px of this clip (1 SD).
+  const tapPx = markers?.tapPx ?? TAP_PX;
 
   // Up, then the running direction along the floor, and the side that faces the camera.
   let up = upFrom(picked, markers);
@@ -1060,7 +1071,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const span = pts.ts[pts.ts.length - 1] - pts.ts[0];
   const drift = COM_DRIFT_M / span;
   const vx = fx.c[1] * gravityScale;
-  // Which way is up, to 1 SD (rad). Two lines each tapped to `TAP_PX`: one a little high or low tilts it. Without lines,
+  // Which way is up, to 1 SD (rad). Two lines each tapped to `tapPx`: one a little high or low tilts it. Without lines,
   // a run-up that comes at the camera makes the floor drop towards the lens, and still feet hanging from the rim sit
   // above it: either way the floor fit can't be told from a tilted phone. Its turn is then the phone's roll plus that
   // false slope, and a phone rolled the other way hides the slope, so the turn alone doesn't bound it: the roll is at
@@ -1075,7 +1086,7 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   };
   const doubtful = sizeChange > SLIGHT_CURVE || flags.includes('curved') || flags.includes('hang');
   const tilt =
-    markerPx != null ? (sqrt(2) * TAP_PX) / markerPx : doubtful ? max(releveled + (LEVEL_DEG * PI) / 180, flags.includes('hang') ? runUpTilt() : 0) : 0;
+    markerPx != null ? (sqrt(2) * tapPx) / markerPx : doubtful ? max(releveled + (LEVEL_DEG * PI) / 180, flags.includes('hang') ? runUpTilt() : 0) : 0;
   // A tilt θ adds θ·vx to the vertical take-off velocity, and θ·(vz − g·t̄) to the horizontal one, t̄ the middle of the
   // fitted stretch: nothing over a whole flight, whose rise and fall cancel, but not so when the fit stops at a hang.
   const tMid = (pts.ts[0] + pts.ts[pts.ts.length - 1]) / 2;
@@ -1102,11 +1113,11 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   // (`TAP_DEPTH_M`). Tapped δ nearer the lens than the hips' path, a point sits further from the picture's middle by δ/d
   // of its offset there, d = f/k the distance: f the focal length (px), k the lines' px per m.
   const tapAlong = (p: Pt): number => {
-    if (!markers?.picture || markerPx == null) return TAP_PX;
+    if (!markers?.picture || markerPx == null) return tapPx;
     const { width, height } = markers.picture;
     const f = max(width, height) / 2 / Math.tan((LENS_FOV_DEG * PI) / 360);
     const off = abs(dot(sub(p, { x: width / 2, y: height / 2 }), frame.xAxis));
-    return hypot(TAP_PX, (off * TAP_DEPTH_M * markerPx) / markers.distanceM / f);
+    return hypot(tapPx, (off * TAP_DEPTH_M * markerPx) / markers.distanceM / f);
   };
   // Lengths along the floor: on the lines' scale, or on gravity's where the lines are off (`SCALE_MISMATCH`).
   const linesScale = flags.includes('off-line') ? null : markerScale;

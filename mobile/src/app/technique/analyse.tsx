@@ -17,7 +17,7 @@ import { toISODate } from '@/domain/dates';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
 import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { Pt } from '@/domain/pose';
-import { analyseTechnique, type Markers, type TechniqueProblem, type TechniqueResult } from '@/domain/technique';
+import { analyseTechnique, TAP_PT, TAP_PX, type Markers, type TechniqueProblem, type TechniqueResult } from '@/domain/technique';
 import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, planWindow, TAP_REACH_S, windowOf } from '@/domain/techniqueRead';
 import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT } from '@/domain/techniqueText';
 import { useAthlete } from '@/state/athlete';
@@ -110,9 +110,6 @@ export default function TechniqueAnalyse() {
   const total = frameCount(duration || clip?.duration || 0, fileFps);
   const looksSlowMo = !camera && detectedFps != null && detectedFps < 100;
   const fpsChoices = detectedFps == null ? FPS_CHOICES : [fileFps, ...FPS_CHOICES.filter((f) => f > fileFps)];
-  const markers: Markers | null =
-    !skipLines && clip && lines.takeoff && lines.back ? { a: lines.back, b: lines.takeoff, distanceM: MARKER_GAP_M, picture: { width: clip.width, height: clip.height } } : null;
-  const linesDone = skipLines || markers != null;
 
   function show(f: number) {
     setFrame(f);
@@ -124,6 +121,13 @@ export default function TechniqueAnalyse() {
   const ox = clip ? (view.w - clip.width * fit) / 2 : 0;
   const oy = clip ? (view.h - clip.height * fit) / 2 : 0;
   const onScreen = (p: Pt) => ({ x: ox + p.x * fit, y: oy + p.y * fit });
+
+  // The lines, with the finger's miss on the zoomed picture in the clip's px (`TAP_PT`).
+  const markers: Markers | null =
+    !skipLines && clip && fit > 0 && lines.takeoff && lines.back
+      ? { a: lines.back, b: lines.takeoff, distanceM: MARKER_GAP_M, picture: { width: clip.width, height: clip.height }, tapPx: Math.max(TAP_PX, TAP_PT / (ZOOM * fit)) }
+      : null;
+  const linesDone = skipLines || markers != null;
 
   const nextStep = (a: typeof athlete, l: typeof lines, skip: boolean): Step | null =>
     !a ? 'athlete' : skip ? null : !l.takeoff ? 'takeoff' : !l.back ? 'back' : null;

@@ -222,6 +222,24 @@ it('asks for each line on the frame the athlete runs over it, tapped right at th
   expect((trial.detail as { markers: { picture: unknown } }).markers.picture).toEqual({ width: 1920, height: 1080 });
 });
 
+it.each([
+  ['a 4K clip, whose px are smaller on screen: 8', 3840, 2160, 8, 'tt-9'],
+  ['a 1080p clip: 4', 1920, 1080, 4, 'tt-10'],
+])('sends how well the lines could be tapped, in the clip’s px, %s', async (_, width, height, tapPx, session) => {
+  // The finger misses by as many screen points whatever the clip; across the 360-pt box zoomed 4×, a 3840-px clip
+  // packs twice the px under it that a 1920-px one does.
+  const scene = poseScene({ width, height, focalPx: (1370 * width) / 1920, fps: 120, noisePx: (1.5 * width) / 1920 });
+  await open(scene, { uri: 'file:///picked/IMG_0016.MOV', fps: '0', source: 'import', session });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await tapLine(scene, scene.markers!.b);
+  await tapLine(scene, scene.markers!.a);
+  await press(r.root, '开始分析');
+  await answerReads();
+  await press(r.root, '保存');
+  const [trial] = await listTrials(mockDb, session);
+  expect((trial.detail as { markers: { tapPx?: number } }).markers.tapPx).toBeCloseTo(tapPx, 6);
+});
+
 it('measures a take filmed in the app without the floor lines, says what that leaves out, and keeps its video', async () => {
   const scene = poseScene({ fps: 60 });
   const uri = 'file:///app/Documents/technique/take-1.mp4';
