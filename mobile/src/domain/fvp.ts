@@ -6,6 +6,8 @@
  */
 import { G } from './jump';
 
+import { localized } from '@/i18n';
+
 /** Push-off distance (m): extended leg length (greater trochanter to tiptoe) minus trochanter height at the 90° start. */
 export function pushOff(legLengthCm: number, squatHeightCm: number): number | null {
   const hpo = (legLengthCm - squatHeightCm) / 100;
@@ -216,6 +218,10 @@ export const EXERCISE_KINDS: { kind: string; what: string; zone: string }[] = [
   { kind: '爆发-速度', what: '跳深，徒手蹲跳，CMJ + 10% 体重，最大跳箱', zone: '速度 > 1.3 m/s' },
   { kind: '速度', what: '弹力带助力跳（比体重轻），带摆臂 CMJ', zone: '速度 > 1.3 m/s' },
 ];
+
+// Shown in the current language (i18n).
+localized(FV_BANDS, 'name', 'kind');
+localized(EXERCISE_KINDS, 'kind', 'what', 'zone');
 
 export function bandOf(fvPct: number): FvBand {
   return FV_BANDS.find((b) => fvPct < b.max) ?? FV_BANDS[FV_BANDS.length - 1];

@@ -5,9 +5,11 @@ import Svg, { Defs, Line, LinearGradient, Path, Rect, Stop } from 'react-native-
 import { openDunkTest } from '@/components/dunkTests';
 import { Icon } from '@/components/Icon';
 import { CountUp, useReduceMotion } from '@/components/motion';
+import { greeting } from '@/domain/athletes';
 import { RIM_CM, reachRuler, type DunkDiagnosis } from '@/domain/dunk';
 import { gapHeading, touchSpread } from '@/domain/dunkSummary';
 import { reachVanes, type Vane } from '@/domain/vanes';
+import { decimal, tr } from '@/i18n';
 import { colors, fonts, text } from '@/theme';
 
 /** Height of the hero; with the status bar above it, it stays within the top half of the screen. */
@@ -21,7 +23,7 @@ const VANE_SHORT = 140;
 const IDLE_OPACITY = 0.12;
 const SWEPT_OPACITY = 0.06;
 
-const cm = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+const cm = (v: number) => (Number.isInteger(v) ? String(v) : decimal(v, 1));
 
 /**
  * The top of the home screen: a jump-and-reach tester (Vertec) drawn faintly behind the numbers. On opening, the vanes
@@ -74,7 +76,7 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
   const swept = layout.vanes.filter((v) => v.state === 'swept').length;
   const travel = markerY == null ? 0 : HEIGHT - markerY;
   const known = d.gapCm != null;
-  const touchLabel = d.touch.source === 'approach' ? '助跑摸高' : '原地估算';
+  const touchLabel = d.touch.source === 'approach' ? tr('助跑摸高') : tr('原地估算');
 
   return (
     <View style={styles.hero}>
@@ -82,7 +84,7 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
         style={StyleSheet.absoluteFill}
         accessible
         accessibilityRole="image"
-        accessibilityLabel={known ? `摸高器：${touchLabel} ${cm(touch!)} cm，扣篮线 ${d.line} cm，${d.gapCm! > 0 ? `还差 ${d.gapCm!.toFixed(1)} cm` : `已过 ${(-d.gapCm!).toFixed(1)} cm`}` : `摸高器：扣篮线 ${d.line} cm，还没有摸高`}
+        accessibilityLabel={known ? tr('摸高器：{touchLabel} {touch} cm，扣篮线 {line} cm，{p}', { touchLabel, touch: cm(touch!), line: d.line, p: d.gapCm! > 0 ? tr('还差 {gapCm} cm', { gapCm: decimal(d.gapCm!, 1) }) : tr('已过 {gapCm} cm', { gapCm: decimal((-d.gapCm!), 1) }) }) : tr('摸高器：扣篮线 {line} cm，还没有摸高', { line: d.line })}
       >
         {layout.vanes.map((v, i) => (
           <VaneBar key={v.cm} v={v} top={y(v.y) - 2} sweep={sweep} pulse={pulse} order={layout.vanes.length - 1 - i} swept={swept} />
@@ -104,7 +106,7 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
             <Line x1={0} x2={VANE_LONG} y1={1} y2={1} stroke={colors.accent} strokeWidth={2} strokeDasharray="5 4" />
           </Svg>
         </View>
-        <Text style={[styles.mark, { top: lineY - 19, color: colors.accent }]}>扣篮线 {d.line}</Text>
+        <Text style={[styles.mark, { top: lineY - 19, color: colors.accent }]}>{tr('扣篮线 {line}', { line: d.line })}</Text>
 
         {rimY != null && (
           <>
@@ -114,7 +116,7 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
                 <Path d="M2 0 12 44M24 0 26 44M46 0 40 44M68 0 56 44M6 14h58M10 30h50" stroke={colors.textMuted} strokeWidth={1.4} fill="none" />
               </Svg>
             </Animated.View>
-            <Text style={[styles.mark, { top: rimY - 20, color: colors.rim }]}>篮筐 {RIM_CM}</Text>
+            <Text style={[styles.mark, { top: rimY - 20, color: colors.rim }]}>{tr('篮筐 {RIM_CM}', { RIM_CM })}</Text>
           </>
         )}
 
@@ -127,26 +129,24 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
       </View>
 
       <View style={styles.column}>
-        <Pressable accessibilityRole="button" accessibilityLabel="切换测试对象" hitSlop={8} onPress={onSwitchAthlete} style={styles.greeting}>
-          <Text style={text.muted} numberOfLines={1}>
-            你好，{name}
-          </Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={tr('切换测试对象')} hitSlop={8} onPress={onSwitchAthlete} style={styles.greeting}>
+          <Text style={text.muted} numberOfLines={1}>{greeting(name)}</Text>
           <Icon name="chevronDown" size={12} color={colors.textMuted} />
         </Pressable>
-        <Text style={text.title}>今天练什么？</Text>
+        <Text style={text.title}>{tr('今天练什么？')}</Text>
 
         {known ? (
           <>
             <Text style={[text.muted, styles.gapLabel]}>{gapHeading(d).label}</Text>
             <View style={styles.gapRow}>
-              <Text style={styles.gap}>{d.gapCm! > 0 ? d.gapCm!.toFixed(1) : `+${(-d.gapCm!).toFixed(1)}`}</Text>
+              <Text style={styles.gap}>{d.gapCm! > 0 ? decimal(d.gapCm!, 1) : `+${decimal((-d.gapCm!), 1)}`}</Text>
               <Text style={styles.gapUnit}>cm</Text>
             </View>
             <View
               style={styles.touchRow}
               accessible
               accessibilityRole="progressbar"
-              accessibilityLabel="离扣篮线的进度"
+              accessibilityLabel={tr('离扣篮线的进度')}
               accessibilityValue={ruler ? { min: 0, max: 100, now: Math.round(ruler.progress * 100) } : undefined}
             >
               <Text style={text.muted}>{touchLabel}</Text>
@@ -158,14 +158,14 @@ export function ReachHero({ diagnosis: d, standingReach, name, onSwitchAthlete }
           </>
         ) : (
           <>
-            <Text style={[text.muted, styles.gapLabel]}>扣篮线 {d.line} cm</Text>
-            <Text style={styles.unknown}>还不知道离扣篮多远</Text>
-            <Text style={styles.hint}>测一次助跑摸高，或者在「我的」填站立摸高、再测一次 CMJ。</Text>
+            <Text style={[text.muted, styles.gapLabel]}>{tr('扣篮线 {line} cm', { line: d.line })}</Text>
+            <Text style={styles.unknown}>{tr('还不知道离扣篮多远')}</Text>
+            <Text style={styles.hint}>{tr('测一次助跑摸高，或者在「我的」填站立摸高、再测一次 CMJ。')}</Text>
           </>
         )}
         {!d.missing.includes('approach') && (
-          <Pressable accessibilityRole="button" accessibilityLabel="测助跑摸高" hitSlop={8} onPress={() => openDunkTest('approach')} style={styles.retest}>
-            <Text style={styles.retestText}>再测助跑摸高</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr('测助跑摸高')} hitSlop={8} onPress={() => openDunkTest('approach')} style={styles.retest}>
+            <Text style={styles.retestText}>{tr('再测助跑摸高')}</Text>
             <Icon name="chevronRight" size={14} color={colors.accent} />
           </Pressable>
         )}

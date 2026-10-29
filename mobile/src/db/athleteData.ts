@@ -2,6 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { exportBackup } from '@/db/backup';
 import { ATHLETE_FORMAT, isPristine, retargetId, type AthleteFile, type BackupRow } from '@/domain/backup';
+import { tr } from '@/i18n';
 
 import type { Athlete } from './repo';
 
@@ -116,7 +117,7 @@ export async function importAthlete(db: SQLiteDatabase, file: AthleteFile, opts:
       athleteId = athletes.get(file.tables.athlete[0].id as number) ?? 0;
     });
   } catch {
-    return { ok: false, problem: '文件里的数据有问题，没有导入，手机上原来的数据保持不变。' };
+    return { ok: false, problem: tr('文件里的数据有问题，没有导入，手机上原来的数据保持不变。') };
   }
   return { ok: true, athleteId };
 }

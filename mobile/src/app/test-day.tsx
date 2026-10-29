@@ -6,9 +6,11 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Icon } from '@/components/Icon';
 import { Button, Card } from '@/components/ui';
 import { newSessionId, type Athlete } from '@/db/repo';
+import { athleteName } from '@/domain/athletes';
 import { toISODate } from '@/domain/dates';
 import { nextTurn } from '@/domain/team';
 import { nextStep } from '@/domain/testDay';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadTestDay, type TestDayRow } from '@/state/testDay';
 import { colors, fonts, radius, text } from '@/theme';
@@ -61,13 +63,13 @@ export default function TestDay() {
 
   const picker = athletes.length > 1 && (
     <View style={{ gap: 8 }}>
-      <Text style={text.section}>谁来测</Text>
+      <Text style={text.section}>{tr('谁来测')}</Text>
       <View style={styles.chips}>
         {athletes.map((a) => {
           const on = crew.some((c) => c.id === a.id);
           return (
             <Pressable key={a.id} accessibilityRole="checkbox" accessibilityState={{ checked: on }} onPress={() => toggle(a.id)} style={[styles.chip, on && styles.chipOn]}>
-              <Text style={[styles.chipText, on && { color: colors.onAccent }]}>{a.name}</Text>
+              <Text style={[styles.chipText, on && { color: colors.onAccent }]}>{athleteName(a.name)}</Text>
             </Pressable>
           );
         })}
@@ -81,12 +83,10 @@ export default function TestDay() {
     return (
       <ScrollView contentContainerStyle={styles.content}>
         {picker}
-        <Text style={text.muted}>{crew.length} 人轮流测：一项全员测完再换下一项，等别人跳的时候正好休息。点名字可以给任何人补测。</Text>
+        <Text style={text.muted}>{tr('{length} 人轮流测：一项全员测完再换下一项，等别人跳的时候正好休息。点名字可以给任何人补测。', { length: crew.length })}</Text>
         {lanes[0].map((step, i) => (
           <Card key={step.metric} style={{ gap: 8 }}>
-            <Text style={styles.name}>
-              {i + 1}. {step.def.name} · 每人 {step.jumps} 跳
-            </Text>
+            <Text style={styles.name}>{tr('{i}. {name} · 每人 {jumps} 跳', { i: i + 1, name: step.def.name, jumps: step.jumps })}</Text>
             {crew.map((a, k) => {
               const row = lanes[k][i];
               const isNext = turn?.athlete === k && turn.step === i;
@@ -94,24 +94,24 @@ export default function TestDay() {
                 <Pressable
                   key={a.id}
                   accessibilityRole="button"
-                  accessibilityLabel={`${a.name} 测 ${step.def.name}`}
+                  accessibilityLabel={tr('{name} 测 {name2}', { name: athleteName(a.name), name2: step.def.name })}
                   onPress={() => measure(row, a.id)}
                   style={({ pressed }) => [styles.turn, isNext && styles.current, pressed && { opacity: 0.75 }]}
                 >
-                  <Text style={[styles.turnName, row.trials > 0 && { color: colors.good }]}>{a.name}</Text>
-                  <Text style={styles.status}>{row.trials > 0 ? result(row) : row.box ? `${row.box} cm 箱` : '未测'}</Text>
+                  <Text style={[styles.turnName, row.trials > 0 && { color: colors.good }]}>{athleteName(a.name)}</Text>
+                  <Text style={styles.status}>{row.trials > 0 ? result(row) : row.box ? tr('{box} cm 箱', { box: row.box }) : tr('未测')}</Text>
                 </Pressable>
               );
             })}
           </Card>
         ))}
         {up ? (
-          <Button label={`下一位：${up.athlete.name} · ${up.row.def.name}`} onPress={() => measure(up.row, up.athlete.id)} />
+          <Button label={tr('下一位：{name} · {name2}', { name: athleteName(up.athlete.name), name2: up.row.def.name })} onPress={() => measure(up.row, up.athlete.id)} />
         ) : (
           <Card style={styles.done}>
-            <Text style={text.section}>{crew.length === athletes.length ? '全队' : `${crew.length} 人`}三项都测完了</Text>
-            <Text style={text.muted}>每个人的扣篮诊断都已按今天的成绩更新。</Text>
-            <Button label="看团队排行" onPress={() => router.push('/team')} />
+            <Text style={text.section}>{tr('{p}三项都测完了', { p: crew.length === athletes.length ? tr('全队') : tr('{length} 人', { length: crew.length }) })}</Text>
+            <Text style={text.muted}>{tr('每个人的扣篮诊断都已按今天的成绩更新。')}</Text>
+            <Button label={tr('看团队排行')} onPress={() => router.push('/team')} />
           </Card>
         )}
       </ScrollView>
@@ -124,16 +124,16 @@ export default function TestDay() {
   return (
     <ScrollView contentContainerStyle={styles.content}>
       {picker}
-      <Text style={text.muted}>按顺序测完这三项。慢动作视频可以从相册一次选好几段，按拍摄先后点选，测完一项会回到这里。</Text>
+      <Text style={text.muted}>{tr('按顺序测完这三项。慢动作视频可以从相册一次选好几段，按拍摄先后点选，测完一项会回到这里。')}</Text>
       {rows.map((row, i) => (
         <Step key={row.metric} n={i + 1} row={row} current={i === next} onPress={() => measure(row)} />
       ))}
-      {rows.length > 0 && next != null && <Button label={`下一项：${rows[next].def.name}`} onPress={() => measure(rows[next])} />}
+      {rows.length > 0 && next != null && <Button label={tr('下一项：{name}', { name: rows[next].def.name })} onPress={() => measure(rows[next])} />}
       {rows.length > 0 && next == null && (
         <Card style={styles.done}>
-          <Text style={text.section}>今天三项都测完了</Text>
-          <Text style={text.muted}>扣篮诊断已按今天的成绩更新。</Text>
-          <Button label="看扣篮诊断" onPress={() => router.push('/dunk')} />
+          <Text style={text.section}>{tr('今天三项都测完了')}</Text>
+          <Text style={text.muted}>{tr('扣篮诊断已按今天的成绩更新。')}</Text>
+          <Button label={tr('看扣篮诊断')} onPress={() => router.push('/dunk')} />
         </Card>
       )}
     </ScrollView>
@@ -143,18 +143,18 @@ export default function TestDay() {
 /** E.g. "3 跳 · 41.5 cm", or the mean of the best three for run-up touches. */
 function result(row: TestDayRow): string {
   const top3 = row.def.aggregate === 'top3' && row.trials > 1;
-  return `${row.trials} 跳 · ${top3 ? '前 3 均值 ' : ''}${row.best!.toFixed(row.def.decimals)} ${row.def.unit}`.trim();
+  return tr('{trials} 跳 · {p}{best} {unit}', { trials: row.trials, p: top3 ? tr('前 3 均值 ') : '', best: decimal(row.best!, row.def.decimals), unit: row.def.unit }).trim();
 }
 
 function Step({ n, row, current, onPress }: { n: number; row: TestDayRow; current: boolean; onPress: () => void }) {
   const done = row.trials > 0;
   const top3 = row.def.aggregate === 'top3' && row.trials > 1;
-  const value = row.best != null ? `${row.best.toFixed(row.def.decimals)} ${row.def.unit}`.trim() : '';
-  const status = done ? `已测 ${row.trials} 跳 · ${top3 ? `最好 ${Math.min(3, row.trials)} 跳均值` : '最好'} ${value}` : `${row.jumps} 跳`;
+  const value = row.best != null ? `${decimal(row.best, row.def.decimals)} ${row.def.unit}`.trim() : '';
+  const status = done ? tr('已测 {trials} 跳 · {p} {value}', { trials: row.trials, p: top3 ? tr('最好 {p} 跳均值', { p: Math.min(3, row.trials) }) : tr('最好'), value }) : tr('{jumps} 跳', { jumps: row.jumps });
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`测 ${row.def.name}`}
+      accessibilityLabel={tr('测 {name}', { name: row.def.name })}
       onPress={onPress}
       style={({ pressed }) => [styles.step, current && styles.current, pressed && { opacity: 0.75 }]}
     >

@@ -13,6 +13,7 @@ import { manualProblem, parseNumber } from '@/domain/entry';
 import { getCategory, getMetric, SQUAT_1RM } from '@/domain/metrics';
 import { toISODate } from '@/domain/dates';
 import { loadAt, ONE_RM_PROBLEMS, parseRepVelocities, roundLoad, setVelocityLoss, STOP_LOSS, ZONES, zoneOf } from '@/domain/vbt';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
@@ -50,14 +51,14 @@ export default function VbtSession() {
     }, [reload]),
   );
 
-  if (!def) return <Empty title="找不到这个动作" />;
+  if (!def) return <Empty title={tr('找不到这个动作')} />;
   const sets = all.filter((s) => s.session_id === session);
   const load = parseNumber(kg);
   // One mean velocity, or one per rep as VBTgo lists them; the set is logged at its fastest rep.
   const repV = parseRepVelocities(v);
   const velocity = repV ? Math.max(...repV) : null;
   const repsN = repV && repV.length > 1 ? repV.length : parseNumber(reps);
-  const vProblem = v.trim() && !repV ? '速度填数字，多次之间用空格隔开' : (repV?.map((x) => manualProblem(def, x)).find((p) => p) ?? null);
+  const vProblem = v.trim() && !repV ? tr('速度填数字，多次之间用空格隔开') : (repV?.map((x) => manualProblem(def, x)).find((p) => p) ?? null);
   const loadOk = load != null && load >= 0 && load <= 400;
   const est = latestEstimate(all, lift);
   const today = est?.sessionId === session ? est : null;
@@ -80,14 +81,14 @@ export default function VbtSession() {
       setV('');
       await reload();
     } catch (e) {
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
     } finally {
       setSaving(false);
     }
   }
 
   function measureVideo() {
-    if (!loadOk) return Alert.alert('先填这一组的重量');
+    if (!loadOk) return Alert.alert(tr('先填这一组的重量'));
     router.push({ pathname: '/vbt/track', params: { lift, session, load: String(load) } });
   }
 
@@ -100,9 +101,9 @@ export default function VbtSession() {
   }
 
   function remove(s: VbtSet, n: number) {
-    Alert.alert(`删除第 ${n} 组？`, '', [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: async () => (await deleteTrial(db, s.id), reload()) },
+    Alert.alert(tr('删除第 {n} 组？', { n }), '', [
+      { text: tr('取消'), style: 'cancel' },
+      { text: tr('删除'), style: 'destructive', onPress: async () => (await deleteTrial(db, s.id), reload()) },
     ]);
   }
 
@@ -125,10 +126,10 @@ export default function VbtSession() {
                     {s.load} kg{s.reps ? ` × ${s.reps}` : ''}
                   </Text>
                   <View style={{ flex: 1, alignItems: 'flex-end' }}>
-                    <Text style={styles.setV}>{s.v.toFixed(2)} m/s</Text>
-                    <Text style={[text.caption, stop && { color: colors.warn }]}>{stop ? `速度损失 ${Math.round(loss * 100)}%，建议停组` : zoneOf(s.v).name}</Text>
+                    <Text style={styles.setV}>{decimal(s.v, 2)} m/s</Text>
+                    <Text style={[text.caption, stop && { color: colors.warn }]}>{stop ? tr('速度损失 {loss}%，建议停组', { loss: Math.round(loss * 100) }) : zoneOf(s.v).name}</Text>
                   </View>
-                  <Pressable accessibilityRole="button" accessibilityLabel={`删除第 ${i + 1} 组`} onPress={() => remove(s, i + 1)} style={styles.trash}>
+                  <Pressable accessibilityRole="button" accessibilityLabel={tr('删除第 {i} 组', { i: i + 1 })} onPress={() => remove(s, i + 1)} style={styles.trash}>
                     <Icon name="trash" size={16} color={colors.textMuted} />
                   </Pressable>
                 </View>
@@ -136,43 +137,41 @@ export default function VbtSession() {
             })}
           </Card>
         ) : (
-          <Text style={text.muted}>从轻重量开始逐组加重，每组记重量和平均速度。三个以上不同重量、最重一组够慢后，会估算 1RM。</Text>
+          <Text style={text.muted}>{tr('从轻重量开始逐组加重，每组记重量和平均速度。三个以上不同重量、最重一组够慢后，会估算 1RM。')}</Text>
         )}
 
         <Card style={{ gap: 12 }}>
-          <Text style={text.section}>第 {sets.length + 1} 组</Text>
+          <Text style={text.section}>{tr('第 {length} 组', { length: sets.length + 1 })}</Text>
           <View style={styles.fields}>
-            <Field label="重量" unit="kg" value={kg} onChange={setKg} />
-            <Field label="次数" unit="次" value={repV && repV.length > 1 ? String(repV.length) : reps} onChange={setReps} integer />
+            <Field label={tr('重量')} unit="kg" value={kg} onChange={setKg} />
+            <Field label={tr('次数')} unit={tr('次')} value={repV && repV.length > 1 ? String(repV.length) : reps} onChange={setReps} integer />
           </View>
           <View style={styles.sourceRow}>
-            <Text style={text.caption}>速度来自</Text>
-            <Chip label="手填" selected={!fromVbtgo} onPress={() => setFromVbtgo(false)} color={COLOR} />
-            <Chip label="照抄 VBTgo" selected={fromVbtgo} onPress={() => setFromVbtgo(true)} color={COLOR} />
+            <Text style={text.caption}>{tr('速度来自')}</Text>
+            <Chip label={tr('手填')} selected={!fromVbtgo} onPress={() => setFromVbtgo(false)} color={COLOR} />
+            <Chip label={tr('照抄 VBTgo')} selected={fromVbtgo} onPress={() => setFromVbtgo(true)} color={COLOR} />
           </View>
           <Field
-            label={fromVbtgo ? '每次的 Mean V（空格隔开）' : '平均速度（多次用空格隔开）'}
+            label={fromVbtgo ? tr('每次的 Mean V（空格隔开）') : tr('平均速度（多次用空格隔开）')}
             unit="m/s"
             value={v}
             onChange={setV}
             wide
           />
           {vProblem ? <Text style={styles.problem}>{vProblem}</Text> : null}
-          {repV && repV.length > 1 && !vProblem ? <Text style={text.caption}>{repV.length} 次，按最快一次 {velocity!.toFixed(2)} m/s 记这一组</Text> : null}
-          <Button label="记一组" onPress={logManual} disabled={!loadOk || velocity == null || vProblem != null} busy={saving} />
-          <Button label="录像自动测速" variant="secondary" onPress={measureVideo} />
-          <Text style={text.caption}>录像测速：侧面拍一整组，圈出 45 cm 杠铃片，自动跟踪算出每一次的平均速度，不用逐帧标。</Text>
+          {repV && repV.length > 1 && !vProblem ? <Text style={text.caption}>{tr('{length} 次，按最快一次 {velocity} m/s 记这一组', { length: repV.length, velocity: decimal(velocity!, 2) })}</Text> : null}
+          <Button label={tr('记一组')} onPress={logManual} disabled={!loadOk || velocity == null || vProblem != null} busy={saving} />
+          <Button label={tr('录像自动测速')} variant="secondary" onPress={measureVideo} />
+          <Text style={text.caption}>{tr('录像测速：侧面拍一整组，圈出 45 cm 杠铃片，自动跟踪算出每一次的平均速度，不用逐帧标。')}</Text>
         </Card>
 
         {lift === 'vbt_squat' && (
           <Card style={{ gap: 10 }}>
-            <Text style={text.section}>实测 1RM</Text>
-            <Text style={text.caption}>
-              {tested ? `最近一次 ${tested.kg} kg（${toISODate(new Date(tested.at))}）。` : ''}填你真正举起过的最大重量，训练计划和扣篮诊断会优先用它，不用速度估算。
-            </Text>
+            <Text style={text.section}>{tr('实测 1RM')}</Text>
+            <Text style={text.caption}>{tr('{p}填你真正举起过的最大重量，训练计划和扣篮诊断会优先用它，不用速度估算。', { p: tested ? tr('最近一次 {kg} kg（{p}）。', { kg: tested.kg, p: toISODate(new Date(tested.at)) }) : '' })}</Text>
             <View style={styles.videoRow}>
-              <Field label="深蹲 1RM" unit="kg" value={testedKg} onChange={setTestedKg} />
-              <Button label="保存" variant="secondary" onPress={saveTested} disabled={testedValue == null || testedProblem != null} style={{ flex: 1 }} />
+              <Field label={tr('深蹲 1RM')} unit="kg" value={testedKg} onChange={setTestedKg} />
+              <Button label={tr('保存')} variant="secondary" onPress={saveTested} disabled={testedValue == null || testedProblem != null} style={{ flex: 1 }} />
             </View>
             {testedProblem ? <Text style={styles.problem}>{testedProblem}</Text> : null}
           </Card>
@@ -180,17 +179,15 @@ export default function VbtSession() {
 
         {est && (
           <Card style={{ gap: 8 }}>
-            <Text style={text.section}>{today ? '今天的载荷-速度曲线' : '最近一次的载荷-速度曲线'}</Text>
+            <Text style={text.section}>{today ? tr('今天的载荷-速度曲线') : tr('最近一次的载荷-速度曲线')}</Text>
             {est.oneRm != null && (
               <Text style={styles.oneRm}>
-                估算 1RM {Math.round(est.oneRm)} <Text style={styles.unit}>kg</Text>
+                {tr('估算 1RM {oneRm}', { oneRm: Math.round(est.oneRm) })} <Text style={styles.unit}>kg</Text>
               </Text>
             )}
-            {est.problem && <Text style={text.caption}>不估 1RM：{ONE_RM_PROBLEMS[est.problem]}。</Text>}
+            {est.problem && <Text style={text.caption}>{tr('不估 1RM：{ONE_RM_PROBLEMS}。', { ONE_RM_PROBLEMS: ONE_RM_PROBLEMS[est.problem] })}</Text>}
             {off != null && Math.abs(off) > ESTIMATE_OFF && (
-              <Text style={styles.problem}>
-                比你实测的 {tested!.kg} kg {off > 0 ? '高' : '低'}了 {Math.round(Math.abs(off) * 100)}%：多半是速度测{off > 0 ? '快' : '慢'}了。训练计划仍按实测 1RM 推荐重量。
-              </Text>
+              <Text style={styles.problem}>{tr('比你实测的 {kg} kg {p}了 {off}%：多半是速度测{p2}了。训练计划仍按实测 1RM 推荐重量。', { kg: tested!.kg, p: off > 0 ? tr('高') : tr('低'), off: Math.round(Math.abs(off) * 100), p2: off > 0 ? tr('快') : tr('慢') })}</Text>
             )}
             {ZONES.slice(0, 4).map((z) => {
               const hi = roundLoad(loadAt(est.profile, z.min === 0 ? 0.3 : z.min));
@@ -205,14 +202,12 @@ export default function VbtSession() {
                 </View>
               );
             })}
-            <Text style={text.caption}>
-              按 {est.profile.n} 个重量（每个重量取最快一组）拟合。{tested ? '训练计划里的深蹲按实测 1RM 推荐重量。' : est.oneRm != null ? '训练计划里的深蹲会按估算 1RM 推荐重量。' : ''}
-            </Text>
+            <Text style={text.caption}>{tr('按 {n} 个重量（每个重量取最快一组）拟合。{p}', { n: est.profile.n, p: tested ? tr('训练计划里的深蹲按实测 1RM 推荐重量。') : est.oneRm != null ? tr('训练计划里的深蹲会按估算 1RM 推荐重量。') : '' })}</Text>
           </Card>
         )}
       </ScrollView>
       <View style={styles.footer}>
-        <Button label="完成" variant={sets.length ? 'primary' : 'secondary'} onPress={() => router.back()} />
+        <Button label={tr('完成')} variant={sets.length ? 'primary' : 'secondary'} onPress={() => router.back()} />
       </View>
     </SafeAreaView>
   );
@@ -231,7 +226,7 @@ function Field({ label, unit, value, onChange, integer, wide }: { label: string;
           placeholder="—"
           placeholderTextColor={colors.textFaint}
           style={styles.input}
-          accessibilityLabel={`${label}（${unit}）`}
+          accessibilityLabel={tr('{label}（{unit}）', { label, unit })}
         />
         <Text style={styles.unit}>{unit}</Text>
       </View>

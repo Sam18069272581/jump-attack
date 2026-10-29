@@ -1,6 +1,8 @@
 import { LIB_FROM_PAGE, POSE_CDN } from './poseLib';
 import { POSE_SHARED_JS } from './poseShared';
 
+import { localizeHtml } from '@/i18n';
+
 /**
  * The page that watches the phone's camera while a run-up jump is set up and filmed, run in a WebView
  * (components/PoseCamera.tsx). It shows the camera's picture with the skeletons the pose model finds in it, says what
@@ -14,7 +16,8 @@ import { POSE_SHARED_JS } from './poseShared';
  *
  * The pose model reads the picture a few times a second: the whole picture in squares (media/poseShared.ts `search`)
  * now and then, and in between only a square around the biggest person found, the athlete on the take-off spot.
- * Reading stops while recording, leaving the phone's GPU to the video.
+ * Reading stops while recording, leaving the phone's GPU to the video. Without the model (`pose: false`) the page is
+ * only the camera and the recorder: no `model` or `frame` messages.
  *
  * Messages to the app (`ReactNativeWebView.postMessage`, JSON):
  * - `{ type: 'camera', label, physical, fps, maxFps, width, height }` once the camera's picture comes: the camera's
@@ -41,6 +44,11 @@ export type PoseCameraOptions = {
   bitrate?: number;
   /** The longest take, s. */
   maxSeconds?: number;
+  /**
+   * Whether the pose model watches the picture (default yes). Tests that only need the take (jumps, VBT) film without
+   * it: no model to download, no reading, nothing drawn, just the camera and the recording.
+   */
+  pose?: boolean;
 };
 
 /** WebKit's own default: about 1.25 MB a second of video. */
@@ -59,6 +67,7 @@ export function poseCameraHtml(o: PoseCameraOptions): string {
     accent: o.accent,
     lib: o.lib ?? LIB_FROM_PAGE,
     cdn: POSE_CDN,
+    pose: o.pose ?? true,
     numPoses: 2,
     bitrate: o.bitrate ?? CAMERA_BITRATE,
     maxSeconds: o.maxSeconds ?? MAX_TAKE_S,
@@ -66,7 +75,7 @@ export function poseCameraHtml(o: PoseCameraOptions): string {
     readEvery: READ_EVERY_MS,
     searchEvery: SEARCH_EVERY,
   });
-  return `<!doctype html>
+  return localizeHtml(`<!doctype html>
 <html><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
@@ -327,13 +336,14 @@ ${POSE_SHARED_JS}
     if (r && !r.stopped && r.rec.state !== 'inactive') r.rec.stop();
   };
 
+  var camera = startCamera().catch(function (e) { fail('camera', e); throw e; });
+  if (!CFG.pose) { camera.catch(function () {}); return; }
   var model = POSE.start(CFG).then(
     function (info) { post({ type: 'model', delegate: info.delegate, source: info.source }); },
     function (e) { fail('model', e); throw e; },
   );
-  var camera = startCamera().catch(function (e) { fail('camera', e); throw e; });
   Promise.all([model, camera]).then(loop, function () {});
 })();
 </script>
-</body></html>`;
+</body></html>`);
 }

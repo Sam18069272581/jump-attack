@@ -9,6 +9,7 @@ import { latestResults, newSessionId, type SessionResult } from '@/db/repo';
 import { parseNumber } from '@/domain/entry';
 import { sprintDistance } from '@/domain/interval';
 import { formatValue, getCategory, sprintMetric, SPRINT_DISTANCES, type MetricDef } from '@/domain/metrics';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
@@ -45,8 +46,8 @@ export default function SpeedTests() {
           <Pressable key={m} accessibilityRole="button" accessibilityLabel={def.name} style={({ pressed }) => [styles.row, pressed && { opacity: 0.75 }]} onPress={() => start(def)}>
             <Text style={[styles.code, { color: COLOR }]}>{m} m</Text>
             <View style={{ flex: 1, gap: 2 }}>
-              <Text style={styles.name}>冲刺</Text>
-              <Text style={text.caption}>{last ? `最近 ${formatValue(def, last.best)} s` : '还没测过'}</Text>
+              <Text style={styles.name}>{tr('冲刺')}</Text>
+              <Text style={text.caption}>{last ? tr('最近 {def} s', { def: formatValue(def, last.best) }) : tr('还没测过')}</Text>
             </View>
             <Icon name="chevronRight" size={18} color={colors.textMuted} />
           </Pressable>
@@ -54,7 +55,7 @@ export default function SpeedTests() {
       })}
 
       <View style={styles.custom}>
-        <Text style={styles.name}>自定义距离</Text>
+        <Text style={styles.name}>{tr('自定义距离')}</Text>
         <View style={styles.customRow}>
           <TextInput
             value={custom}
@@ -63,14 +64,14 @@ export default function SpeedTests() {
             placeholder="20"
             placeholderTextColor={colors.textFaint}
             style={styles.customInput}
-            accessibilityLabel="自定义距离（米）"
+            accessibilityLabel={tr('自定义距离（米）')}
           />
           <Text style={styles.unit}>m</Text>
-          <Button label="开始" disabled={!customOk} onPress={() => customOk && start(sprintMetric(customM))} style={{ flex: 1 }} />
+          <Button label={tr('开始')} disabled={!customOk} onPress={() => customOk && start(sprintMetric(customM))} style={{ flex: 1 }} />
         </View>
       </View>
 
-      <Text style={styles.note}>每次建议跑 2–3 趟，取最好成绩。用手机慢动作拍下起跑和冲线，逐帧算时间；也可以用光电门或秒表计时后手动输入。</Text>
+      <Text style={styles.note}>{tr('每次建议跑 2–3 趟，取最好成绩。用手机慢动作拍下起跑和冲线，逐帧算时间；也可以用光电门或秒表计时后手动输入。')}</Text>
     </ScrollView>
   );
 }

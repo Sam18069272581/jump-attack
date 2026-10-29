@@ -4,6 +4,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import type { Pt } from '@/domain/pose';
 import type { Square, WireFrame } from '@/domain/techniqueRead';
+import { tr } from '@/i18n';
 import { stagePosePage, unstagePosePage } from '@/media/poseLib';
 import { poseReaderHtml } from '@/media/poseReaderHtml';
 import { colors } from '@/theme';
@@ -79,7 +80,7 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
     /** iOS ended the page (memory, or the app in the background): a read under way has failed; load it again for the next. */
     function died() {
       const reading = job.current != null;
-      const message = '手机把识别页面关掉了';
+      const message = tr('手机把识别页面关掉了');
       if (timer.current) clearTimeout(timer.current);
       // The read's own failure says the same as onError: whichever the screen hears last is what the athlete reads.
       job.current?.reject(new Error(message));
@@ -92,7 +93,7 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
 
     function hear() {
       if (timer.current) clearTimeout(timer.current);
-      if (job.current) timer.current = setTimeout(() => fail('识别页面没有反应了'), SILENCE_MS);
+      if (job.current) timer.current = setTimeout(() => fail(tr('识别页面没有反应了')), SILENCE_MS);
     }
 
     function ask(call: string, req: Record<string, unknown>, onProgress?: (n: number) => void) {
@@ -118,7 +119,7 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
       } catch {
         return;
       }
-      if (m.type === 'error') return fail(m.stage === 'model' ? `骨架识别启动不了：${m.message}` : m.message);
+      if (m.type === 'error') return fail(m.stage === 'model' ? tr('骨架识别启动不了：{message}', { message: m.message }) : m.message);
       if (m.type === 'ready') {
         loaded.current = true;
         if (waiting.current) web.current?.injectJavaScript(waiting.current);
@@ -156,8 +157,8 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
         scrollEnabled={false}
         bounces={false}
         onMessage={onMessage}
-        onError={() => fail('识别页面打不开')}
-        onHttpError={() => fail('识别页面打不开')}
+        onError={() => fail(tr('识别页面打不开'))}
+        onHttpError={() => fail(tr('识别页面打不开'))}
         onContentProcessDidTerminate={died}
         onRenderProcessGone={died}
         style={[{ backgroundColor: colors.text }, style]}

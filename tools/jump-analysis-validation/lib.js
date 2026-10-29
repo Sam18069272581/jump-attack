@@ -10,12 +10,18 @@ const MOBILE = path.resolve(__dirname, '../../mobile');
 /** Compiles the given files under mobile/src (and what they import) and returns a loader for the compiled modules. */
 function compile(out, files) {
   const build = path.join(out, 'build');
-  // Type errors are the app's typecheck's business (`npm run typecheck`); here tsc runs without the app's config, so
-  // `@/` imports of types don't resolve, which changes nothing in the JavaScript it writes.
-  const r = spawnSync('npx', ['tsc', '--ignoreConfig', '--outDir', build, '--module', 'commonjs', '--target', 'es2022', '--skipLibCheck', '--rootDir', 'src', ...files.map((f) => `src/${f}`)], {
-    cwd: MOBILE,
-    encoding: 'utf8',
-  });
+  // Type errors are the app's typecheck's business (`npm run typecheck`). The app's own tsconfig pulls in Expo's, so a
+  // small one here maps `@/x` to `src/x` (the app's alias), which lets tsc follow those imports and compile them too.
+  const config = path.join(out, 'tsconfig.validate.json');
+  fs.mkdirSync(out, { recursive: true });
+  fs.writeFileSync(
+    config,
+    JSON.stringify({
+      compilerOptions: { outDir: build, rootDir: path.join(MOBILE, 'src'), module: 'commonjs', target: 'es2022', skipLibCheck: true, types: [], paths: { '@/*': [path.join(MOBILE, 'src/*')] } },
+      files: files.map((f) => path.join(MOBILE, 'src', f)),
+    }),
+  );
+  const r = spawnSync('npx', ['tsc', '-p', config], { cwd: MOBILE, encoding: 'utf8' });
   const missing = files.filter((f) => !fs.existsSync(path.join(build, f.replace(/\.ts$/, '.js'))));
   if (missing.length) throw new Error(`tsc wrote nothing for ${missing.join(', ')}:\n${r.stdout}${r.stderr}`);
   // The app imports `@/x` for `src/x`.
@@ -26,11 +32,21 @@ function compile(out, files) {
   return (name) => require(path.join(build, name));
 }
 
+/**
+ * ffmpeg arguments that encode raw grey frames from stdin to H.264. ffmpeg and x264 pick their SIMD code and x264 its
+ * thread count from the machine, and each choice changes the decoded picture a little; with plain C in ffmpeg, SSE2
+ * (every x86-64 CPU has it) in x264 and two threads, a clip comes out the same on every machine, so the accuracy check
+ * (tools/accuracy-regression) can compare its runs in CI with the baseline exactly.
+ */
+function encodeArgs(o, file) {
+  return ['-loglevel', 'error', '-y', '-cpuflags', '0', '-f', 'rawvideo', '-pix_fmt', 'gray', '-s', `${o.width}x${o.height}`, '-r', String(o.fps), '-i', '-', '-c:v', 'libx264', '-crf', '20', '-pix_fmt', 'yuv420p', '-g', '60', '-threads', '2', '-x264-params', 'asm=SSE2', file];
+}
+
 /** Renders a synthetic clip frame by frame and encodes it to H.264 at its real-time frame rate. */
 function encode(S, o, file) {
   return new Promise((resolve, reject) => {
     const frames = Math.floor(o.durationS * o.fps);
-    const ff = spawn('ffmpeg', ['-loglevel', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'gray', '-s', `${o.width}x${o.height}`, '-r', String(o.fps), '-i', '-', '-c:v', 'libx264', '-crf', '20', '-pix_fmt', 'yuv420p', '-g', '60', file]);
+    const ff = spawn('ffmpeg', encodeArgs(o, file));
     ff.on('error', reject);
     ff.on('close', (code) => (code === 0 ? resolve(frames) : reject(new Error(`ffmpeg exited ${code}`))));
     let f = 0;
@@ -144,4 +160,4 @@ async function detectClip(A, reader, { frames, fileFps, captureFps, kind, opts }
   };
 }
 
-module.exports = { compile, encode, encodeAll, serve, openReader, detectClip, MOBILE };
+module.exports = { compile, encode, encodeArgs, encodeAll, serve, openReader, detectClip, MOBILE };

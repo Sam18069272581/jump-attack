@@ -1,5 +1,7 @@
 import type { AlertButton } from 'react-native';
 
+import { tr } from '@/i18n';
+
 export type BrowserDialogs = {
   alert: (message: string) => void;
   confirm: (message: string) => boolean;
@@ -22,7 +24,7 @@ export function showAlert(title: string, message: string | undefined, buttons: A
   }
   const cancel = buttons.find((b) => b.style === 'cancel') ?? buttons[0];
   const action = buttons.find((b) => b !== cancel)!;
-  const chosen = browser.confirm(joined(title, `${message ? `${message}\n\n` : ''}（确定 = ${action.text}）`)) ? action : cancel;
+  const chosen = browser.confirm(joined(title, tr('{p}（确定 = {text}）', { p: message ? `${message}\n\n` : '', text: action.text }))) ? action : cancel;
   chosen.onPress?.();
 }
 

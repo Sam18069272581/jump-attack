@@ -9,6 +9,7 @@ import { addTrial, ensureSession } from '@/db/repo';
 import { manualProblem, parseNumber } from '@/domain/entry';
 import { getMetric } from '@/domain/metrics';
 import { TIMING_NAME, TYPED_TIMINGS } from '@/domain/timing';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
@@ -22,7 +23,7 @@ export default function ManualEntry() {
   const [saving, setSaving] = useState(false);
   const [timing, setTiming] = useState<(typeof TYPED_TIMINGS)[number] | null>(null);
 
-  if (!def) return <Empty title="找不到这个项目" />;
+  if (!def) return <Empty title={tr('找不到这个项目')} />;
   const value = parseNumber(raw);
   const problem = value == null ? null : manualProblem(def, value);
   // Sprint times only compare within one timing method (domain/timing.ts).
@@ -36,7 +37,7 @@ export default function ManualEntry() {
       await addTrial(db, { session_id: session, value, detail: { source: 'manual', ...(timing ? { timing } : {}) } });
       router.replace({ pathname: '/measure/result', params: { metric, session, ...(from ? { from } : {}) } });
     } catch (e) {
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
       setSaving(false);
     }
   }
@@ -46,10 +47,10 @@ export default function ManualEntry() {
       <Stack.Screen options={{ title: def.name }} />
       {/* The button sits right under the field: the number pad has no return key and would cover anything lower. */}
       <ScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag">
-        <Text style={text.muted}>{def.entryHint ?? '输入这一次的成绩'}</Text>
+        <Text style={text.muted}>{def.entryHint ?? tr('输入这一次的成绩')}</Text>
         {askTiming && (
           <View style={{ gap: 8 }}>
-            <Text style={text.muted}>怎么计时的？不同计时方式差 0.1–0.3 秒，成绩只和同一种方式比较。</Text>
+            <Text style={text.muted}>{tr('怎么计时的？不同计时方式差 0.1–0.3 秒，成绩只和同一种方式比较。')}</Text>
             <View style={styles.chips}>
               {TYPED_TIMINGS.map((t) => (
                 <Chip key={t} label={TIMING_NAME[t]} selected={timing === t} onPress={() => setTiming(timing === t ? null : t)} />
@@ -62,16 +63,16 @@ export default function ManualEntry() {
             value={raw}
             onChangeText={setRaw}
             keyboardType="decimal-pad"
-            placeholder={(0).toFixed(def.decimals)}
+            placeholder={decimal((0), def.decimals)}
             placeholderTextColor={colors.textFaint}
             autoFocus
             style={styles.input}
-            accessibilityLabel={`${def.name}（${def.unit}）`}
+            accessibilityLabel={tr('{name}（{unit}）', { name: def.name, unit: def.unit })}
           />
           <Text style={styles.unit}>{def.unit}</Text>
         </View>
         {problem ? <Text style={styles.problem}>{problem}</Text> : null}
-        <Button label="保存这一次" onPress={save} disabled={value == null || problem != null} busy={saving} />
+        <Button label={tr('保存这一次')} onPress={save} disabled={value == null || problem != null} busy={saving} />
       </ScrollView>
     </SafeAreaView>
   );

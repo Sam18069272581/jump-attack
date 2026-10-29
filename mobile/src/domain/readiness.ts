@@ -2,6 +2,8 @@ import { FATIGUE_DROP, readinessOn, type Readiness } from './assess';
 import { addDays, type ISODate } from './dates';
 import { readRecovery, type RecoveryDay, type RecoveryRead } from './recovery';
 
+import { decimal, tr } from '@/i18n';
+
 /** A day's readiness from every signal there is: today's CMJ against its baseline, and HRV / resting HR / sleep. */
 export type DayReadiness = {
   /** Today's best CMJ, or null when not tested. */
@@ -19,7 +21,7 @@ export function dayReadiness(cmj: CmjResult[], recovery: RecoveryDay[], date: IS
   const c = readinessOn(cmj, date);
   const r = readRecovery(recovery, date);
   const signals: string[] = [];
-  if (c.readiness === 'fatigued') signals.push(`CMJ 比近期均值低 ${(c.dropPct * 100).toFixed(1)}%（超过 ${FATIGUE_DROP * 100}%）`);
+  if (c.readiness === 'fatigued') signals.push(tr('CMJ 比近期均值低 {dropPct}%（超过 {FATIGUE_DROP}%）', { dropPct: decimal((c.dropPct * 100), 1), FATIGUE_DROP: FATIGUE_DROP * 100 }));
   if (r.status === 'poor') signals.push(...r.warnings);
   const readiness: Readiness = signals.length ? 'fatigued' : c.readiness === 'ready' || r.status === 'good' || r.status === 'fair' ? 'ready' : 'unknown';
   return { today: c.today, readiness, dropPct: c.dropPct, recovery: r, signals };

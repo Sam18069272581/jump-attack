@@ -7,6 +7,7 @@ import { DunkPanel } from '@/components/DunkPanel';
 import { Button, Card } from '@/components/ui';
 import { loadDiagnosis } from '@/db/dunk';
 import type { DunkDiagnosis } from '@/domain/dunk';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { loadMassGain } from '@/state/bodyMass';
 import { colors, text } from '@/theme';
@@ -32,12 +33,12 @@ export default function Dunk() {
       <DunkPanel diagnosis={d} standingReach={current?.standing_reach_cm ?? null} />
       {mass && (
         <Card style={{ gap: 4 }}>
-          <Text style={text.section}>体重</Text>
+          <Text style={text.section}>{tr('体重')}</Text>
           <Text style={mass.estimated ? text.body : text.muted}>{mass.text}</Text>
-          <Text style={text.caption}>只是估算，不改诊断。</Text>
+          <Text style={text.caption}>{tr('只是估算，不改诊断。')}</Text>
         </Card>
       )}
-      <Button label="改扣篮线" variant="secondary" onPress={() => router.navigate('/me')} />
+      <Button label={tr('改扣篮线')} variant="secondary" onPress={() => router.navigate('/me')} />
     </ScrollView>
   );
 }

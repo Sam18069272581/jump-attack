@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Keyboard, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { tr } from '@/i18n';
 import { colors } from '@/theme';
 
 /**
@@ -24,7 +25,7 @@ export function KeyboardDoneBar() {
   return (
     <View style={[styles.bar, { bottom: keyboardHeight }]}>
       <Pressable accessibilityRole="button" hitSlop={10} onPress={() => Keyboard.dismiss()}>
-        <Text style={styles.label}>收起键盘</Text>
+        <Text style={styles.label}>{tr('收起键盘')}</Text>
       </Pressable>
     </View>
   );

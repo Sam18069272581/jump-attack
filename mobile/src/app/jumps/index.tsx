@@ -8,15 +8,16 @@ import { loadDiagnosis } from '@/db/dunk';
 import { newSessionId } from '@/db/repo';
 import { BLOCKS, type DunkDiagnosis } from '@/domain/dunk';
 import { APPROACH_TOUCH, DROP_JUMP, JUMP_TESTS, LOADED_SJ, REPEATED_JUMP } from '@/domain/metrics';
+import { decimal, localized, tr } from '@/i18n';
 import { isWeb } from '@/media/runtime';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
 /** Multi-step tests that each log several jumps on their own screen. */
-const PROFILES = [
+const PROFILES = localized([
   { key: 'dj', pathname: '/jumps/dj', short: DROP_JUMP.short, color: DROP_JUMP.color, name: 'DJ 跳深 · 找最佳箱高', hint: '逐级加高箱子，看哪个高度 RSI 最高' },
   { key: 'fvp', pathname: '/jumps/fvp', short: LOADED_SJ.short, color: LOADED_SJ.color, name: '力-速度曲线', hint: '史密斯机负重蹲跳 4 级，看缺力量还是缺速度' },
-] as const;
+] as const, 'name', 'hint');
 
 /** Tests the dunk diagnosis is waiting for, or that measure the current limiter. */
 function suggested(d: DunkDiagnosis | null): Set<string> {
@@ -29,9 +30,9 @@ function suggested(d: DunkDiagnosis | null): Set<string> {
 }
 
 function gapLine(d: DunkDiagnosis | null): string {
-  if (!d || d.gapCm == null) return '离扣篮还差多少、缺哪一块';
-  const gap = d.gapCm > 0 ? `还差 ${d.gapCm.toFixed(1)} cm` : '够到扣篮线了';
-  return d.limiter ? `${gap} · 短板：${BLOCKS[d.limiter].name}` : gap;
+  if (!d || d.gapCm == null) return tr('离扣篮还差多少、缺哪一块');
+  const gap = d.gapCm > 0 ? tr('还差 {gapCm} cm', { gapCm: decimal(d.gapCm, 1) }) : tr('够到扣篮线了');
+  return d.limiter ? tr('{gap} · 短板：{name}', { gap, name: BLOCKS[d.limiter].name }) : gap;
 }
 
 export default function JumpTests() {
@@ -51,22 +52,22 @@ export default function JumpTests() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>扣篮</Text>
-      <Row icon="plan" color={colors.accent} name="测试日 · 按顺序测完三项" hint="CMJ → 跳深 → 助跑摸高，视频可以一次多选" onPress={() => router.push('/test-day')} />
-      <Row code={APPROACH_TOUCH.short} color={APPROACH_TOUCH.color} name={APPROACH_TOUCH.name} hint="录像或手填摸到的高度" tag={todo.has(APPROACH_TOUCH.code)} onPress={() => capture(APPROACH_TOUCH.code)} />
-      <Row icon="jump" color={colors.accent} name="扣篮诊断" hint={gapLine(diagnosis)} onPress={() => router.push('/dunk')} />
+      <Text style={styles.heading}>{tr('扣篮')}</Text>
+      <Row icon="plan" color={colors.accent} name={tr('测试日 · 按顺序测完三项')} hint={tr('CMJ → 跳深 → 助跑摸高，视频可以一次多选')} onPress={() => router.push('/test-day')} />
+      <Row code={APPROACH_TOUCH.short} color={APPROACH_TOUCH.color} name={APPROACH_TOUCH.name} hint={tr('录像或手填摸到的高度')} tag={todo.has(APPROACH_TOUCH.code)} onPress={() => capture(APPROACH_TOUCH.code)} />
+      <Row icon="jump" color={colors.accent} name={tr('扣篮诊断')} hint={gapLine(diagnosis)} onPress={() => router.push('/dunk')} />
       {/* Reads video with the pose model in a WebView: not in the web version. */}
-      {!isWeb && <Row code="起跳" color={colors.purple} name="起跳技术 · 骨架分析" hint="侧面拍一次助跑起跳，测起跳速度、角度和助跑速度" onPress={() => router.push('/technique')} />}
+      {!isWeb && <Row code={tr('起跳')} color={colors.purple} name={tr('起跳技术 · 骨架分析')} hint={tr('侧面拍一次助跑起跳，测起跳速度、角度和助跑速度')} onPress={() => router.push('/technique')} />}
 
-      <Text style={styles.heading}>纵跳</Text>
+      <Text style={styles.heading}>{tr('纵跳')}</Text>
       {JUMP_TESTS.map((t) => (
         <Row key={t.code} code={t.short} color={t.color} name={t.name} tag={todo.has(t.code)} onPress={() => capture(t.code)} />
       ))}
       <View style={styles.note}>
-        <Text style={styles.noteText}>每次测试建议做 3 次，取最好成绩。</Text>
+        <Text style={styles.noteText}>{tr('每次测试建议做 3 次，取最好成绩。')}</Text>
       </View>
 
-      <Text style={styles.heading}>找短板</Text>
+      <Text style={styles.heading}>{tr('找短板')}</Text>
       {profiles.map((p) => (
         <Row
           key={p.pathname}
@@ -78,7 +79,7 @@ export default function JumpTests() {
           onPress={() => router.push({ pathname: p.pathname, params: { session: newSessionId() } })}
         />
       ))}
-      <Row code={REPEATED_JUMP.short} color={REPEATED_JUMP.color} name={REPEATED_JUMP.name} hint="原地连跳 10 次，看 RSI 和触地稳不稳" onPress={() => capture(REPEATED_JUMP.code)} />
+      <Row code={REPEATED_JUMP.short} color={REPEATED_JUMP.color} name={REPEATED_JUMP.name} hint={tr('原地连跳 10 次，看 RSI 和触地稳不稳')} onPress={() => capture(REPEATED_JUMP.code)} />
     </ScrollView>
   );
 }
@@ -97,7 +98,7 @@ function Row({ code, icon, color, name, hint, tag, onPress }: { code?: string; i
         <Text style={styles.name}>{name}</Text>
         {hint != null && <Text style={styles.noteText}>{hint}</Text>}
       </View>
-      {tag && <Text style={styles.tag}>建议测</Text>}
+      {tag && <Text style={styles.tag}>{tr('建议测')}</Text>}
       <Icon name="chevronRight" size={18} color={colors.textMuted} />
     </Pressable>
   );

@@ -8,17 +8,19 @@ import type { MetricDef } from '../domain/metrics';
 
 import type { ReplayConfig } from './replayHtml';
 
+import { decimal, tr } from '@/i18n';
+
 /** Frames a second of the exported video. */
 const OUT_FPS = 30;
 /** Real-time frames shown each second of video: 120 is quarter speed for 30 fps output. */
 const SHOWN_PER_S = 120;
 
-const cm = (x: number) => x.toFixed(1);
+const cm = (x: number) => decimal(x, 1);
 const ms = (s: number) => `${Math.round(s * 1000)} ms`;
 
 function label(j: JumpResult): { label: string; detail: string } {
-  if (j.rsi != null && j.gctS != null) return { label: `${j.rsi.toFixed(2)} RSI`, detail: `${cm(j.jhCm)} cm · 触地 ${ms(j.gctS)}` };
-  return { label: `${cm(j.jhCm)} cm`, detail: `滞空 ${ms(j.ftS)}` };
+  if (j.rsi != null && j.gctS != null) return { label: `${decimal(j.rsi, 2)} RSI`, detail: tr('{jhCm} cm · 触地 {gctS}', { jhCm: cm(j.jhCm), gctS: ms(j.gctS) }) };
+  return { label: `${cm(j.jhCm)} cm`, detail: tr('滞空 {ftS}', { ftS: ms(j.ftS) }) };
 }
 
 export function replayConfig(o: {
@@ -43,25 +45,25 @@ export function replayConfig(o: {
   let headline: ReplayConfig['headline'];
   let stats: ReplayConfig['stats'];
   if (kind === 'repeat') {
-    headline = { label: '10/5 RSI', value: s.rsi105?.toFixed(2) ?? '—', unit: '' };
+    headline = { label: '10/5 RSI', value: s.rsi105 != null ? decimal(s.rsi105, 2) : '—', unit: '' };
     stats = [
-      { label: 'GCT-CV', value: s.gctCv != null ? `${s.gctCv.toFixed(1)}%` : '—' },
-      { label: 'DRI-CV', value: s.driCv != null ? `${s.driCv.toFixed(1)}%` : '—' },
-      { label: '平均触地', value: s.gctS ? ms(s.gctS.mean) : '—' },
+      { label: 'GCT-CV', value: s.gctCv != null ? `${decimal(s.gctCv, 1)}%` : '—' },
+      { label: 'DRI-CV', value: s.driCv != null ? `${decimal(s.driCv, 1)}%` : '—' },
+      { label: tr('平均触地'), value: s.gctS ? ms(s.gctS.mean) : '—' },
     ];
   } else if (kind === 'drop') {
-    headline = { label: '最好 RSI', value: s.rsi?.best.toFixed(2) ?? '—', unit: '' };
+    headline = { label: tr('最好 RSI'), value: s.rsi ? decimal(s.rsi.best, 2) : '—', unit: '' };
     stats = [
-      { label: '最短触地', value: s.gctS ? ms(s.gctS.best) : '—' },
-      { label: '平均跳高', value: s.jhCm ? `${cm(s.jhCm.mean)} cm` : '—' },
-      { label: 'RSR', value: s.rsr?.mean.toFixed(2) ?? '—' },
+      { label: tr('最短触地'), value: s.gctS ? ms(s.gctS.best) : '—' },
+      { label: tr('平均跳高'), value: s.jhCm ? `${cm(s.jhCm.mean)} cm` : '—' },
+      { label: 'RSR', value: s.rsr ? decimal(s.rsr.mean, 2) : '—' },
     ];
   } else {
-    headline = { label: '最高', value: s.jhCm ? cm(s.jhCm.best) : '—', unit: 'cm' };
+    headline = { label: tr('最高'), value: s.jhCm ? cm(s.jhCm.best) : '—', unit: 'cm' };
     stats = [
-      { label: '平均', value: s.jhCm ? `${cm(s.jhCm.mean)}` : '—' },
-      { label: '最长滞空', value: s.ftS ? ms(s.ftS.best) : '—' },
-      { label: '计入', value: `${s.counted}/${s.total}` },
+      { label: tr('平均'), value: s.jhCm ? `${cm(s.jhCm.mean)}` : '—' },
+      { label: tr('最长滞空'), value: s.ftS ? ms(s.ftS.best) : '—' },
+      { label: tr('计入'), value: `${s.counted}/${s.total}` },
     ];
   }
   return {
@@ -83,10 +85,10 @@ export function replayConfig(o: {
     title: o.def.name,
     headline,
     stats,
-    note: err ? `每个关键帧 ±1 帧：跳高 ±${err.jhCm.toFixed(1)} cm` : '',
+    note: err ? tr('每个关键帧 ±1 帧：跳高 ±{jhCm} cm', { jhCm: decimal(err.jhCm, 1) }) : '',
     date: o.date,
     brand: 'JUMP ATTACK',
-    speed: slower > 1.05 ? `1/${Math.round(slower)} 慢放` : '原速',
+    speed: slower > 1.05 ? tr('1/{slower} 慢放', { slower: Math.round(slower) }) : tr('原速'),
     colors: o.colors,
   };
 }

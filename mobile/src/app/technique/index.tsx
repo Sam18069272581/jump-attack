@@ -14,6 +14,7 @@ import { shortDate, toISODate } from '@/domain/dates';
 import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { MetricKey } from '@/domain/technique';
 import { flagText, formatMeasured, METRIC_ORDER, METRIC_TEXT, shownFlags } from '@/domain/techniqueText';
+import { decimal, localized, tr } from '@/i18n';
 import { clearPoseRuns, downloadPoseLib, POSE_DOWNLOAD_BYTES, poseLibReady } from '@/media/poseLib';
 import { pruneTakes } from '@/media/takes';
 import { useAthlete } from '@/state/athlete';
@@ -22,12 +23,12 @@ import { colors, fonts, radius } from '@/theme';
 /** What a take's card shows before it is opened. */
 const HEADLINE: MetricKey[] = ['angle', 'approach', 'plant'];
 
-const GUIDE = [
+const GUIDE = localized([
   '手机横放在三脚架上，放在助跑线侧面 7–10 米，镜头高约 1 米，对着起跳点。',
   '地上贴两条胶带：一条在起跳点，一条往回 3 米（量助跑速度用）。',
   '起跳脚那一侧对着手机；衣服颜色和背景要分得开，光线要够。',
   '最准的是 iPhone 慢动作（240 帧）拍完再导入；App 里直接拍最多 60 帧，触地时间测不准。',
-];
+]);
 
 const MODEL_MB = Math.round(POSE_DOWNLOAD_BYTES / 1e6);
 
@@ -37,7 +38,7 @@ function when(at: string): string {
 }
 
 function styleText(s: TechniqueTake['style']): string {
-  return s.kind === 'two' ? '双脚起跳' : `单脚起跳（${s.foot === 'left' ? '左' : '右'}脚）`;
+  return s.kind === 'two' ? tr('双脚起跳') : tr('单脚起跳（{p}脚）', { p: s.foot === 'left' ? tr('左') : tr('右') });
 }
 
 /**
@@ -103,10 +104,10 @@ export default function Technique() {
   }
 
   function remove(t: TechniqueTake) {
-    Alert.alert('删除这条记录？', t.videoUri ? '这次在 App 里拍的录像也会一起删掉。' : undefined, [
-      { text: '取消', style: 'cancel' },
+    Alert.alert(tr('删除这条记录？'), t.videoUri ? tr('这次在 App 里拍的录像也会一起删掉。') : undefined, [
+      { text: tr('取消'), style: 'cancel' },
       {
-        text: '删除',
+        text: tr('删除'),
         style: 'destructive',
         onPress: async () => {
           await deleteTechniqueTake(db, t.id);
@@ -119,26 +120,26 @@ export default function Technique() {
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
-      <Text style={styles.lead}>从侧面拍一次助跑起跳，测起跳垂直速度、起跳角度、助跑速度、最后一步触地时间和步长。只测量和显示，不下诊断；每个数都带误差，测不准的会标出来。</Text>
+      <Text style={styles.lead}>{tr('从侧面拍一次助跑起跳，测起跳垂直速度、起跳角度、助跑速度、最后一步触地时间和步长。只测量和显示，不下诊断；每个数都带误差，测不准的会标出来。')}</Text>
 
       {!ready && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>先下载骨架识别模型</Text>
-          <Text style={styles.muted}>第一次用要下载约 {MODEL_MB} MB，存在手机上，以后没网也能用。视频只在手机上分析，不上传。</Text>
+          <Text style={styles.cardTitle}>{tr('先下载骨架识别模型')}</Text>
+          <Text style={styles.muted}>{tr('第一次用要下载约 {MODEL_MB} MB，存在手机上，以后没网也能用。视频只在手机上分析，不上传。', { MODEL_MB })}</Text>
           {download != null ? (
-            <PulseProgress progress={download} label={`正在下载 ${Math.round(download * 100)}%`} />
+            <PulseProgress progress={download} label={tr('正在下载 {download}%', { download: Math.round(download * 100) })} />
           ) : (
-            <Button label="下载模型" onPress={getModel} />
+            <Button label={tr('下载模型')} onPress={getModel} />
           )}
-          {failed && <Text style={styles.warn}>下载失败：{failed}</Text>}
+          {failed && <Text style={styles.warn}>{tr('下载失败：{failed}', { failed })}</Text>}
         </View>
       )}
 
-      <Button label="现场拍摄" onPress={() => router.push({ pathname: '/technique/camera', params: { session: newSessionId() } })} disabled={!ready} />
-      <Button label="导入慢动作视频" variant="secondary" onPress={importClip} disabled={!ready} />
+      <Button label={tr('现场拍摄')} onPress={() => router.push({ pathname: '/technique/camera', params: { session: newSessionId() } })} disabled={!ready} />
+      <Button label={tr('导入慢动作视频')} variant="secondary" onPress={importClip} disabled={!ready} />
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>怎么拍</Text>
+        <Text style={styles.cardTitle}>{tr('怎么拍')}</Text>
         {GUIDE.map((g, i) => (
           <View key={i} style={styles.guideRow}>
             <Text style={styles.guideNo}>{i + 1}</Text>
@@ -147,7 +148,7 @@ export default function Technique() {
         ))}
       </View>
 
-      {takes.length > 0 && <Text style={styles.heading}>记录</Text>}
+      {takes.length > 0 && <Text style={styles.heading}>{tr('记录')}</Text>}
       {takes.map((t, i) => {
         const vz = t.metrics.vz;
         const dayReach = reach[toISODate(new Date(t.at))];
@@ -155,11 +156,9 @@ export default function Technique() {
         return (
           <Rise key={t.id} index={i}>
             <View style={styles.card}>
-              <Pressable accessibilityRole="button" accessibilityLabel={`展开第 ${i + 1} 条`} onPress={() => setOpen(expanded ? null : t.id)} style={{ gap: 6 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr('展开第 {i} 条', { i: i + 1 })} onPress={() => setOpen(expanded ? null : t.id)} style={{ gap: 6 }}>
                 <View style={styles.takeHead}>
-                  <Text style={styles.muted}>
-                    {when(t.at)} · {t.source === 'camera' ? 'App 拍摄' : '导入'} · {t.captureFps} 帧
-                  </Text>
+                  <Text style={styles.muted}>{tr('{at} · {p} · {captureFps} 帧', { at: when(t.at), p: t.source === 'camera' ? tr('App 拍摄') : tr('导入'), captureFps: t.captureFps })}</Text>
                   <Icon name={expanded ? 'chevronDown' : 'chevronRight'} size={16} color={colors.textMuted} />
                 </View>
                 <Text style={styles.cardTitle}>{styleText(t.style)}</Text>
@@ -173,7 +172,7 @@ export default function Technique() {
                     {METRIC_TEXT[k].name} {formatMeasured(k, t.metrics[k]!)}
                   </Text>
                 ))}
-                <Text style={styles.reach}>{dayReach != null ? `当天助跑摸高 ${dayReach.toFixed(APPROACH_TOUCH.decimals)} cm` : '当天没测助跑摸高'}</Text>
+                <Text style={styles.reach}>{dayReach != null ? tr('当天助跑摸高 {dayReach} cm', { dayReach: decimal(dayReach, APPROACH_TOUCH.decimals) }) : tr('当天没测助跑摸高')}</Text>
               </Pressable>
               {expanded && (
                 <View style={{ gap: 6 }}>
@@ -187,7 +186,7 @@ export default function Technique() {
                       {flagText(f, t.flags)}
                     </Text>
                   ))}
-                  <Button label="删除这条记录" variant="secondary" onPress={() => remove(t)} />
+                  <Button label={tr('删除这条记录')} variant="secondary" onPress={() => remove(t)} />
                 </View>
               )}
             </View>

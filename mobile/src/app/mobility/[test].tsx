@@ -10,6 +10,7 @@ import { addTrial, ensureSession, newSessionId } from '@/db/repo';
 import { manualProblem, parseNumber } from '@/domain/entry';
 import { formatValue, type MetricDef } from '@/domain/metrics';
 import { asymmetry, getMobilityTest } from '@/domain/mobility';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
@@ -26,7 +27,7 @@ export default function MobilityEntry() {
   const [meter, setMeter] = useState<'L' | 'R' | null>(null);
   const [saving, setSaving] = useState(false);
 
-  if (!t) return <Empty title="找不到这个测试" />;
+  if (!t) return <Empty title={tr('找不到这个测试')} />;
   const angles = t.unit === '°';
   const l = parseNumber(left.raw);
   const r = parseNumber(right.raw);
@@ -46,7 +47,7 @@ export default function MobilityEntry() {
       }
       router.back();
     } catch (e) {
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
       setSaving(false);
     }
   }
@@ -54,10 +55,10 @@ export default function MobilityEntry() {
   const sideCard = (label: 'L' | 'R', def: MetricDef, side: Side, set: (s: Side) => void) => (
     <Card style={{ gap: 10 }}>
       <View style={styles.sideHead}>
-        <Text style={text.section}>{label === 'L' ? '左侧' : '右侧'}</Text>
+        <Text style={text.section}>{label === 'L' ? tr('左侧') : tr('右侧')}</Text>
         {angles && (
           <Pressable accessibilityRole="button" onPress={() => setMeter(meter === label ? null : label)}>
-            <Text style={styles.link}>{meter === label ? '收起量角' : '手机量角'}</Text>
+            <Text style={styles.link}>{meter === label ? tr('收起量角') : tr('手机量角')}</Text>
           </Pressable>
         )}
       </View>
@@ -66,10 +67,10 @@ export default function MobilityEntry() {
           value={side.raw}
           onChangeText={(raw) => set({ raw, measured: false })}
           keyboardType="numbers-and-punctuation"
-          placeholder={(0).toFixed(def.decimals)}
+          placeholder={decimal((0), def.decimals)}
           placeholderTextColor={colors.textFaint}
           style={styles.input}
-          accessibilityLabel={`${def.name}（${def.unit}）`}
+          accessibilityLabel={tr('{name}（{unit}）', { name: def.name, unit: def.unit })}
         />
         <Text style={styles.unit}>{def.unit}</Text>
       </View>
@@ -97,16 +98,11 @@ export default function MobilityEntry() {
           </Text>
         ))}
         {a && (
-          <Text style={[styles.asym, a.flagged && { color: colors.warn }]}>
-            左右差 {formatValue(t.left, a.diff)}
-            {t.unit}
-            {a.pct != null ? `（${Math.round(a.pct * 100)}%）` : ''}
-            {a.flagged ? '，超过提醒线，多练弱侧' : '，在正常范围内'}
-          </Text>
+          <Text style={[styles.asym, a.flagged && { color: colors.warn }]}>{tr('左右差 {left}{unit}{p}{p2}', { left: formatValue(t.left, a.diff), unit: t.unit, p: a.pct != null ? tr('（{pct}%）', { pct: Math.round(a.pct * 100) }) : '', p2: a.flagged ? tr('，超过提醒线，多练弱侧') : tr('，在正常范围内') })}</Text>
         )}
       </ScrollView>
       <View style={styles.footer}>
-        <Button label="保存" onPress={save} disabled={!canSave} busy={saving} />
+        <Button label={tr('保存')} onPress={save} disabled={!canSave} busy={saving} />
       </View>
     </SafeAreaView>
   );

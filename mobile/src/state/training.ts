@@ -26,6 +26,7 @@ import { dayReadiness, fatigueStreak, type DayReadiness } from '@/domain/readine
 import { poorDays, readDay, selfSignal, setTarget, type DayInputs, type DayReading, type SetTarget } from '@/domain/target';
 import { getTemplate } from '@/domain/templates';
 import { LOAD_FROM_VBT, pctOf1rm, roundLoad } from '@/domain/vbt';
+import { tr } from '@/i18n';
 
 import { loadTrainingLoads } from './load';
 
@@ -172,6 +173,6 @@ export async function beginWorkout(db: SQLiteDatabase, data: TrainingData, date:
     readiness,
     cmjDrop: r?.today != null ? r.dropPct : null,
     adjustments,
-    reason: reasons.length ? reasons.join('；') : null,
+    reason: reasons.length ? reasons.join(tr('；')) : null,
   });
 }

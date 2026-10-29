@@ -7,12 +7,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Button, Card } from '@/components/ui';
 import { SAMPLE_IMPORT } from '@/domain/healthImport';
 import { getCategory } from '@/domain/metrics';
+import { localized, tr } from '@/i18n';
 import { hasHealthConsent, setHealthConsent } from '@/state/healthConsent';
 import { colors, fonts, text } from '@/theme';
 
 const COLOR = getCategory('recovery').color;
 
-const STEPS: { title: string; body: string }[] = [
+const STEPS: { title: string; body: string }[] = localized([
   { title: '新建快捷指令', body: '打开「快捷指令」App，点右上角「+」，命名为「恢复数据」。' },
   {
     title: '读取 HRV、静息心率、呼吸',
@@ -28,7 +29,7 @@ const STEPS: { title: string; body: string }[] = [
   },
   { title: '复制并回到 App', body: '添加「拷贝到剪贴板」。想跑完直接回来，可以再加「打开 App」选 Expo Go。' },
   { title: '第一次运行', body: 'iOS 会问是否允许「快捷指令」读取这些健康数据，选允许。这一步由苹果管，随时可以在「健康」App → 共享 → App 里关掉。' },
-];
+], 'title', 'body');
 
 /** How to set up the Shortcut that copies Apple Health data, and the user's consent to import it. */
 export default function HealthImportGuide() {
@@ -41,8 +42,8 @@ export default function HealthImportGuide() {
   );
 
   async function copySample() {
-    await Clipboard.setStringAsync(SAMPLE_IMPORT);
-    Alert.alert('已复制示例', '回到恢复页点「从苹果健康导入」试一下。');
+    await Clipboard.setStringAsync(tr(SAMPLE_IMPORT));
+    Alert.alert(tr('已复制示例'), tr('回到恢复页点「从苹果健康导入」试一下。'));
   }
 
   async function withdraw() {
@@ -53,9 +54,7 @@ export default function HealthImportGuide() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={text.body}>
-          Expo Go 里的 App 不能直接读「健康」，所以借 iPhone 自带的「快捷指令」读出今天的数据并复制，回到恢复页点一下就能填好。设置一次，以后每天起床跑一下就行，也可以加到主屏幕或设成自动化。
-        </Text>
+        <Text style={text.body}>{tr('Expo Go 里的 App 不能直接读「健康」，所以借 iPhone 自带的「快捷指令」读出今天的数据并复制，回到恢复页点一下就能填好。设置一次，以后每天起床跑一下就行，也可以加到主屏幕或设成自动化。')}</Text>
 
         {STEPS.map((s, i) => (
           <Card key={s.title} style={{ gap: 6 }}>
@@ -68,18 +67,16 @@ export default function HealthImportGuide() {
         ))}
 
         <Card style={{ gap: 8 }}>
-          <Text style={text.section}>格式</Text>
-          <Text style={text.caption}>每行「名称: 数字」，单位可带可不带。名称认 HRV/心率变异性、静息心率、睡眠、呼吸；睡眠可以是小时、分钟、秒或「7小时24分钟」。没有的项留空即可。</Text>
-          <Text style={styles.sample}>{SAMPLE_IMPORT}</Text>
-          <Button label="复制示例试一下" variant="secondary" onPress={copySample} />
+          <Text style={text.section}>{tr('格式')}</Text>
+          <Text style={text.caption}>{tr('每行「名称: 数字」，单位可带可不带。名称认 HRV/心率变异性、静息心率、睡眠、呼吸；睡眠可以是小时、分钟、秒或「7小时24分钟」。没有的项留空即可。')}</Text>
+          <Text style={styles.sample}>{tr(SAMPLE_IMPORT)}</Text>
+          <Button label={tr('复制示例试一下')} variant="secondary" onPress={copySample} />
         </Card>
 
         <Card style={{ gap: 8 }}>
-          <Text style={text.section}>隐私</Text>
-          <Text style={text.caption}>
-            导入的数据存在这台手机的 App 里；登录了云端同步时会随全部数据备份到你自己的账号。App 只在你点导入时读一次剪贴板。{consent ? '你已同意导入健康数据。' : '你还没有同意导入，第一次导入时会先问你。'}
-          </Text>
-          {consent && <Button label="撤回同意" variant="ghost" onPress={withdraw} />}
+          <Text style={text.section}>{tr('隐私')}</Text>
+          <Text style={text.caption}>{tr('导入的数据存在这台手机的 App 里；登录了云端同步时会随全部数据备份到你自己的账号。App 只在你点导入时读一次剪贴板。{p}', { p: consent ? tr('你已同意导入健康数据。') : tr('你还没有同意导入，第一次导入时会先问你。') })}</Text>
+          {consent && <Button label={tr('撤回同意')} variant="ghost" onPress={withdraw} />}
         </Card>
       </ScrollView>
     </SafeAreaView>

@@ -20,6 +20,7 @@ import { jumpVolumeNote, kneeStatus, PAIN_HINT, PAIN_LIMIT } from '@/domain/pain
 import { formatPrescription, formatRpe, isLoaded, personalNote, planDay, summarizeWorkout, type LoggedSet, type PersonalNumbers, type Prescription } from '@/domain/plan';
 import { allowanceText, checkSet, setTarget, STATE_LABEL, usualWarmupLoad, type DayReading } from '@/domain/target';
 import { LOAD_FROM_VBT } from '@/domain/vbt';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { beginWorkout, loadDay, loadPersonalNumbers, loadSuggestions, loadTraining, sessionFor, type Day, type LoadSuggestion, type TrainingData } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
@@ -85,7 +86,7 @@ export default function WorkoutScreen() {
   if (loaded === 'none' || !planned) {
     return (
       <SafeAreaView style={styles.screen}>
-        <Empty title="这天没有安排训练" hint="回到训练页看看计划" />
+        <Empty title={tr('这天没有安排训练')} hint={tr('回到训练页看看计划')} />
       </SafeAreaView>
     );
   }
@@ -111,7 +112,7 @@ export default function WorkoutScreen() {
     if (v == null) return;
     const others = sets.filter((s) => s.exercise_code === p.code && s.set_no !== setNo && s.mean_velocity != null).map((s) => s.mean_velocity!);
     const check = checkSet(v, suggested[p.code]?.minV ?? null, others.length ? Math.max(...others) : null);
-    if (check.stop) Alert.alert('今天到这里为止', `${check.why}。${p.name}剩下的组今天不做了，硬练只会积累疲劳。`);
+    if (check.stop) Alert.alert(tr('今天到这里为止'), tr('{why}。{name}剩下的组今天不做了，硬练只会积累疲劳。', { why: check.why, name: p.name }));
   }
 
   async function logWarmup(lift: string, kg: number, v: number) {
@@ -135,9 +136,9 @@ export default function WorkoutScreen() {
       setFinishing(false);
     };
     if (summary.setsDone < summary.setsPlanned) {
-      Alert.alert('结束训练？', `还有 ${summary.setsPlanned - summary.setsDone} 组没打勾，会按已完成的记录。`, [
-        { text: '继续练', style: 'cancel' },
-        { text: '结束', onPress: go },
+      Alert.alert(tr('结束训练？'), tr('还有 {setsPlanned} 组没打勾，会按已完成的记录。', { setsPlanned: summary.setsPlanned - summary.setsDone }), [
+        { text: tr('继续练'), style: 'cancel' },
+        { text: tr('结束'), onPress: go },
       ]);
     } else {
       await go();
@@ -151,17 +152,17 @@ export default function WorkoutScreen() {
         <Text style={text.muted}>
           {shortDate(date)} · {session.focus}
         </Text>
-        {startedOn > date && <Text style={styles.suggest}>{startedOn === toISODate(new Date()) ? '今天' : shortDate(startedOn)}补上这节课</Text>}
+        {startedOn > date && <Text style={styles.suggest}>{tr('{p}补上这节课', { p: startedOn === toISODate(new Date()) ? tr('今天') : shortDate(startedOn) })}</Text>}
 
         {done && (
           <Card style={{ gap: 10 }}>
-            <Text style={[text.section, { color: colors.good }]}>训练完成</Text>
+            <Text style={[text.section, { color: colors.good }]}>{tr('训练完成')}</Text>
             <View style={styles.stats}>
-              <Stat label="完成组数" value={`${summary.setsDone}/${summary.setsPlanned}`} />
-              <Stat label="跳跃次数" value={String(summary.jumps)} />
-              <Stat label="训练量" value={`${summary.volumeKg}`} unit="kg" />
+              <Stat label={tr('完成组数')} value={`${summary.setsDone}/${summary.setsPlanned}`} />
+              <Stat label={tr('跳跃次数')} value={String(summary.jumps)} />
+              <Stat label={tr('训练量')} value={`${summary.volumeKg}`} unit="kg" />
             </View>
-            {workout.adjustments.length === 0 && <Text style={text.caption}>{workout.readiness === 'ready' ? '准备度正常，按计划完成。' : '没测 CMJ，按原计划完成。'}</Text>}
+            {workout.adjustments.length === 0 && <Text style={text.caption}>{workout.readiness === 'ready' ? tr('准备度正常，按计划完成。') : tr('没测 CMJ，按原计划完成。')}</Text>}
             {summary.jumps + testJumps > 0 && <Text style={[text.caption, volume.warn && { color: colors.warn }]}>{volume.text}</Text>}
             <SessionLoad
               workout={workout}
@@ -170,7 +171,7 @@ export default function WorkoutScreen() {
                 await reload();
               }}
             />
-            <ScoreScale label="训练中膝盖最疼几分" value={pain} onPick={recordPain} hint={PAIN_HINT} warnAbove={PAIN_LIMIT} />
+            <ScoreScale label={tr('训练中膝盖最疼几分')} value={pain} onPick={recordPain} hint={tr(PAIN_HINT)} warnAbove={PAIN_LIMIT} />
           </Card>
         )}
 
@@ -178,14 +179,14 @@ export default function WorkoutScreen() {
 
         {(day.state === 'fair' || day.state === 'poor') && (
           <View style={[styles.dayNote, day.state === 'poor' && { borderColor: colors.warn }]}>
-            <Text style={[styles.dayTitle, day.state === 'poor' && { color: colors.warn }]}>今天状态{STATE_LABEL[day.state]}</Text>
+            <Text style={[styles.dayTitle, day.state === 'poor' && { color: colors.warn }]}>{tr('今天状态{STATE_LABEL}', { STATE_LABEL: STATE_LABEL[day.state] })}</Text>
             {day.reasons.map((r) => (
               <Text key={r} style={styles.dayLine}>
                 · {r}
               </Text>
             ))}
             {allowance && <Text style={styles.dayLine}>{allowance}</Text>}
-            {day.state === 'poor' && <Text style={styles.dayLine}>今天的成绩不计入进步趋势。</Text>}
+            {day.state === 'poor' && <Text style={styles.dayLine}>{tr('今天的成绩不计入进步趋势。')}</Text>}
           </View>
         )}
 
@@ -196,17 +197,15 @@ export default function WorkoutScreen() {
               <Text style={styles.dose}>{formatPrescription(p)}</Text>
             </View>
             {demoFor(p.code) && (
-              <Pressable accessibilityRole="link" accessibilityLabel={`${p.name}怎么做`} hitSlop={8} onPress={() => router.push({ pathname: '/exercise/[code]', params: { code: p.code } })}>
-                <Text style={styles.demoLink}>怎么做 ›</Text>
+              <Pressable accessibilityRole="link" accessibilityLabel={tr('{name}怎么做', { name: p.name })} hitSlop={8} onPress={() => router.push({ pathname: '/exercise/[code]', params: { code: p.code } })}>
+                <Text style={styles.demoLink}>{tr('怎么做 ›')}</Text>
               </Pressable>
             )}
             {p.cue ? <Text style={text.caption}>{p.cue}</Text> : null}
             {personalNote(p.code, personal) && <Text style={styles.suggest}>{personalNote(p.code, personal)}</Text>}
             {suggested[p.code] && <SuggestionLine p={p} s={suggested[p.code]} />}
             {!suggested[p.code] && isLoaded(p) && (fromLast(p.code)?.loadFactor ?? 1) < 1 && (
-              <Text style={styles.suggest}>
-                上次 {loads[p.code]} kg，今天状态{STATE_LABEL[day.state]}，建议 {fromLast(p.code)!.kg} kg
-              </Text>
+              <Text style={styles.suggest}>{tr('上次 {loads} kg，今天状态{STATE_LABEL}，建议 {kg} kg', { loads: loads[p.code], STATE_LABEL: STATE_LABEL[day.state], kg: fromLast(p.code)!.kg })}</Text>
             )}
             {LOAD_FROM_VBT[p.code] && !done && (
               <WarmupRow
@@ -238,7 +237,7 @@ export default function WorkoutScreen() {
         ))}
       </ScrollView>
       <View style={styles.footer}>
-        {done ? <Button label="返回训练页" variant="secondary" onPress={() => router.back()} /> : <Button label="完成训练" onPress={finish} busy={finishing} />}
+        {done ? <Button label={tr('返回训练页')} variant="secondary" onPress={() => router.back()} /> : <Button label={tr('完成训练')} onPress={finish} busy={finishing} />}
       </View>
     </SafeAreaView>
   );
@@ -246,16 +245,13 @@ export default function WorkoutScreen() {
 
 /** The VBT-based weight, eased for the day, and the bar speed it should move at. */
 function SuggestionLine({ p, s }: { p: Prescription; s: LoadSuggestion }) {
-  const eased = s.loadFactor < 1 ? `，今天按状态减到 ${s.kg} kg` : '';
+  const eased = s.loadFactor < 1 ? tr('，今天按状态减到 {kg} kg', { kg: s.kg }) : '';
   const line =
     s.minV != null
-      ? ` · 达标线 ${s.minV.toFixed(2)} m/s${s.velocityTolerance > 0 && s.targetV != null ? `（目标 ${s.targetV.toFixed(2)}，今天允许慢 ${Math.round(s.velocityTolerance * 100)}%）` : ''}`
+      ? tr(' · 达标线 {minV} m/s{p}', { minV: decimal(s.minV, 2), p: s.velocityTolerance > 0 && s.targetV != null ? tr('（目标 {targetV}，今天允许慢 {velocityTolerance}%）', { targetV: decimal(s.targetV, 2), velocityTolerance: Math.round(s.velocityTolerance * 100) }) : '' })
       : '';
   return (
-    <Text style={styles.suggest}>
-      按{s.source === 'tested' ? '实测' : ' VBT 估算'} 1RM {Math.round(s.oneRm)} kg，{p.reps} 次 @ RPE {formatRpe(p.rpe ?? 8)} 建议 {s.baseKg} kg{eased}
-      {line}
-    </Text>
+    <Text style={styles.suggest}>{tr('按{p} 1RM {oneRm} kg，{reps} 次 @ RPE {rpe} 建议 {baseKg} kg{eased}{line}', { p: s.source === 'tested' ? tr('实测') : tr(' VBT 估算'), oneRm: Math.round(s.oneRm), reps: p.reps, rpe: formatRpe(p.rpe ?? 8), baseKg: s.baseKg, eased, line })}</Text>
   );
 }
 
@@ -268,7 +264,7 @@ function WarmupRow({ usualKg, reading, onLog }: { usualKg: number | null; readin
   const ok = load != null && load > 0 && velocity != null && velocity > 0 && velocity < 3;
 
   function save() {
-    if (!ok) return Alert.alert('请检查数字', '填热身重量和最快一次的平均速度（m/s）');
+    if (!ok) return Alert.alert(tr('请检查数字'), tr('填热身重量和最快一次的平均速度（m/s）'));
     onLog(load!, velocity!);
     setV('');
   }
@@ -277,15 +273,15 @@ function WarmupRow({ usualKg, reading, onLog }: { usualKg: number | null; readin
     <View style={styles.warmup}>
       <Text style={text.caption}>
         {reading
-          ? `热身 ${reading.load} kg：${reading.v.toFixed(2)} m/s，是 30 天均值 ${reading.mean.toFixed(2)} 的 ${Math.round(reading.pct * 100)}%（${STATE_LABEL[reading.state]}）`
-          : '热身速度：用平时的热身重量做一组，填最快一次的平均速度，和 30 天均值比判断今天的状态'}
+          ? tr('热身 {load} kg：{v} m/s，是 30 天均值 {mean} 的 {pct}%（{STATE_LABEL}）', { load: reading.load, v: decimal(reading.v, 2), mean: decimal(reading.mean, 2), pct: Math.round(reading.pct * 100), STATE_LABEL: STATE_LABEL[reading.state] })
+          : tr('热身速度：用平时的热身重量做一组，填最快一次的平均速度，和 30 天均值比判断今天的状态')}
       </Text>
       <View style={styles.setRow}>
-        <Text style={styles.setNo}>热</Text>
-        <Field value={kg} onChange={setKg} placeholder={usualKg != null ? String(usualKg) : '—'} unit="kg" label="热身重量" editable decimal />
-        <Field value={v} onChange={setV} placeholder="0.00" unit="m/s" label="热身速度" editable decimal />
+        <Text style={styles.setNo}>{tr('热')}</Text>
+        <Field value={kg} onChange={setKg} placeholder={usualKg != null ? String(usualKg) : '—'} unit="kg" label={tr('热身重量')} editable decimal />
+        <Field value={v} onChange={setV} placeholder="0.00" unit="m/s" label={tr('热身速度')} editable decimal />
         <View style={{ flex: 1 }} />
-        <Button label="记录" variant="secondary" onPress={save} />
+        <Button label={tr('记录')} variant="secondary" onPress={save} />
       </View>
     </View>
   );
@@ -315,7 +311,7 @@ function SetRow({
   const [reps, setReps] = useState(entry ? String(entry.reps) : '');
   const [kg, setKg] = useState(entry?.load_kg != null ? String(entry.load_kg) : '');
   const [rpe, setRpe] = useState(entry?.rpe != null ? formatRpe(entry.rpe) : '');
-  const [v, setV] = useState(entry?.mean_velocity != null ? entry.mean_velocity.toFixed(2) : '');
+  const [v, setV] = useState(entry?.mean_velocity != null ? decimal(entry.mean_velocity, 2) : '');
   const checked = entry != null;
   const num = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
   const below = entry?.mean_velocity != null && minV != null && entry.mean_velocity < minV;
@@ -326,7 +322,7 @@ function SetRow({
     const load = loaded ? (num(kg) ?? suggestedKg) : null;
     const velocity = tracksVelocity ? num(v) : null;
     if (!Number.isFinite(r) || r <= 0 || (load != null && !Number.isFinite(load)) || (velocity != null && !(velocity > 0 && velocity < 3))) {
-      Alert.alert('请检查数字', '次数、重量和速度要填数字');
+      Alert.alert(tr('请检查数字'), tr('次数、重量和速度要填数字'));
       return;
     }
     onToggle({ exercise_code: p.code, set_no: setNo, reps: Math.round(r), load_kg: load, rpe: num(rpe) ?? p.rpe ?? null, mean_velocity: velocity });
@@ -335,15 +331,15 @@ function SetRow({
   return (
     <View style={[styles.setRow, checked && styles.setRowDone, below && styles.setRowBelow]}>
       <Text style={styles.setNo}>{setNo}</Text>
-      <Field value={reps} onChange={setReps} placeholder={String(p.reps)} unit={p.perSide ? '次/侧' : '次'} editable={!checked && !locked} />
+      <Field value={reps} onChange={setReps} placeholder={String(p.reps)} unit={p.perSide ? tr('次/侧') : tr('次')} editable={!checked && !locked} />
       {loaded && <Field value={kg} onChange={setKg} placeholder={suggestedKg != null ? String(suggestedKg) : '—'} unit="kg" editable={!checked && !locked} decimal />}
       {p.rpe != null && <Field value={rpe} onChange={setRpe} placeholder={formatRpe(p.rpe)} unit="RPE" editable={!checked && !locked} decimal />}
-      {tracksVelocity && <Field value={v} onChange={setV} placeholder={minV != null ? minV.toFixed(2) : '—'} unit="m/s" editable={!checked && !locked} decimal />}
+      {tracksVelocity && <Field value={v} onChange={setV} placeholder={minV != null ? decimal(minV, 2) : '—'} unit="m/s" editable={!checked && !locked} decimal />}
       <View style={{ flex: 1 }} />
       <Pressable
         accessibilityRole="checkbox"
         accessibilityState={{ checked, disabled: locked }}
-        accessibilityLabel={`${p.name} 第 ${setNo} 组${checked ? '已完成' : ''}`}
+        accessibilityLabel={tr('{name} 第 {setNo} 组{p}', { name: p.name, setNo, p: checked ? tr('已完成') : '' })}
         disabled={locked}
         onPress={press}
         style={[styles.check, checked && styles.checkDone]}
@@ -409,20 +405,20 @@ function SessionLoad({ workout, onSave }: { workout: Workout; onSave: (v: { rpe:
   const load = sessionLoad(workout.durationMin ?? null, rpe);
   return (
     <View style={{ gap: 8 }}>
-      <ScoreScale label="整节课多累（RPE）" value={rpe} onPick={(r) => onSave({ rpe: r, minutes: typed })} hint="0 很轻松 · 10 用尽全力" />
+      <ScoreScale label={tr('整节课多累（RPE）')} value={rpe} onPick={(r) => onSave({ rpe: r, minutes: typed })} hint={tr('0 很轻松 · 10 用尽全力')} />
       <View style={styles.minutes}>
-        <Text style={styles.minutesLabel}>训练时长</Text>
+        <Text style={styles.minutesLabel}>{tr('训练时长')}</Text>
         <TextInput
           value={minutes}
           onChangeText={setMinutes}
           onEndEditing={() => onSave({ rpe, minutes: typed })}
           keyboardType="number-pad"
-          accessibilityLabel="训练时长（分钟）"
+          accessibilityLabel={tr('训练时长（分钟）')}
           style={styles.minutesInput}
         />
-        <Text style={text.caption}>分钟</Text>
+        <Text style={text.caption}>{tr('分钟')}</Text>
       </View>
-      {load != null && <Text style={text.caption}>这节负荷 {Math.round(load)}（RPE × 分钟）</Text>}
+      {load != null && <Text style={text.caption}>{tr('这节负荷 {load}（RPE × 分钟）', { load: Math.round(load) })}</Text>}
     </View>
   );
 }

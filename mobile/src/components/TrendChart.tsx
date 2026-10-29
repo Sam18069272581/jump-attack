@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Line, Polyline } from 'react-native-svg';
 
+import { tr } from '@/i18n';
 import { colors, fonts } from '@/theme';
 
 type Point = { label: string; value: number; display: string };
@@ -43,7 +44,7 @@ export function TrendChart({
   const every = Math.max(1, Math.ceil(points.length / 8));
 
   return (
-    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={`趋势图，共 ${points.length} 次`}>
+    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={tr('趋势图，共 {length} 次', { length: points.length })}>
       {width > 0 && points.length > 0 && (
         <>
           <Svg width={width} height={height} style={StyleSheet.absoluteFill}>

@@ -4,6 +4,8 @@
  */
 import type { Measured, MetricKey, QualityFlag, TechniqueProblem } from './technique';
 
+import { decimal, localized, tr } from '@/i18n';
+
 export type MetricText = { name: string; unit: string; decimals: number; hint: string };
 
 /** In the order they are shown: the take-off first, then the run-up and the plant that make it. */
@@ -25,15 +27,15 @@ export const METRIC_ORDER = Object.keys(METRIC_TEXT) as MetricKey[];
 /** A figure's error to the figure's precision, never less than one unit of the last digit: "± 0" would claim it exact. */
 export function formatError(key: MetricKey, error: number): string {
   const d = METRIC_TEXT[key].decimals;
-  return Math.max(error, 10 ** -d).toFixed(d);
+  return decimal(Math.max(error, 10 ** -d), d);
 }
 
 /** "3.30 ± 0.04 m/s"; a figure less sure than its pass line says so instead of passing for a number to trust. */
 export function formatMeasured(key: MetricKey, m: Measured): string {
   const t = METRIC_TEXT[key];
   const sep = t.unit === '°' ? '' : ' ';
-  const text = `${m.value.toFixed(t.decimals)} ± ${formatError(key, m.error)}${sep}${t.unit}`;
-  return m.status === 'ok' ? text : `${text}（不够准）`;
+  const text = `${decimal(m.value, t.decimals)} ± ${formatError(key, m.error)}${sep}${t.unit}`;
+  return m.status === 'ok' ? text : tr('{text}（不够准）', { text });
 }
 
 export const FLAG_TEXT: Record<QualityFlag, string> = {
@@ -76,3 +78,8 @@ export const PROBLEM_TEXT: Record<TechniqueProblem, { what: string; advice: stri
   'no-plant': { what: '找到了腾空，但起跳那一步不在视频里', advice: '从最后两步之前就开始拍，起跳点放在画面中间偏落地那边。' },
   markers: { what: '两条线点得太近', advice: '起跳线点在起跳点的胶带上，3 米线点在往回 3 米的那条胶带上；没贴线就点「没贴线，跳过」。' },
 };
+
+// Shown in the current language (i18n).
+localized(METRIC_TEXT, 'name', 'hint');
+localized(FLAG_TEXT);
+localized(PROBLEM_TEXT);

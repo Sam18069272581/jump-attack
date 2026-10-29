@@ -1,9 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
-import { WEEKDAY_NAMES, type ISODate } from '@/domain/dates';
+import { weekdayNames, type ISODate } from '@/domain/dates';
 import { FATIGUE_DROP } from '@/domain/assess';
 import { formatPrescription, KIND_NAMES, type Adjustment, type SessionTemplate } from '@/domain/plan';
+import { decimal, tr } from '@/i18n';
 import { colors, fonts, radius } from '@/theme';
 
 export type DayStatus = 'rest' | 'planned' | 'started' | 'done';
@@ -25,7 +26,7 @@ export function WeekStrip({
 }) {
   return (
     <View style={styles.strip}>
-      <Pressable accessibilityRole="button" accessibilityLabel="上一周" onPress={() => onShift(-1)} style={styles.shift}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('上一周')} onPress={() => onShift(-1)} style={styles.shift}>
         <Icon name="chevronLeft" size={18} color={colors.textMuted} />
       </Pressable>
       {days.map((d, i) => {
@@ -36,11 +37,11 @@ export function WeekStrip({
             key={d}
             accessibilityRole="button"
             accessibilityState={{ selected: isSelected }}
-            accessibilityLabel={`周${WEEKDAY_NAMES[i]}${status === 'rest' ? ' 休息' : status === 'done' ? ' 已完成' : ' 有训练'}`}
+            accessibilityLabel={tr('周{day}{p}', { day: weekdayNames()[i], p: status === 'rest' ? tr(' 休息') : status === 'done' ? tr(' 已完成') : tr(' 有训练') })}
             onPress={() => onSelect(d)}
             style={[styles.day, isSelected && styles.daySelected, d === today && !isSelected && styles.dayToday]}
           >
-            <Text style={[styles.dayName, isSelected && { color: colors.onAccent }]}>{WEEKDAY_NAMES[i]}</Text>
+            <Text style={[styles.dayName, isSelected && { color: colors.onAccent }]}>{weekdayNames()[i]}</Text>
             <Text style={[styles.dayNum, isSelected && { color: colors.onAccent }]}>{Number(d.slice(8))}</Text>
             {status === 'done' ? (
               <Icon name="check" size={12} strokeWidth={3} color={isSelected ? colors.onAccent : colors.good} />
@@ -50,7 +51,7 @@ export function WeekStrip({
           </Pressable>
         );
       })}
-      <Pressable accessibilityRole="button" accessibilityLabel="下一周" onPress={() => onShift(1)} style={styles.shift}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('下一周')} onPress={() => onShift(1)} style={styles.shift}>
         <Icon name="chevronRight" size={18} color={colors.textMuted} />
       </Pressable>
     </View>
@@ -93,35 +94,31 @@ export function AdjustmentNote({
   const knee = adjustments.filter((a) => a.cause === 'knee');
   // A stored reason also lists the knee's; keep those for the knee note.
   const fatigueReason = reason
-    ?.split('；')
+    ?.split(tr('；'))
     .filter((r) => !kneeReasons.includes(r))
-    .join('；');
-  const why = fatigueReason || `CMJ 比近期均值低 ${dropPct != null ? `${(dropPct * 100).toFixed(1)}%` : '较多'}（超过 ${FATIGUE_DROP * 100}%）`;
+    .join(tr('；'));
+  const why = fatigueReason || tr('CMJ 比近期均值低 {p}（超过 {FATIGUE_DROP}%）', { p: dropPct != null ? `${decimal((dropPct * 100), 1)}%` : tr('较多'), FATIGUE_DROP: FATIGUE_DROP * 100 });
   return (
     <>
       {fatigue.length > 0 && (
         <View style={styles.note}>
-          <Text style={styles.noteTitle}>已按疲劳信号减量</Text>
-          <Text style={styles.noteReason}>{why}：今天总量减约 30%，取消最大强度练习。</Text>
+          <Text style={styles.noteTitle}>{tr('已按疲劳信号减量')}</Text>
+          <Text style={styles.noteReason}>{tr('{why}：今天总量减约 30%，取消最大强度练习。', { why })}</Text>
           {fatigue.map((a) => (
-            <Text key={a.code} style={styles.noteLine}>
-              · {a.name}：{a.change}
-            </Text>
+            <Text key={a.code} style={styles.noteLine}>{tr('· {name}：{change}', { name: a.name, change: a.change })}</Text>
           ))}
         </View>
       )}
       {knee.length > 0 && (
         <View style={styles.note}>
-          <Text style={styles.noteTitle}>膝盖疼，已减跳跃</Text>
+          <Text style={styles.noteTitle}>{tr('膝盖疼，已减跳跃')}</Text>
           {kneeReasons.map((r) => (
             <Text key={r} style={styles.noteReason}>
               {r}
             </Text>
           ))}
           {knee.map((a) => (
-            <Text key={a.code} style={styles.noteLine}>
-              · {a.name}：{a.change}
-            </Text>
+            <Text key={a.code} style={styles.noteLine}>{tr('· {name}：{change}', { name: a.name, change: a.change })}</Text>
           ))}
         </View>
       )}

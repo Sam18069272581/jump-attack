@@ -3,6 +3,8 @@ import { intervalFromMarks, roundTo, sprintDistance, sprintLimits, type Interval
 import { measureFromMarks, type MarkProblem } from './jump';
 import type { MetricDef } from './metrics';
 
+import { decimal, localized, tr } from '@/i18n';
+
 type Mark = { title: string; hint: string };
 
 export type MarkOutcome =
@@ -49,8 +51,8 @@ const jumpProfile: MarkProfile = {
       value: roundTo(heightCm, 1),
       elapsedS: flightS,
       cells: [
-        { label: '滞空', value: String(Math.round(flightS * 1000)), unit: 'ms' },
-        { label: '跳高', value: heightCm.toFixed(1), unit: 'cm', main: true },
+        { label: tr('滞空'), value: String(Math.round(flightS * 1000)), unit: 'ms' },
+        { label: tr('跳高'), value: decimal(heightCm, 1), unit: 'cm', main: true },
       ],
     };
   },
@@ -64,20 +66,20 @@ function touchProfile(reachCm: number | undefined): MarkProfile {
   return {
     ...jumpProfile,
     marks: [
-      { title: '起跳帧', hint: '起跳脚刚离地' },
-      { title: '落地帧', hint: '第一只脚刚触地' },
+      { title: tr('起跳帧'), hint: tr('起跳脚刚离地') },
+      { title: tr('落地帧'), hint: tr('第一只脚刚触地') },
     ],
-    phases: ['助跑', '腾空', '落地'],
+    phases: [tr('助跑'), tr('腾空'), tr('落地')],
     measure(marks, fps) {
       const jump = jumpProfile.measure(marks, fps);
       if (!jump.ok) return jump;
-      if (reachCm == null) return { ok: false, message: '先在「我的」填站立摸高，才能用录像算摸高；也可以直接手填摸到的高度' };
+      if (reachCm == null) return { ok: false, message: tr('先在「我的」填站立摸高，才能用录像算摸高；也可以直接手填摸到的高度') };
       return {
         ...jump,
         value: roundTo(reachCm + jump.value, 1),
         cells: [
-          { label: '跳高', value: jump.value.toFixed(1), unit: 'cm' },
-          { label: '摸高', value: (reachCm + jump.value).toFixed(1), unit: 'cm', main: true },
+          { label: tr('跳高'), value: decimal(jump.value, 1), unit: 'cm' },
+          { label: tr('摸高'), value: decimal((reachCm + jump.value), 1), unit: 'cm', main: true },
         ],
         detail: { jump_cm: jump.value, standing_reach_cm: reachCm },
       };
@@ -88,17 +90,17 @@ function touchProfile(reachCm: number | undefined): MarkProfile {
 function sprintProfile(metres: number): MarkProfile {
   const limits = sprintLimits(metres);
   const problems: Record<IntervalProblem, string> = {
-    missing: '标记起跑帧和冲线帧后显示成绩',
-    order: '冲线帧要在起跑帧之后',
-    'too-short': `${metres} m 不可能少于 ${limits.minS.toFixed(2)} s，检查是否标错帧`,
-    'too-long': `超过 ${limits.maxS.toFixed(0)} s：检查是否标错帧；慢动作视频要把拍摄帧率选成 240`,
+    missing: tr('标记起跑帧和冲线帧后显示成绩'),
+    order: tr('冲线帧要在起跑帧之后'),
+    'too-short': tr('{metres} m 不可能少于 {minS} s，检查是否标错帧', { metres, minS: decimal(limits.minS, 2) }),
+    'too-long': tr('超过 {maxS} s：检查是否标错帧；慢动作视频要把拍摄帧率选成 240', { maxS: decimal(limits.maxS, 0) }),
   };
   return {
     marks: [
-      { title: '起跑帧', hint: '身体第一次动' },
-      { title: '冲线帧', hint: '躯干越过终点线' },
+      { title: tr('起跑帧'), hint: tr('身体第一次动') },
+      { title: tr('冲线帧'), hint: tr('躯干越过终点线') },
     ],
-    phases: ['准备', '跑', '冲线后'],
+    phases: [tr('准备'), tr('跑'), tr('冲线后')],
     measure([first, second], fps) {
       const r = intervalFromMarks(first, second, fps, limits);
       if (!r.ok) return { ok: false, message: problems[r.problem] };
@@ -107,9 +109,9 @@ function sprintProfile(metres: number): MarkProfile {
         value: roundTo(r.seconds, 2),
         elapsedS: r.seconds,
         cells: [
-          { label: '距离', value: String(metres), unit: 'm' },
-          { label: '用时', value: r.seconds.toFixed(2), unit: 's', main: true },
-          { label: '平均速度', value: (metres / r.seconds).toFixed(2), unit: 'm/s' },
+          { label: tr('距离'), value: String(metres), unit: 'm' },
+          { label: tr('用时'), value: decimal(r.seconds, 2), unit: 's', main: true },
+          { label: tr('平均速度'), value: decimal((metres / r.seconds), 2), unit: 'm/s' },
         ],
       };
     },
@@ -141,9 +143,9 @@ const dropJumpProfile: MarkProfile = {
       value: roundTo(rsi, 2),
       elapsedS: flightS,
       cells: [
-        { label: '触地', value: String(Math.round(contactS * 1000)), unit: 'ms' },
-        { label: '跳高', value: heightCm.toFixed(1), unit: 'cm' },
-        { label: 'RSI', value: rsi.toFixed(2), unit: '', main: true },
+        { label: tr('触地'), value: String(Math.round(contactS * 1000)), unit: 'ms' },
+        { label: tr('跳高'), value: decimal(heightCm, 1), unit: 'cm' },
+        { label: 'RSI', value: decimal(rsi, 2), unit: '', main: true },
       ],
       detail: { contact_frame: contact, contact_ms: Math.round(contactS * 1000), height_cm: roundTo(heightCm, 1) },
     };
@@ -154,6 +156,11 @@ const dropJumpProfile: MarkProfile = {
  * The marking profile for a metric recorded from video, or null when it can't be marked. Lifts aren't marked by
  * hand: their videos are tracked automatically (app/vbt/track).
  */
+// Shown in the current language (i18n).
+localized(JUMP_PROBLEMS);
+localized(DROP_PROBLEMS);
+localized([jumpProfile, dropJumpProfile], 'title', 'hint', 'phases');
+
 export function markProfile(def: MetricDef, opts: { reachCm?: number } = {}): MarkProfile | null {
   if (def.capture.includes('contact')) return dropJumpProfile;
   if (def.capture.includes('flight')) return def.plusReach ? touchProfile(opts.reachCm) : jumpProfile;

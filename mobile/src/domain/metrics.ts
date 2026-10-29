@@ -1,4 +1,5 @@
 import type { IconName } from '@/components/Icon';
+import { decimal, localized, tr } from '@/i18n';
 
 import { cooperVo2max, rsaSummary, yoyoVo2max } from './conditioning';
 import { sprintLimits } from './interval';
@@ -217,7 +218,19 @@ export function sprintMetric(m: number): MetricDef {
   let def = sprints.get(m);
   if (!def) {
     const { minS, maxS } = sprintLimits(m);
-    def = { code: `sprint_${m}`, short: `${m} m`, name: `${m} m 冲刺`, category: 'speed', unit: 's', decimals: 2, lowerIsBetter: true, capture: ['interval', 'manual'], range: [minS, maxS] };
+    def = {
+      code: `sprint_${m}`,
+      short: `${m} m`,
+      get name() {
+        return tr('{m} m 冲刺', { m });
+      },
+      category: 'speed',
+      unit: 's',
+      decimals: 2,
+      lowerIsBetter: true,
+      capture: ['interval', 'manual'],
+      range: [minS, maxS],
+    };
     sprints.set(m, def);
   }
   return def;
@@ -243,8 +256,24 @@ export const SQUAT_1RM: MetricDef = { code: 'squat_1rm', name: '深蹲 1RM（实
 function sides(code: string, name: string, unit: string, decimals: number, use: string, range: [number, number], lowerIsBetter?: boolean): MetricDef[] {
   const base = { category: 'mobility' as const, unit, decimals, use, range, capture: ['manual' as const], ...(lowerIsBetter ? { lowerIsBetter } : {}) };
   return [
-    { ...base, code: `${code}_l`, name: `${name} · 左`, short: name, pair: `${code}_r` },
-    { ...base, code: `${code}_r`, name: `${name} · 右`, short: name, pair: `${code}_l` },
+    {
+      ...base,
+      code: `${code}_l`,
+      get name() {
+        return tr('{name} · 左', { name: tr(name) });
+      },
+      short: name,
+      pair: `${code}_r`,
+    },
+    {
+      ...base,
+      code: `${code}_r`,
+      get name() {
+        return tr('{name} · 右', { name: tr(name) });
+      },
+      short: name,
+      pair: `${code}_l`,
+    },
   ];
 }
 
@@ -286,6 +315,9 @@ export const METRICS: MetricDef[] = [
   BODY_MASS,
 ];
 
+// Names, hints and units are shown in the current language (i18n).
+localized([CATEGORIES, METRICS], 'name', 'short', 'use', 'entryHint', 'subtitle', 'summary', 'kit', 'unit');
+
 export function getMetric(code: string): MetricDef | undefined {
   const known = METRICS.find((m) => m.code === code);
   if (known) return known;
@@ -294,15 +326,15 @@ export function getMetric(code: string): MetricDef | undefined {
 }
 
 export function formatValue(metric: MetricDef, value: number): string {
-  return value.toFixed(metric.decimals);
+  return decimal(value, metric.decimals);
 }
 
 /** The secondary figure for a session: the VO2max a run distance implies, or how much a sprint set slowed down. */
 export function resultNote(metric: MetricDef, result: number, attempts: number[] = []): string | null {
-  if (metric.estimate) return `${metric.estimate.name} ≈ ${metric.estimate.from(result).toFixed(metric.estimate.decimals)}`;
+  if (metric.estimate) return `${metric.estimate.name} ≈ ${decimal(metric.estimate.from(result), metric.estimate.decimals)}`;
   if (metric.aggregate === 'mean' && attempts.length > 1) {
     const s = rsaSummary(attempts);
-    return `最快 ${s.best.toFixed(metric.decimals)} ${metric.unit} · 递减 ${s.sdec.toFixed(1)}%`;
+    return tr('最快 {best} {unit} · 递减 {sdec}%', { best: decimal(s.best, metric.decimals), unit: metric.unit, sdec: decimal(s.sdec, 1) });
   }
   return null;
 }

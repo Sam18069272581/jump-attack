@@ -1,6 +1,8 @@
 import { ladder, type LadderJump } from './dropJump';
 import { APPROACH_TOUCH, DROP_JUMP } from './metrics';
 
+import { tr } from '@/i18n';
+
 /**
  * A test day in one pass, the way Output and Hawkin run theirs: pick the test, jump, see the number, next. The order
  * goes from the least to the most tiring, so the run-up touches aren't measured on legs the drop jumps already took.
@@ -13,9 +15,9 @@ export const DEFAULT_TEST_BOX_CM = 30;
 
 export function testDaySteps(boxCm: number): TestDayStep[] {
   return [
-    { metric: 'cmj', jumps: 3, hint: '原地 CMJ，跳 3 次，每次间隔 30 秒' },
-    { metric: DROP_JUMP.code, jumps: 3, hint: `从 ${boxCm} cm 的箱子跳下，落地马上弹起，跳 3 次`, box: boxCm },
-    { metric: APPROACH_TOUCH.code, jumps: 6, hint: '助跑摸高 6 次，每次间隔 1–2 分钟' },
+    { metric: 'cmj', jumps: 3, hint: tr('原地 CMJ，跳 3 次，每次间隔 30 秒') },
+    { metric: DROP_JUMP.code, jumps: 3, hint: tr('从 {boxCm} cm 的箱子跳下，落地马上弹起，跳 3 次', { boxCm }), box: boxCm },
+    { metric: APPROACH_TOUCH.code, jumps: 6, hint: tr('助跑摸高 6 次，每次间隔 1–2 分钟') },
   ];
 }
 

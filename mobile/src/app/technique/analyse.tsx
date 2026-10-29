@@ -20,6 +20,7 @@ import type { Pt } from '@/domain/pose';
 import { analyseTechnique, TAP_PT, TAP_PX, type Markers, type TechniqueProblem, type TechniqueResult } from '@/domain/technique';
 import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, planWindow, TAP_REACH_S, windowOf } from '@/domain/techniqueRead';
 import { flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, PROBLEM_TEXT, shownFlags } from '@/domain/techniqueText';
+import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -30,11 +31,11 @@ const ZOOM = 4;
 
 /** What the next tap on the picture places. */
 type Step = 'athlete' | 'takeoff' | 'back';
-const STEPS: { key: Step; label: string; color: string }[] = [
+const STEPS: { key: Step; label: string; color: string }[] = localized([
   { key: 'athlete', label: '运动员', color: colors.accent },
   { key: 'takeoff', label: '起跳线', color: colors.rim },
   { key: 'back', label: '3 米线', color: colors.purple },
-];
+], 'label');
 
 type Phase =
   | { name: 'setup' }
@@ -48,7 +49,7 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
 }
 
 // The page says why (it can't decode the clip, the model won't start, iOS closed it): trying again comes first.
-const READ_FAILED = { what: '没分析完', advice: '点「重新点选」再分析一次，分析时别切到别的 App；还不行就换一段视频。' };
+const READ_FAILED = localized({ what: '没分析完', advice: '点「重新点选」再分析一次，分析时别切到别的 App；还不行就换一段视频。' });
 
 /** Keeps the screen on while it is shown: nobody touches the phone during a read, and Auto-Lock would end the page. */
 function StayAwake() {
@@ -57,7 +58,7 @@ function StayAwake() {
 }
 
 function styleText(s: TechniqueResult['style']): string {
-  return s.kind === 'two' ? '双脚起跳' : `单脚起跳（${s.foot === 'left' ? '左' : '右'}脚）`;
+  return s.kind === 'two' ? tr('双脚起跳') : tr('单脚起跳（{p}脚）', { p: s.foot === 'left' ? tr('左') : tr('右') });
 }
 
 /**
@@ -172,7 +173,7 @@ export default function TechniqueAnalyse() {
     const coarseCount = forward.length + backward.length;
     // The close reading usually asks for the window's frames the coarse pass skipped; the bar is honest once it is known.
     const guess = coarseCount + Math.round((JUMP_WINDOW.before + JUMP_WINDOW.after) * fps * (1 - 1 / coarseStep(fps)));
-    const label1 = '跟住运动员，粗扫前后 3 秒';
+    const label1 = tr('跟住运动员，粗扫前后 3 秒');
     setPhase({ name: 'running', done: 0, total: guess, label: label1 });
     try {
       const ahead = await r.follow(forward, athlete.at, (n) => setPhase({ name: 'running', done: n, total: guess, label: label1 }));
@@ -183,7 +184,7 @@ export default function TechniqueAnalyse() {
       if (!plan.ok) return setPhase({ name: 'failed', problem: plan.problem });
       const dense = denseFrames(plan.win, total, coarse.map((f) => f.frame));
       const sum = coarseCount + dense.length;
-      const label2 = '逐帧读起跳前后';
+      const label2 = tr('逐帧读起跳前后');
       const fine = dense.length ? await r.crops(dense, denseSquares(coarse, plan.win.target, dense), (n) => setPhase({ name: 'running', done: coarseCount + n, total: sum, label: label2 })) : [];
       const frames = windowOf(framesFromWire([...coarseWire, ...fine], width, height, fps), plan.win);
       const res = analyseTechnique({ frames, captureFps: fps, markers, target: plan.win.target });
@@ -202,7 +203,7 @@ export default function TechniqueAnalyse() {
       await addTechniqueTake(db, current.id, { sessionId: params.session, result: phase.result, captureFps: fps, source: camera ? 'camera' : 'import', markers, videoUri: camera ? params.uri : null });
       router.back();
     } catch (e) {
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
       setSaving(false);
     }
   }
@@ -210,19 +211,19 @@ export default function TechniqueAnalyse() {
   const running = phase.name === 'running';
   const result = phase.name === 'done' ? phase.result : null;
   const ready = clip != null && total > 0 && athlete != null && linesDone;
-  const startLabel = !clip ? '正在读取视频…' : !athlete ? '先点运动员' : !linesDone ? '先点两条线，或者跳过' : '开始分析';
+  const startLabel = !clip ? tr('正在读取视频…') : !athlete ? tr('先点运动员') : !linesDone ? tr('先点两条线，或者跳过') : tr('开始分析');
   const failure = phase.name === 'failed' ? (phase.problem === 'error' ? READ_FAILED : PROBLEM_TEXT[phase.problem]) : null;
   const marks = [
     ...(athlete ? [{ key: 'athlete', at: athlete.at, color: colors.accent, label: '' }] : []),
-    ...(!skipLines && lines.takeoff ? [{ key: 'takeoff', at: lines.takeoff, color: colors.rim, label: '起跳线' }] : []),
-    ...(!skipLines && lines.back ? [{ key: 'back', at: lines.back, color: colors.purple, label: '3 米' }] : []),
+    ...(!skipLines && lines.takeoff ? [{ key: 'takeoff', at: lines.takeoff, color: colors.rim, label: tr('起跳线') }] : []),
+    ...(!skipLines && lines.back ? [{ key: 'back', at: lines.back, color: colors.purple, label: tr('3 米') }] : []),
   ];
 
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <View
-          accessibilityLabel="视频"
+          accessibilityLabel={tr('视频')}
           style={[styles.video, { aspectRatio: clip ? Math.max(0.75, clip.width / clip.height) : 16 / 9 }]}
           onLayout={(e: LayoutChangeEvent) => setView({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
         >
@@ -262,19 +263,19 @@ export default function TechniqueAnalyse() {
             })}
           {zoom && <View pointerEvents="none" style={[styles.cross, { left: view.w / 2 - 14, top: view.h / 2 - 14 }]} />}
           {phase.name === 'setup' && (
-            <Pressable accessibilityRole="button" accessibilityLabel="点画面" style={StyleSheet.absoluteFill} onPress={(e) => tap(e.nativeEvent.locationX, e.nativeEvent.locationY)} />
+            <Pressable accessibilityRole="button" accessibilityLabel={tr('点画面')} style={StyleSheet.absoluteFill} onPress={(e) => tap(e.nativeEvent.locationX, e.nativeEvent.locationY)} />
           )}
           {!running && (
             <View style={styles.badge} pointerEvents="none">
               <Text style={styles.badgeText}>#{frame}</Text>
-              <Text style={styles.badgeTime}>{(frame / fps).toFixed(2)} s</Text>
+              <Text style={styles.badgeTime}>{decimal((frame / fps), 2)} s</Text>
             </View>
           )}
         </View>
 
         {!running && (
           <Slider
-            accessibilityLabel="画面位置"
+            accessibilityLabel={tr('画面位置')}
             minimumValue={0}
             maximumValue={Math.max(1, total - 1)}
             step={1}
@@ -299,21 +300,21 @@ export default function TechniqueAnalyse() {
             </View>
             <Text style={styles.lead}>
               {zoom
-                ? '放大了：点运动员身体正下方、两脚中间的胶带，别点在脚上。'
+                ? tr('放大了：点运动员身体正下方、两脚中间的胶带，别点在脚上。')
                 : step === 'athlete'
-                  ? '拖动进度条到起跳前后，点一下运动员。'
+                  ? tr('拖动进度条到起跳前后，点一下运动员。')
                   : step === 'takeoff'
-                    ? '点起跳线：拖到运动员跑到这条胶带上的那一帧，先点个大概，放大后点准身体正下方的胶带。'
+                    ? tr('点起跳线：拖到运动员跑到这条胶带上的那一帧，先点个大概，放大后点准身体正下方的胶带。')
                     : step === 'back'
-                      ? '点 3 米线（起跳线往回 3 米那条）：同样拖到运动员跑到它上面的那一帧，点两下。'
+                      ? tr('点 3 米线（起跳线往回 3 米那条）：同样拖到运动员跑到它上面的那一帧，点两下。')
                       : skipLines
-                        ? '没点地上的线：不测助跑速度，长度按重力换算。'
-                        : '都点好了。分析要读几百帧，大约半分钟到一分钟。'}
+                        ? tr('没点地上的线：不测助跑速度，长度按重力换算。')
+                        : tr('都点好了。分析要读几百帧，大约半分钟到一分钟。')}
             </Text>
-            {!skipLines && <Button label="没贴线，跳过" variant="ghost" onPress={skip} />}
+            {!skipLines && <Button label={tr('没贴线，跳过')} variant="ghost" onPress={skip} />}
             {!camera && (
               <View style={styles.fpsRow}>
-                <Text style={styles.muted}>拍摄帧率{detectedFps ? `（视频 ${detectedFps} fps）` : ''}</Text>
+                <Text style={styles.muted}>{tr('拍摄帧率{p}', { p: detectedFps ? tr('（视频 {detectedFps} fps）', { detectedFps }) : '' })}</Text>
                 <View style={{ flexDirection: 'row', gap: 6 }}>
                   {fpsChoices.map((f) => (
                     <Chip key={f} label={String(f)} selected={f === fps} onPress={() => setCaptureOverride(f)} />
@@ -321,7 +322,7 @@ export default function TechniqueAnalyse() {
                 </View>
               </View>
             )}
-            {looksSlowMo && fps <= fileFps && <Text style={styles.warn}>这个视频是 {detectedFps} fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。</Text>}
+            {looksSlowMo && fps <= fileFps && <Text style={styles.warn}>{tr('这个视频是 {detectedFps} fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。', { detectedFps })}</Text>}
           </>
         )}
 
@@ -332,7 +333,7 @@ export default function TechniqueAnalyse() {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{failure.what}</Text>
             {phase.message && <Text style={styles.muted}>{phase.message}</Text>}
-            <Text style={styles.muted}>建议：{failure.advice}</Text>
+            <Text style={styles.muted}>{tr('建议：{advice}', { advice: failure.advice })}</Text>
           </View>
         )}
 
@@ -356,9 +357,9 @@ export default function TechniqueAnalyse() {
             </Rise>
             <View style={styles.events}>
               {[
-                ...(result.events.plantDown != null ? [{ name: '最后一步落地', f: result.events.plantDown }] : []),
-                { name: '起跳', f: result.events.takeoff },
-                ...(result.events.landing != null ? [{ name: '落地', f: result.events.landing }] : []),
+                ...(result.events.plantDown != null ? [{ name: tr('最后一步落地'), f: result.events.plantDown }] : []),
+                { name: tr('起跳'), f: result.events.takeoff },
+                ...(result.events.landing != null ? [{ name: tr('落地'), f: result.events.landing }] : []),
               ].map((e) => (
                 <Chip key={e.name} label={`${e.name} #${e.f}`} selected={frame === e.f} onPress={() => show(e.f)} />
               ))}
@@ -374,10 +375,10 @@ export default function TechniqueAnalyse() {
 
       <View style={styles.footer}>
         {phase.name === 'setup' && <Button label={startLabel} onPress={analyse} disabled={!ready} />}
-        {result && <Button label="保存" onPress={save} busy={saving} />}
+        {result && <Button label={tr('保存')} onPress={save} busy={saving} />}
         {(result || phase.name === 'failed') && (
           <Button
-            label="重新点选"
+            label={tr('重新点选')}
             variant="secondary"
             onPress={() => {
               if (phase.name === 'failed' && phase.problem === 'error') setReaderRun((n) => n + 1);
@@ -394,9 +395,7 @@ function Summary({ result, fps, reach }: { result: TechniqueResult; fps: number;
   const cells = (['vz', 'angle', 'approach'] as const).filter((k) => result.metrics[k]);
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>
-        {styleText(result.style)} · {fps} 帧/秒
-      </Text>
+      <Text style={styles.cardTitle}>{tr('{style} · {fps} 帧/秒', { style: styleText(result.style), fps })}</Text>
       <View style={styles.cells}>
         {cells.map((k, i) => {
           const m = result.metrics[k]!;
@@ -405,18 +404,18 @@ function Summary({ result, fps, reach }: { result: TechniqueResult; fps: number;
             <View key={k} style={styles.cell}>
               <Text style={styles.muted}>{t.name}</Text>
               <Text style={[styles.cellValue, i === 0 && { color: colors.accent }, m.status !== 'ok' && { color: colors.textMuted }]}>
-                {m.value.toFixed(t.decimals)}
+                {decimal(m.value, t.decimals)}
                 <Text style={styles.unit}> {t.unit}</Text>
               </Text>
               <Text style={styles.muted}>
                 ± {formatError(k, m.error)}
-                {m.status !== 'ok' ? ' 不够准' : ''}
+                {m.status !== 'ok' ? tr(' 不够准') : ''}
               </Text>
             </View>
           );
         })}
       </View>
-      <Text style={styles.reach}>{reach != null ? `今天助跑摸高 ${reach.toFixed(APPROACH_TOUCH.decimals)} cm` : '今天还没测助跑摸高'}</Text>
+      <Text style={styles.reach}>{reach != null ? tr('今天助跑摸高 {reach} cm', { reach: decimal(reach, APPROACH_TOUCH.decimals) }) : tr('今天还没测助跑摸高')}</Text>
     </View>
   );
 }

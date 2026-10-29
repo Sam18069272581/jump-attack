@@ -4,6 +4,7 @@ import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { Chip } from '@/components/ui';
 import { analyseCoarse, analyseFine, coarseRequest, type DetectedJump, type DetectKind, type DetectProblem, type FinePlan, type FrameRequest, type Grey, type VideoInfo } from '@/domain/autoMark';
+import { localized, tr } from '@/i18n';
 import { decodeBase64, stageForGrabbing, unstage } from '@/media/frameGrabber';
 import { frameGrabberHtml } from '@/media/frameGrabberHtml';
 import { colors, radius } from '@/theme';
@@ -17,12 +18,12 @@ type Msg =
   | { type: 'done'; id: number }
   | { type: 'error'; message: string };
 
-const PROBLEMS: Record<DetectProblem | 'error', string> = {
+const PROBLEMS: Record<DetectProblem | 'error', string> = localized({
   shaky: '画面在晃，没法自动识别。下次把手机放在地上或三脚架上；这次请手动标。',
   'no-jump': '没在这段视频里认出起跳和落地，请手动标。',
   unsure: '没把握认准起跳和落地，请手动标。',
   error: '读不到视频画面，请手动标。',
-};
+});
 
 /** Frames the fine pass usually asks for, to make the progress bar honest before it is known. */
 const FINE_GUESS = 110;
@@ -197,32 +198,32 @@ export function AutoMarker({
             )}
           </View>
           <View style={{ flex: 1, gap: 8 }}>
-            <Text style={styles.title}>正在自动找起跳和落地…</Text>
+            <Text style={styles.title}>{tr('正在自动找起跳和落地…')}</Text>
             <View style={styles.track}>
               <View style={[styles.bar, { width: `${Math.round((100 * Math.min(state.done, state.total)) / state.total)}%` }]} />
             </View>
-            <Text style={styles.hint}>也可以不等，直接手动标。</Text>
+            <Text style={styles.hint}>{tr('也可以不等，直接手动标。')}</Text>
           </View>
         </View>
       )}
       {state.phase === 'found' && (
         <View style={{ gap: 8 }}>
           <Text style={styles.title}>
-            {state.picked < 0 ? '自动也找到了，你标的没动' : state.jumps.length > 1 ? `认出 ${state.jumps.length} 跳，已标好第 ${state.picked + 1} 跳` : '已自动标好'}
+            {state.picked < 0 ? tr('自动也找到了，你标的没动') : state.jumps.length > 1 ? tr('认出 {length} 跳，已标好第 {picked} 跳', { length: state.jumps.length, picked: state.picked + 1 }) : tr('已自动标好')}
           </Text>
           {(state.jumps.length > 1 || state.picked < 0) && (
             <View style={styles.chips}>
               {state.jumps.map((jmp, i) => (
                 <Chip
                   key={jmp.marks.join('-')}
-                  label={`${state.picked < 0 ? '换成自动找到的' : ''}${state.jumps.length > 1 ? `第 ${i + 1} 跳` : '帧'} · ${Math.round(jmp.flightS * 1000)} ms`}
+                  label={`${state.picked < 0 ? tr('换成自动找到的') : ''}${state.jumps.length > 1 ? tr('第 {i} 跳', { i: i + 1 }) : tr('帧')} · ${Math.round(jmp.flightS * 1000)} ms`}
                   selected={i === state.picked}
                   onPress={() => choose(i)}
                 />
               ))}
             </View>
           )}
-          <Text style={styles.hint}>点下面的帧号跳过去核对；不准就逐帧调一下再重新标。</Text>
+          <Text style={styles.hint}>{tr('点下面的帧号跳过去核对；不准就逐帧调一下再重新标。')}</Text>
         </View>
       )}
       {state.phase === 'failed' && <Text style={styles.hint}>{state.message}</Text>}

@@ -1,0 +1,4 @@
+# Pinned so the accuracy check (tools/accuracy-regression) gets the same numbers on every run.
+numpy==2.5.3
+scipy==1.18.1
+opencv-python-headless==5.0.0.93

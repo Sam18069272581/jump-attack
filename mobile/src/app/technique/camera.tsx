@@ -11,6 +11,7 @@ import { PoseCamera, type CameraErrorStage, type CameraFrame, type CameraInfo, t
 import { Button } from '@/components/ui';
 import { decodePose } from '@/domain/pose';
 import { checkSetup, SETUP_CHECKS, type GravitySample, type SetupCheck, type SetupFrame, type SetupState } from '@/domain/poseSetup';
+import { decimal, speechLanguage, tr } from '@/i18n';
 import { startGravity, type Vec } from '@/media/gravity';
 import { MAX_TAKE_S } from '@/media/poseCameraHtml';
 import { dropTake } from '@/media/takes';
@@ -38,12 +39,12 @@ const STATE_COLOR: Record<SetupCheck['state'], string> = { ok: colors.good, warn
 
 function errorText(stage: CameraErrorStage, message: string, name: string): string {
   if (stage === 'camera') {
-    if (name === 'NotAllowedError') return '没有相机权限：到 iPhone「设置」里找到 Expo Go，打开「相机」，再回来点重试。';
-    if (name === 'NotFoundError' || name === 'OverconstrainedError') return '找不到能用的后置相机。';
-    if (name === 'NotSupportedError') return '这台手机的系统不能在 App 里用网页相机（要 iOS 14.3 以上）。可以用相机 App 拍慢动作，再导入。';
-    return `相机打不开：${message}`;
+    if (name === 'NotAllowedError') return tr('没有相机权限：到 iPhone「设置」里找到 Expo Go，打开「相机」，再回来点重试。');
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return tr('找不到能用的后置相机。');
+    if (name === 'NotSupportedError') return tr('这台手机的系统不能在 App 里用网页相机（要 iOS 14.3 以上）。可以用相机 App 拍慢动作，再导入。');
+    return tr('相机打不开：{message}', { message });
   }
-  if (stage === 'model') return `骨架识别启动不了：${message}`;
+  if (stage === 'model') return tr('骨架识别启动不了：{message}', { message });
   return message;
 }
 
@@ -84,7 +85,7 @@ export default function TechniqueCamera() {
     if (!line || muted || line === v.text) return;
     if (!urgent && t - v.at < SPEAK_GAP_S) return;
     Speech.stop();
-    Speech.speak(line, { language: 'zh-CN', rate: 1.05 });
+    Speech.speak(line, { language: speechLanguage(), rate: 1.05 });
     voice.current = { text: line, at: t };
   }
 
@@ -97,7 +98,7 @@ export default function TechniqueCamera() {
     setNow(t);
     // The moment it is ready is worth saying at once; hints wait their turn, and "still looking" isn't one. After a
     // take the checks run on, but there is nothing to set up until it is filmed again.
-    if (rec.name === 'live') speak(held ? READY_LINE : s.main && s.main.state !== 'wait' ? s.main.hint : null, t, held);
+    if (rec.name === 'live') speak(held ? tr(READY_LINE) : s.main && s.main.state !== 'wait' ? s.main.hint : null, t, held);
   }
 
   // The accelerometer's listener lives as long as the screen; what it calls is this render's.
@@ -187,7 +188,7 @@ export default function TechniqueCamera() {
           const t = Date.now() / 1000;
           setRec({ name: 'recording', since: t });
           setNow(t);
-          speak(GO_LINE, t, true);
+          speak(tr(GO_LINE), t, true);
         }}
         onRecorded={(take) => setRec({ name: 'recorded', take })}
         onError={onError}
@@ -195,18 +196,18 @@ export default function TechniqueCamera() {
       />
       <SafeAreaView style={StyleSheet.absoluteFill} edges={['left', 'right', 'top', 'bottom']} pointerEvents="box-none">
         <View style={styles.top} pointerEvents="box-none">
-          <Pressable accessibilityRole="button" accessibilityLabel="关闭" onPress={() => router.back()} style={styles.close}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr('关闭')} onPress={() => router.back()} style={styles.close}>
             <Icon name="close" size={22} color="#FFFFFF" />
           </Pressable>
           <View style={styles.topRight}>
             {info && (
               <Text style={styles.info}>
-                {info.fps ? `${Math.round(info.fps)} fps` : '帧率未知'}
-                {info.physical ? '' : ' · 录的时候别缩放'}
+                {info.fps ? `${Math.round(info.fps)} fps` : tr('帧率未知')}
+                {info.physical ? '' : tr(' · 录的时候别缩放')}
               </Text>
             )}
             <Pressable accessibilityRole="button" onPress={() => setMuted((m) => !m)} style={styles.pill}>
-              <Text style={styles.pillText}>{muted ? '语音提示：关' : '语音提示：开'}</Text>
+              <Text style={styles.pillText}>{muted ? tr('语音提示：关') : tr('语音提示：开')}</Text>
             </Pressable>
           </View>
         </View>
@@ -215,7 +216,7 @@ export default function TechniqueCamera() {
           <View style={styles.checks} pointerEvents="none">
             {SETUP_CHECKS.map(([key, name]) => {
               const c = setup.checks.find((x) => x.key === key);
-              const level = key === 'phone' && setup.level ? ` ${Math.abs(setup.level.roll).toFixed(1)}° / ${Math.abs(setup.level.pitch).toFixed(1)}°` : '';
+              const level = key === 'phone' && setup.level ? ` ${decimal(Math.abs(setup.level.roll), 1)}° / ${decimal(Math.abs(setup.level.pitch), 1)}°` : '';
               return (
                 <View key={key} style={styles.checkRow}>
                   <View style={[styles.dot, { backgroundColor: STATE_COLOR[c?.state ?? 'wait'] }]} />
@@ -226,8 +227,8 @@ export default function TechniqueCamera() {
                 </View>
               );
             })}
-            {info?.fps != null && info.fps < 50 && <Text style={styles.note}>这台手机的网页相机只有 {Math.round(info.fps)} 帧：触地时间测不出来，起跳速度也粗。</Text>}
-            <Text style={styles.note}>App 里最多 60 帧：要测准触地时间，用 iPhone 慢动作拍了再导入。</Text>
+            {info?.fps != null && info.fps < 50 && <Text style={styles.note}>{tr('这台手机的网页相机只有 {fps} 帧：触地时间测不出来，起跳速度也粗。', { fps: Math.round(info.fps) })}</Text>}
+            <Text style={styles.note}>{tr('App 里最多 60 帧：要测准触地时间，用 iPhone 慢动作拍了再导入。')}</Text>
           </View>
         )}
 
@@ -236,7 +237,7 @@ export default function TechniqueCamera() {
             <>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="开始录像"
+                accessibilityLabel={tr('开始录像')}
                 accessibilityState={{ disabled: !canRecord }}
                 disabled={!canRecord}
                 onPress={record}
@@ -246,14 +247,14 @@ export default function TechniqueCamera() {
               </Pressable>
               {live && !armed && !unchecked && (
                 <Pressable accessibilityRole="button" onPress={() => setUnchecked(true)}>
-                  <Text style={styles.skip}>不检查直接拍</Text>
+                  <Text style={styles.skip}>{tr('不检查直接拍')}</Text>
                 </Pressable>
               )}
             </>
           )}
           {recording && (
             <>
-              <Pressable accessibilityRole="button" accessibilityLabel="停止录像" disabled={rec.name === 'stopping'} onPress={stop} style={styles.shutter}>
+              <Pressable accessibilityRole="button" accessibilityLabel={tr('停止录像')} disabled={rec.name === 'stopping'} onPress={stop} style={styles.shutter}>
                 <View style={styles.stopSquare} />
               </Pressable>
               <Text style={styles.timer}>
@@ -267,12 +268,12 @@ export default function TechniqueCamera() {
           <View style={styles.banner} pointerEvents="none">
             <Text style={styles.bannerText}>
               {recording
-                ? `录像中：助跑、起跳、落地，再回来点停（最长 ${MAX_TAKE_S} 秒）`
+                ? tr('录像中：助跑、起跳、落地，再回来点停（最长 {MAX_TAKE_S} 秒）', { MAX_TAKE_S })
                 : armed
-                  ? '可以拍了：点红色按钮开始录，助跑、起跳、落地后再点停。'
+                  ? tr('可以拍了：点红色按钮开始录，助跑、起跳、落地后再点停。')
                   : unchecked
-                    ? '没检查也可以拍：点红色按钮开始录。'
-                    : (setup.main?.hint ?? '正在检查…')}
+                    ? tr('没检查也可以拍：点红色按钮开始录。')
+                    : (setup.main?.hint ?? tr('正在检查…'))}
             </Text>
           </View>
         )}
@@ -280,9 +281,9 @@ export default function TechniqueCamera() {
         {rec.name === 'recorded' && (
           <View style={styles.panelWrap}>
             <View style={styles.panel}>
-              <Text style={styles.panelTitle}>录好了 · {rec.take.seconds.toFixed(1)} 秒</Text>
-              <Button label="分析这一段" onPress={() => analyse(rec.take)} />
-              <Button label="重拍" variant="secondary" onPress={retake} />
+              <Text style={styles.panelTitle}>{tr('录好了 · {seconds} 秒', { seconds: decimal(rec.take.seconds, 1) })}</Text>
+              <Button label={tr('分析这一段')} onPress={() => analyse(rec.take)} />
+              <Button label={tr('重拍')} variant="secondary" onPress={retake} />
             </View>
           </View>
         )}
@@ -292,8 +293,8 @@ export default function TechniqueCamera() {
             <View style={styles.panel}>
               <Text style={styles.panelText}>{rec.message}</Text>
               {/* After a failed take the page may still be holding it: a fresh page films the next one. */}
-              <Button label={fatal ? '重试' : '重拍'} onPress={retry} />
-              {fatal && <Button label="返回" variant="secondary" onPress={() => router.back()} />}
+              <Button label={fatal ? tr('重试') : tr('重拍')} onPress={retry} />
+              {fatal && <Button label={tr('返回')} variant="secondary" onPress={() => router.back()} />}
             </View>
           </View>
         )}

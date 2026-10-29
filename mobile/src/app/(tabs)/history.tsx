@@ -15,6 +15,7 @@ import { MISSING_TEXT, type DunkDiagnosis } from '@/domain/dunk';
 import { standingTouches } from '@/domain/dunkSummary';
 import { APPROACH_TOUCH, CATEGORIES, METRICS, formatValue, getMetric, metricColor, resultNote, type MetricDef } from '@/domain/metrics';
 import type { Timing } from '@/domain/timing';
+import { decimal, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius, text } from '@/theme';
 
@@ -68,44 +69,44 @@ export default function History() {
   return (
     <SafeAreaView style={styles.screen} edges={['top']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={text.title}>历史</Text>
+        <Text style={text.title}>{tr('历史')}</Text>
 
         {diagnosis && (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="摸高历史"
+            accessibilityLabel={tr('摸高历史')}
             onPress={() => router.push({ pathname: '/history/[metric]', params: { metric: approach.length ? APPROACH_TOUCH.code : 'cmj' } })}
             style={styles.featured}
           >
             <View style={styles.featuredTop}>
-              <Text style={text.muted}>摸高</Text>
+              <Text style={text.muted}>{tr('摸高')}</Text>
               {diagnosis.gapCm != null && (
                 <Text style={{ fontSize: 12, color: diagnosis.gapCm > 0 ? colors.textSoft : colors.good }}>
-                  {diagnosis.gapCm > 0 ? `离扣篮线还差 ${diagnosis.gapCm.toFixed(1)} cm` : '已过扣篮线'}
+                  {diagnosis.gapCm > 0 ? tr('离扣篮线还差 {gapCm} cm', { gapCm: decimal(diagnosis.gapCm, 1) }) : tr('已过扣篮线')}
                 </Text>
               )}
             </View>
             {diagnosis.touch.value != null ? (
               <>
                 <Text style={styles.featuredValue}>
-                  {diagnosis.touch.value.toFixed(1)} <Text style={styles.featuredUnit}>cm</Text>
+                  {decimal(diagnosis.touch.value, 1)} <Text style={styles.featuredUnit}>cm</Text>
                 </Text>
                 <TouchChart approach={approach} standing={standing} line={diagnosis.line} />
                 <View style={styles.legend}>
-                  <Legend dot={{ backgroundColor: APPROACH_TOUCH.color }} label="助跑实测" />
-                  <Legend dot={{ borderWidth: 1.5, borderColor: colors.textMuted }} label="原地估算" />
-                  <Legend dot={{ height: 0, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: colors.textSoft, width: 14 }} label={`扣篮线 ${diagnosis.line}`} />
+                  <Legend dot={{ backgroundColor: APPROACH_TOUCH.color }} label={tr('助跑实测')} />
+                  <Legend dot={{ borderWidth: 1.5, borderColor: colors.textMuted }} label={tr('原地估算')} />
+                  <Legend dot={{ height: 0, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: colors.textSoft, width: 14 }} label={tr('扣篮线 {line}', { line: diagnosis.line })} />
                 </View>
               </>
             ) : (
-              <Text style={text.muted}>{MISSING_TEXT[diagnosis.missing.includes('standing_reach') ? 'standing_reach' : 'approach']}，摸高曲线就会出现在这里。</Text>
+              <Text style={text.muted}>{tr('{MISSING_TEXT}，摸高曲线就会出现在这里。', { MISSING_TEXT: MISSING_TEXT[diagnosis.missing.includes('standing_reach') ? 'standing_reach' : 'approach'] })}</Text>
             )}
           </Pressable>
         )}
 
         {diagnosis && <LimiterTiles diagnosis={diagnosis} sprint={sprintRow} />}
 
-        {withData.length === 0 && <Empty title="还没有记录" hint="去首页做一次测试，成绩会出现在这里。" />}
+        {withData.length === 0 && <Empty title={tr('还没有记录')} hint={tr('去首页做一次测试，成绩会出现在这里。')} />}
 
         {CATEGORIES.map((g) => {
           const groupRows = withData.filter((r) => r.def.category === g.key);
@@ -115,14 +116,12 @@ export default function History() {
               <Text style={text.section}>{g.name}</Text>
               {groupRows.map(({ def, color, results }) => {
                 const last = results.at(-1)!;
-                const note = def.estimate ? resultNote(def, last.best) : def.aggregate === 'mean' ? '6 趟平均' : null;
+                const note = def.estimate ? resultNote(def, last.best) : def.aggregate === 'mean' ? tr('6 趟平均') : null;
                 return (
                   <Pressable key={def.code} accessibilityRole="button" onPress={() => router.push({ pathname: '/history/[metric]', params: { metric: def.code } })} style={styles.row}>
                     <View style={{ flex: 1, gap: 2 }}>
                       <Text style={styles.rowName}>{def.name}</Text>
-                      <Text style={text.caption}>
-                        {results.length} 次测试{note ? ` · ${note}` : ''}
-                      </Text>
+                      <Text style={text.caption}>{tr('{length} 次测试{p}', { length: results.length, p: note ? ` · ${note}` : '' })}</Text>
                     </View>
                     <Text style={[styles.rowValue, { color }]}>
                       {formatValue(def, last.best)} <Text style={styles.rowUnit}>{def.unit}</Text>
@@ -155,7 +154,7 @@ const styles = StyleSheet.create({
   featuredTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   featuredValue: { color: APPROACH_TOUCH.color, fontFamily: fonts.numericBold, fontSize: 56, lineHeight: 60 },
   featuredUnit: { color: colors.textMuted, fontSize: 18 },
-  legend: { flexDirection: 'row', gap: 14 },
+  legend: { flexDirection: 'row', flexWrap: 'wrap', columnGap: 14, rowGap: 4 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   row: { backgroundColor: colors.surface, borderRadius: radius.row, height: 68, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },

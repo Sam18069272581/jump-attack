@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router/tabs';
 
 import { Icon } from '@/components/Icon';
+import { tr } from '@/i18n';
 import { colors } from '@/theme';
 
 export default function TabsLayout() {
@@ -15,10 +16,10 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.bg },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: '首页', tabBarIcon: ({ color }) => <Icon name="home" color={color} /> }} />
-      <Tabs.Screen name="train" options={{ title: '训练', tabBarIcon: ({ color }) => <Icon name="plan" color={color} /> }} />
-      <Tabs.Screen name="history" options={{ title: '历史', tabBarIcon: ({ color }) => <Icon name="trend" color={color} /> }} />
-      <Tabs.Screen name="me" options={{ title: '我的', tabBarIcon: ({ color }) => <Icon name="user" color={color} /> }} />
+      <Tabs.Screen name="index" options={{ title: tr('首页'), tabBarIcon: ({ color }) => <Icon name="home" color={color} /> }} />
+      <Tabs.Screen name="train" options={{ title: tr('训练'), tabBarIcon: ({ color }) => <Icon name="plan" color={color} /> }} />
+      <Tabs.Screen name="history" options={{ title: tr('历史'), tabBarIcon: ({ color }) => <Icon name="trend" color={color} /> }} />
+      <Tabs.Screen name="me" options={{ title: tr('我的'), tabBarIcon: ({ color }) => <Icon name="user" color={color} /> }} />
     </Tabs>
   );
 }

@@ -1,6 +1,8 @@
 import { mean, sd } from './assess';
 import { addDays, type ISODate } from './dates';
 
+import { decimal, localized, tr } from '@/i18n';
+
 /** One day's recovery values; missing ones are null. */
 export type RecoveryDay = { date: ISODate; hrv: number | null; rhr: number | null; sleep: number | null; resp: number | null };
 
@@ -108,27 +110,27 @@ export function readRecovery(days: RecoveryDay[], date: ISODate): RecoveryRead {
       const trendLow = trend != null && trend < hrv.logMean - HRV_SWC_SD * hrv.logSd;
       if (trendLow || hrvLowBefore(days, date)) {
         hard++;
-        warn(`HRV ${Math.round(today.hrv)} ms，低于你 30 天基线 ${range}，${trendLow ? '7 天平均也偏低' : '前一次也偏低'}`);
+        warn(tr('HRV {hrv} ms，低于你 30 天基线 {range}，{p}', { hrv: Math.round(today.hrv), range, p: trendLow ? tr('7 天平均也偏低') : tr('前一次也偏低') }));
       } else {
         soft++;
-        warn(`HRV ${Math.round(today.hrv)} ms，低于你 30 天基线 ${range}（7 天平均还正常）`);
+        warn(tr('HRV {hrv} ms，低于你 30 天基线 {range}（7 天平均还正常）', { hrv: Math.round(today.hrv), range }));
       }
     } else {
-      reasons.push(`HRV 在你 30 天基线范围内（${range}）`);
+      reasons.push(tr('HRV 在你 30 天基线范围内（{range}）', { range }));
     }
   }
   if (today?.rhr != null && rhr) {
     const d = today.rhr - rhr.mean;
     if (d >= RHR_RISE) {
       soft++;
-      warn(`静息心率比 7 天平均高 ${Math.round(d)} bpm`);
+      warn(tr('静息心率比 7 天平均高 {d} bpm', { d: Math.round(d) }));
     } else if (d <= -1) {
-      reasons.push(`静息心率略低于平时`);
+      reasons.push(tr('静息心率略低于平时'));
     }
   }
   if (today?.sleep != null && today.sleep < SHORT_SLEEP_H) {
     soft++;
-    warn(`睡眠只有 ${today.sleep.toFixed(1)} 小时`);
+    warn(tr('睡眠只有 {sleep} 小时', { sleep: decimal(today.sleep, 1) }));
   }
 
   const known = (today?.hrv != null && hrv != null) || (today?.rhr != null && rhr != null) || today?.sleep != null;
@@ -136,9 +138,9 @@ export function readRecovery(days: RecoveryDay[], date: ISODate): RecoveryRead {
   return { status, reasons, warnings, hrv, rhr };
 }
 
-export const STATUS_TEXT: Record<RecoveryStatus, { label: string; advice: string }> = {
+export const STATUS_TEXT: Record<RecoveryStatus, { label: string; advice: string }> = localized({
   good: { label: '良好', advice: '适合高强度训练' },
   fair: { label: '一般', advice: '可以按计划练，注意强度' },
   poor: { label: '疲劳', advice: '今天的训练会自动减量' },
   unknown: { label: '数据不足', advice: '记录几天 HRV 和静息心率后就能判断' },
-};
+});

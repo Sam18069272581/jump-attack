@@ -14,15 +14,16 @@ import { deleteTrial } from '@/db/repo';
 import { parseNumber } from '@/domain/entry';
 import { bandOf, EXERCISE_KINDS, fvProfile, heightPerLoad, MIN_R2, pushOff, suggestedLoads, suggestion, type FvProfile } from '@/domain/fvp';
 import { LOADED_SJ } from '@/domain/metrics';
+import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, text } from '@/theme';
 
 const COLOR = LOADED_SJ.color;
-const SIDE_TEXT = {
+const SIDE_TEXT = localized({
   force: '力量端偏弱：重负荷下推不动，轻负荷下的速度相对够用',
   balanced: '力量端和速度端比较均衡',
   velocity: '速度端偏弱：力量够，但轻负荷下动作不够快',
-};
+});
 
 function shortDate(iso: string) {
   const d = new Date(iso);
@@ -56,9 +57,9 @@ export default function ForceVelocity() {
     return (
       <ScrollView contentContainerStyle={styles.content}>
         <Card style={{ gap: 10 }}>
-          <Text style={text.section}>先在「我的」填三个数</Text>
-          <Text style={text.muted}>体重、腿长（踮脚站立，大转子到脚尖）、膝关节 90° 下蹲时大转子离地的高度。后两个只量一次，用来算蹬伸距离。</Text>
-          <Button label="去填写" onPress={() => router.navigate('/me')} />
+          <Text style={text.section}>{tr('先在「我的」填三个数')}</Text>
+          <Text style={text.muted}>{tr('体重、腿长（踮脚站立，大转子到脚尖）、膝关节 90° 下蹲时大转子离地的高度。后两个只量一次，用来算蹬伸距离。')}</Text>
+          <Button label={tr('去填写')} onPress={() => router.navigate('/me')} />
         </Card>
       </ScrollView>
     );
@@ -85,21 +86,21 @@ export default function ForceVelocity() {
       setCm('');
       await reload();
     } catch (e) {
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
     } finally {
       setSaving(false);
     }
   }
 
   function measureVideo() {
-    if (!loadOk) return Alert.alert('先填负重', '负重包括杠铃杆（史密斯机按机器标注的杆重算），徒手跳填 0。');
+    if (!loadOk) return Alert.alert(tr('先填负重'), tr('负重包括杠铃杆（史密斯机按机器标注的杆重算），徒手跳填 0。'));
     router.push({ pathname: '/measure/capture', params: { metric: LOADED_SJ.code, session, from: 'fvp', load: String(load) } });
   }
 
   function remove(j: LoadedJump) {
-    Alert.alert('删除这一跳？', '', [
-      { text: '取消', style: 'cancel' },
-      { text: '删除', style: 'destructive', onPress: async () => (await deleteTrial(db, j.id), reload()) },
+    Alert.alert(tr('删除这一跳？'), '', [
+      { text: tr('取消'), style: 'cancel' },
+      { text: tr('删除'), style: 'destructive', onPress: async () => (await deleteTrial(db, j.id), reload()) },
     ]);
   }
 
@@ -108,9 +109,7 @@ export default function ForceVelocity() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-        <Text style={text.muted}>
-          史密斯机负重蹲跳：蹲到膝关节 90°（可以轻碰跳箱）停 2 秒，不往下顿，直接全力跳，落地时腿伸直。每级负重跳 2–3 次，次间休 2 分钟。
-        </Text>
+        <Text style={text.muted}>{tr('史密斯机负重蹲跳：蹲到膝关节 90°（可以轻碰跳箱）停 2 秒，不往下顿，直接全力跳，落地时腿伸直。每级负重跳 2–3 次，次间休 2 分钟。')}</Text>
 
         {today.length > 0 && (
           <Card style={{ gap: 4 }}>
@@ -121,49 +120,49 @@ export default function ForceVelocity() {
                   {today
                     .filter((j) => j.loadKg === p.loadKg)
                     .map((j) => (
-                      <Pressable key={j.id} accessibilityRole="button" accessibilityLabel={`删除 ${p.loadKg} kg 的 ${j.heightCm.toFixed(1)} cm`} onPress={() => remove(j)} style={styles.jump}>
-                        <Text style={styles.jumpText}>{j.heightCm.toFixed(1)}</Text>
+                      <Pressable key={j.id} accessibilityRole="button" accessibilityLabel={tr('删除 {loadKg} kg 的 {heightCm} cm', { loadKg: p.loadKg, heightCm: decimal(j.heightCm, 1) })} onPress={() => remove(j)} style={styles.jump}>
+                        <Text style={styles.jumpText}>{decimal(j.heightCm, 1)}</Text>
                         <Icon name="trash" size={12} color={colors.textMuted} />
                       </Pressable>
                     ))}
                 </View>
-                <Text style={styles.mean}>{p.heightCm.toFixed(1)} cm</Text>
+                <Text style={styles.mean}>{decimal(p.heightCm, 1)} cm</Text>
               </View>
             ))}
-            <Text style={text.caption}>右边是每级最好两跳的平均，用来算曲线。</Text>
+            <Text style={text.caption}>{tr('右边是每级最好两跳的平均，用来算曲线。')}</Text>
           </Card>
         )}
 
         <Card style={{ gap: 12 }}>
-          <Text style={text.section}>下一跳</Text>
+          <Text style={text.section}>{tr('下一跳')}</Text>
           <View style={styles.chips}>
             {loads.map((l) => (
               <Chip key={l} label={`${l}`} selected={load === l} onPress={() => setKg(String(l))} color={COLOR} />
             ))}
           </View>
           <View style={styles.fields}>
-            <Field label="负重（含杆）" unit="kg" value={kg} onChange={setKg} />
-            <Field label="跳高（手填）" unit="cm" value={cm} onChange={setCm} />
+            <Field label={tr('负重（含杆）')} unit="kg" value={kg} onChange={setKg} />
+            <Field label={tr('跳高（手填）')} unit="cm" value={cm} onChange={setCm} />
           </View>
-          <Button label="录像测这一跳" onPress={measureVideo} disabled={!loadOk} />
-          <Button label="记手填的跳高" variant="secondary" onPress={logManual} disabled={!loadOk || !heightOk} busy={saving} />
-          <Text style={text.caption}>建议负重约为体重的 0、25%、50%、75%，最重一级能跳 10 cm 左右最好。用 My Jump 等 App 测过的跳高也可以直接手填。</Text>
+          <Button label={tr('录像测这一跳')} onPress={measureVideo} disabled={!loadOk} />
+          <Button label={tr('记手填的跳高')} variant="secondary" onPress={logManual} disabled={!loadOk || !heightOk} busy={saving} />
+          <Text style={text.caption}>{tr('建议负重约为体重的 0、25%、50%、75%，最重一级能跳 10 cm 左右最好。用 My Jump 等 App 测过的跳高也可以直接手填。')}</Text>
         </Card>
 
         {shown ? (
           <ProfileCard profile={shown.profile} isToday={shown.sessionId === session} date={shortDate(shown.startedAt)} hpo={hpo} />
         ) : (
-          <Text style={text.muted}>至少两级不同负重后，这里会画出你的力-速度曲线。</Text>
+          <Text style={text.muted}>{tr('至少两级不同负重后，这里会画出你的力-速度曲线。')}</Text>
         )}
 
         {advice && (
           <Card style={{ gap: 8 }}>
-            <Text style={text.section}>训练建议 · {advice.band.name}</Text>
+            <Text style={text.section}>{tr('训练建议 · {name}', { name: advice.band.name })}</Text>
             {!advice.confirmed && (
-              <Text style={[text.muted, { color: colors.warn }]}>单次测试的斜率误差较大。下次复测仍在这一侧，再按这个配比调整训练。</Text>
+              <Text style={[text.muted, { color: colors.warn }]}>{tr('单次测试的斜率误差较大。下次复测仍在这一侧，再按这个配比调整训练。')}</Text>
             )}
-            <Text style={text.body}>每周 6 个下肢练习：{advice.band.mix.map((m) => `${m.kind} ${m.n}`).join(' · ')}</Text>
-            <Text style={text.muted}>VBT 速度损失到 {Math.round(advice.band.velocityLoss * 100)}% 就停组。</Text>
+            <Text style={text.body}>{tr('每周 6 个下肢练习：{p}', { p: advice.band.mix.map((m) => `${m.kind} ${m.n}`).join(' · ') })}</Text>
+            <Text style={text.muted}>{tr('VBT 速度损失到 {velocityLoss}% 就停组。', { velocityLoss: Math.round(advice.band.velocityLoss * 100) })}</Text>
             {EXERCISE_KINDS.filter((k) => advice.band.mix.some((m) => m.kind === k.kind)).map((k) => (
               <View key={k.kind} style={styles.kind}>
                 <Text style={styles.kindName}>{k.kind}</Text>
@@ -173,22 +172,22 @@ export default function ForceVelocity() {
                 </View>
               </View>
             ))}
-            <Text style={text.caption}>只是建议，不会改你的训练计划。每 4 周复测一次；约 8 周后 CMJ 和 Pmax 没涨，就换回均衡配比。</Text>
+            <Text style={text.caption}>{tr('只是建议，不会改你的训练计划。每 4 周复测一次；约 8 周后 CMJ 和 Pmax 没涨，就换回均衡配比。')}</Text>
           </Card>
         )}
 
         {history.length > 1 && (
           <Card style={{ gap: 10 }}>
-            <Text style={text.section}>历次测试 · FV%（100 = 均衡）</Text>
+            <Text style={text.section}>{tr('历次测试 · FV%（100 = 均衡）')}</Text>
             <TrendChart color={COLOR} points={history.slice(-12).map((s) => ({ label: shortDate(s.startedAt), value: s.profile.fvPct, display: String(Math.round(s.profile.fvPct)) }))} />
-            <Text style={text.section}>Pmax（W/kg）</Text>
-            <TrendChart color={colors.accent} points={history.slice(-12).map((s) => ({ label: shortDate(s.startedAt), value: s.profile.pmax, display: s.profile.pmax.toFixed(1) }))} />
-            <Text style={text.caption}>按现在的体重和蹬伸距离重算。</Text>
+            <Text style={text.section}>{tr('Pmax（W/kg）')}</Text>
+            <TrendChart color={colors.accent} points={history.slice(-12).map((s) => ({ label: shortDate(s.startedAt), value: s.profile.pmax, display: decimal(s.profile.pmax, 1) }))} />
+            <Text style={text.caption}>{tr('按现在的体重和蹬伸距离重算。')}</Text>
           </Card>
         )}
       </ScrollView>
       <View style={styles.footer}>
-        <Button label="完成" variant={today.length ? 'primary' : 'secondary'} onPress={() => router.back()} />
+        <Button label={tr('完成')} variant={today.length ? 'primary' : 'secondary'} onPress={() => router.back()} />
       </View>
     </SafeAreaView>
   );
@@ -199,30 +198,26 @@ function ProfileCard({ profile, isToday, date, hpo }: { profile: FvProfile; isTo
   const unloaded = profile.points.find((p) => p.loadKg === 0);
   return (
     <Card style={{ gap: 10 }}>
-      <Text style={text.section}>{isToday ? '今天的力-速度曲线' : `最近一次的力-速度曲线 · ${date}`}</Text>
+      <Text style={text.section}>{isToday ? tr('今天的力-速度曲线') : tr('最近一次的力-速度曲线 · {date}', { date })}</Text>
       <FvChart profile={profile} color={COLOR} />
       <View style={styles.legend}>
         <View style={[styles.swatch, { backgroundColor: COLOR }]} />
-        <Text style={text.caption}>你的曲线</Text>
+        <Text style={text.caption}>{tr('你的曲线')}</Text>
         <View style={[styles.swatch, { backgroundColor: colors.textSoft, height: 1 }]} />
-        <Text style={text.caption}>同样功率下跳得最高的曲线</Text>
+        <Text style={text.caption}>{tr('同样功率下跳得最高的曲线')}</Text>
       </View>
       <View style={styles.stats}>
-        <Stat label="F0" value={profile.f0.toFixed(1)} unit="N/kg" />
-        <Stat label="v0" value={profile.v0.toFixed(2)} unit="m/s" />
-        <Stat label="Pmax" value={profile.pmax.toFixed(1)} unit="W/kg" />
+        <Stat label="F0" value={decimal(profile.f0, 1)} unit="N/kg" />
+        <Stat label="v0" value={decimal(profile.v0, 2)} unit="m/s" />
+        <Stat label="Pmax" value={decimal(profile.pmax, 1)} unit="W/kg" />
         <Stat label="FV%" value={String(Math.round(profile.fvPct))} unit="" main />
       </View>
-      <Text style={text.body}>{SIDE_TEXT[band.side]}（{band.name}）。</Text>
+      <Text style={text.body}>{tr('{SIDE_TEXT}（{name}）。', { SIDE_TEXT: SIDE_TEXT[band.side], name: band.name })}</Text>
       {unloaded && profile.optimalHeightCm > unloaded.heightCm + 0.5 && (
-        <Text style={text.muted}>
-          功率不变、只把曲线调到最优，徒手蹲跳约从 {unloaded.heightCm.toFixed(1)} 到 {profile.optimalHeightCm.toFixed(1)} cm；更大的进步要靠 Pmax 本身提高。
-        </Text>
+        <Text style={text.muted}>{tr('功率不变、只把曲线调到最优，徒手蹲跳约从 {heightCm} 到 {optimalHeightCm} cm；更大的进步要靠 Pmax 本身提高。', { heightCm: decimal(unloaded.heightCm, 1), optimalHeightCm: decimal(profile.optimalHeightCm, 1) })}</Text>
       )}
-      {profile.r2 < MIN_R2 && <Text style={[text.muted, { color: colors.warn }]}>几个点不太在一条直线上（R² {profile.r2.toFixed(2)}），检查有没有标错帧或跳之前往下顿了，可以把偏离的那级重跳。</Text>}
-      <Text style={text.caption}>
-        按 {profile.points.length} 级负重、蹬伸距离 {Math.round(hpo * 100)} cm 计算（Samozino 简易法）。
-      </Text>
+      {profile.r2 < MIN_R2 && <Text style={[text.muted, { color: colors.warn }]}>{tr('几个点不太在一条直线上（R² {r2}），检查有没有标错帧或跳之前往下顿了，可以把偏离的那级重跳。', { r2: decimal(profile.r2, 2) })}</Text>}
+      <Text style={text.caption}>{tr('按 {length} 级负重、蹬伸距离 {hpo} cm 计算（Samozino 简易法）。', { length: profile.points.length, hpo: Math.round(hpo * 100) })}</Text>
     </Card>
   );
 }
@@ -249,7 +244,7 @@ function Field({ label, unit, value, onChange }: { label: string; unit: string; 
           placeholder="—"
           placeholderTextColor={colors.textFaint}
           style={styles.input}
-          accessibilityLabel={`${label}（${unit}）`}
+          accessibilityLabel={tr('{label}（{unit}）', { label, unit })}
         />
         <Text style={styles.unit}>{unit}</Text>
       </View>

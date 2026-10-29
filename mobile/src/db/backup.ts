@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { BACKUP_FORMAT, type Backup, type BackupRow } from '@/domain/backup';
+import { tr } from '@/i18n';
 
 async function tableNames(db: SQLiteDatabase): Promise<string[]> {
   const rows = await db.getAllAsync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
@@ -37,7 +38,7 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise
       }
     });
   } catch {
-    return { ok: false, problem: '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。' };
+    return { ok: false, problem: tr('备份里的数据有问题，没有恢复，手机上原来的数据保持不变。') };
   }
   return { ok: true };
 }

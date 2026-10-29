@@ -5,6 +5,8 @@ import { THRESHOLDS, type BlockType, type DunkDiagnosis, type Missing } from './
 import { DEFERRED_STRENGTH_REASON, defersStrength } from './goal';
 import { blockPosition, calendarDate, PHASE_NAMES, planPosition, withBlock, type BlockPosition, type PlanBlock, type PlanSettings, type PlanTemplate } from './plan';
 
+import { decimal, tr } from '@/i18n';
+
 /** The block template additions a diagnosis calls for (see BLOCK_TEMPLATES extras in templates.ts). */
 export function blockExtras(d: DunkDiagnosis | null, type: BlockType): string[] {
   if (!d) return [];
@@ -31,7 +33,7 @@ function withExtras(extras: string[], deferred: boolean): string[] {
 export function firstBlock(d: DunkDiagnosis | null, start: ISODate, picked?: BlockType, goal?: ISODate | null): PlanBlock {
   const deferred = !picked && defersStrength(d?.limiter ?? 'strength', start, goal);
   const type = deferred ? 'transfer' : (picked ?? d?.limiter ?? 'strength');
-  const reason = deferred ? DEFERRED_STRENGTH_REASON : d?.limiter === type ? d.reasons[0] : d?.limiter == null && !picked ? NO_DIAGNOSIS_REASON : '你自己选的训练块。';
+  const reason = deferred ? tr(DEFERRED_STRENGTH_REASON) : d?.limiter === type ? d.reasons[0] : d?.limiter == null && !picked ? tr(NO_DIAGNOSIS_REASON) : tr('你自己选的训练块。');
   const extras = withExtras(blockExtras(d, type), deferred);
   return { start, type, ...(reason ? { reason } : {}), ...(extras.length ? { extras } : {}) };
 }
@@ -101,7 +103,7 @@ export function switchSuggestion(t: PlanTemplate, plan: PlanSettings, today: ISO
   if (!type || type === pos.type) return null;
   const key = `switch:${type}@${pos.start}`;
   if (plan.blocks?.[pos.index].declined?.includes(key)) return null;
-  return { kind: 'switch', key, from: pos.type, type, start: pos.end, reasons: deferred ? [DEFERRED_STRENGTH_REASON] : d!.reasons, ...(deferred ? { deferred } : {}) };
+  return { kind: 'switch', key, from: pos.type, type, start: pos.end, reasons: deferred ? [tr(DEFERRED_STRENGTH_REASON)] : d!.reasons, ...(deferred ? { deferred } : {}) };
 }
 
 export type TouchResult = { date: ISODate; value: number };
@@ -138,15 +140,15 @@ export function advanceSuggestion(t: PlanTemplate, plan: PlanSettings, today: IS
   const during = sorted.filter((r) => r.date >= from && r.date <= today).slice(-2);
   if (during.length < 2 || !during.every((r) => clearlyBetter(before, r.value))) return null;
 
-  const phase = weeks[target].retest ? '减量复测周' : PHASE_NAMES[weeks[target].phase];
-  const values = during.map((r) => r.value.toFixed(1)).join('、');
+  const phase = weeks[target].retest ? tr('减量复测周') : PHASE_NAMES[weeks[target].phase];
+  const values = during.map((r) => decimal(r.value, 1)).join(tr('、'));
   return {
     kind: 'advance',
     key,
     type: pos.type,
     week: target,
     phase,
-    reason: `摸高连续两次明显进步（${values} cm，之前平均 ${mean(before).toFixed(1)} cm），适应得比计划快，可以提前进入${phase}。`,
+    reason: tr('摸高连续两次明显进步（{values} cm，之前平均 {before} cm），适应得比计划快，可以提前进入{phase}。', { values, before: decimal(mean(before), 1), phase }),
   };
 }
 

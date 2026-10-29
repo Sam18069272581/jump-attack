@@ -128,7 +128,7 @@ const flush = async () => {
 };
 
 async function openCamera(
-  o: { devices?: Device[]; denied?: boolean; noCamera?: boolean; noRecorder?: boolean; maxSeconds?: number; people?: () => Pose[] } = {},
+  o: { devices?: Device[]; denied?: boolean; noCamera?: boolean; noRecorder?: boolean; maxSeconds?: number; people?: () => Pose[]; pose?: boolean } = {},
 ): Promise<Camera> {
   const devices = o.devices ?? [FRONT, WIDE];
   const people = o.people ?? (() => [athlete, bystander]);
@@ -159,7 +159,7 @@ async function openCamera(
     return ids;
   };
   FakeRecorder.made = [];
-  const page = runPage(poseCameraHtml({ bg: '#000', accent: '#f80', maxSeconds: o.maxSeconds }), {
+  const page = runPage(poseCameraHtml({ bg: '#000', accent: '#f80', maxSeconds: o.maxSeconds, pose: o.pose }), {
     elements: { video, overlay: new FakeCanvas() },
     timer,
     globals: {
@@ -322,5 +322,27 @@ describe('the camera page', () => {
     await cam.advance(300);
     cam.win.startRecording();
     expect(cam.all('error')).toEqual([expect.objectContaining({ stage: 'record' })]);
+  });
+
+  it('films without the pose model when a test only needs the take (jumps, VBT): no model, no reading, the same recording', async () => {
+    const cam = await openCamera({ pose: false });
+    await cam.advance(1000);
+    expect(cam.all('camera')).toEqual([{ type: 'camera', label: '后置相机', physical: true, fps: 60, maxFps: 60, width: W, height: H }]);
+    expect(cam.all('model')).toEqual([]);
+    expect(cam.all('frame')).toEqual([]);
+    expect(cam.all('error')).toEqual([]);
+
+    cam.win.startRecording();
+    await cam.advance(0);
+    const rec = FakeRecorder.made[0];
+    expect(rec.options).toEqual({ mimeType: 'video/mp4;codecs=avc1', videoBitsPerSecond: CAMERA_BITRATE });
+    rec.tail = Uint8Array.from({ length: 1000 }, (_, i) => i % 251);
+    await cam.advance(2000);
+    cam.win.stopRecording();
+    await cam.advance(0);
+    cam.win.ack(0);
+    await cam.advance(0);
+    expect(cam.all('recorded')).toEqual([{ type: 'recorded', chunks: 1, size: 1000, mime: 'video/mp4; codecs="avc1.42000a"', seconds: 2 }]);
+    expect(cam.all('frame')).toEqual([]);
   });
 });

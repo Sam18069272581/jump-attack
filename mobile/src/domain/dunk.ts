@@ -3,6 +3,8 @@ import { daysBetween, toISODate, type ISODate } from './dates';
 import type { DayReadiness } from './readiness';
 import { lineVerdict, type LineVerdict } from './touch';
 
+import { decimal, localized, tr } from '@/i18n';
+
 /** Regulation rim height, cm. */
 export const RIM_CM = 305;
 
@@ -34,11 +36,11 @@ export const THRESHOLDS = {
 /** The kind of 4-week training block the diagnosis calls for. */
 export type BlockType = 'strength' | 'reactive' | 'transfer';
 
-export const BLOCKS: Record<BlockType, { name: string; focus: string }> = {
+export const BLOCKS: Record<BlockType, { name: string; focus: string }> = localized({
   strength: { name: '力量块', focus: '后蹲或史密斯深蹲每周 2–3 次，每组 3–5 次大重量；跳跃少量保持' },
   reactive: { name: '反应块', focus: '最佳箱高跳深、短触地连续跳每周 2–3 次；深蹲 1–2 次维持' },
   transfer: { name: '转化块', focus: '助跑摸高跳、轻负重跳、冲刺；深蹲和跳深各 1 次维持' },
-};
+}, 'name', 'focus');
 
 /** Results oldest first, one per test session; only the last two of each are read. */
 export type DunkInput = {
@@ -104,16 +106,16 @@ export type Testable = Extract<Missing, 'squat' | 'drop_jump' | 'approach' | 'cm
  */
 export const STALE_DAYS = 42;
 
-const TESTABLE_NAME: Record<Testable, string> = { squat: '深蹲 1RM', drop_jump: '跳深 RSI', approach: '助跑摸高', cmj: 'CMJ' };
+const TESTABLE_NAME: Record<Testable, string> = localized({ squat: '深蹲 1RM', drop_jump: '跳深 RSI', approach: '助跑摸高', cmj: 'CMJ' });
 
-export const MISSING_TEXT: Record<Missing, string> = {
+export const MISSING_TEXT: Record<Missing, string> = localized({
   body_mass: '在「我的」填体重',
   standing_reach: '在「我的」填站立摸高',
   squat: '在 VBT 页测一次后蹲（两个以上重量），估出 1RM',
   drop_jump: '做一次 DJ 跳深，找最佳箱高',
   approach: '测一次助跑摸高',
   cmj: '测一次 CMJ',
-};
+});
 
 export type DunkDiagnosis = {
   /** Rim + clearance, cm. */
@@ -202,7 +204,7 @@ function rate(value: number | null, low: number, good: number, lowerIsBetter = f
   return 'good';
 }
 
-const fixed = (x: number, d: number) => x.toFixed(d);
+const fixed = (x: number, d: number) => decimal(x, d);
 
 export function diagnose(input: DunkInput): DunkDiagnosis {
   const line = dunkLine(input.rimCm, input.clearanceCm);
@@ -233,13 +235,13 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
   const T = THRESHOLDS;
 
   const metrics: DunkMetric[] = [
-    { key: 'squat_ratio', name: '深蹲 ÷ 体重', value: now.squatRatio, unit: '×', decimals: 2, low: T.squatRatio.low, threshold: T.squatRatio.good, status: rate(now.squatRatio, T.squatRatio.low, T.squatRatio.good) },
-    { key: 'rsi', name: '跳深 RSI', value: now.rsi, unit: '', decimals: 2, low: T.rsi.low, threshold: T.rsi.good, status: rate(now.rsi, T.rsi.low, T.rsi.good) },
-    { key: 'contact', name: '跳深触地', value: now.contactMs, unit: 'ms', decimals: 0, low: T.contactMs, threshold: T.contactMs, lowerIsBetter: true, status: rate(now.contactMs, T.contactMs, T.contactMs, true) },
+    { key: 'squat_ratio', name: tr('深蹲 ÷ 体重'), value: now.squatRatio, unit: '×', decimals: 2, low: T.squatRatio.low, threshold: T.squatRatio.good, status: rate(now.squatRatio, T.squatRatio.low, T.squatRatio.good) },
+    { key: 'rsi', name: tr('跳深 RSI'), value: now.rsi, unit: '', decimals: 2, low: T.rsi.low, threshold: T.rsi.good, status: rate(now.rsi, T.rsi.low, T.rsi.good) },
+    { key: 'contact', name: tr('跳深触地'), value: now.contactMs, unit: 'ms', decimals: 0, low: T.contactMs, threshold: T.contactMs, lowerIsBetter: true, status: rate(now.contactMs, T.contactMs, T.contactMs, true) },
     { key: 'eur', name: 'CMJ ÷ SJ', value: eur, unit: '', decimals: 2, low: T.eur.low, threshold: T.eur.good, status: rate(eur, T.eur.low, T.eur.good) },
     {
       key: 'fv',
-      name: '力-速度 FV%',
+      name: tr('力-速度 FV%'),
       value: fv,
       unit: '%',
       decimals: 0,
@@ -247,33 +249,33 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
       threshold: T.fvPct.high,
       status: fv == null ? 'missing' : fv < T.fvPct.low || fv > T.fvPct.high ? 'mid' : 'good',
     },
-    { key: 'approach_gain', name: '助跑比原地高', value: gain, unit: 'cm', decimals: 1, low: T.approachGainCm.low, threshold: T.approachGainCm.good, status: rate(gain, T.approachGainCm.low, T.approachGainCm.good) },
+    { key: 'approach_gain', name: tr('助跑比原地高'), value: gain, unit: 'cm', decimals: 1, low: T.approachGainCm.low, threshold: T.approachGainCm.good, status: rate(gain, T.approachGainCm.low, T.approachGainCm.good) },
   ];
 
   const reasons: string[] = [];
   const r = now.squatRatio;
   if (limiter === 'strength' && r != null) {
-    reasons.push(`深蹲 1RM 约 ${Math.round(input.squat1rm.at(-1)!)} kg，是体重的 ${fixed(r, 2)} 倍，不到 ${T.squatRatio.low} 倍：先练力量。`);
+    reasons.push(tr('深蹲 1RM 约 {p} kg，是体重的 {r} 倍，不到 {low} 倍：先练力量。', { p: Math.round(input.squat1rm.at(-1)!), r: fixed(r, 2), low: T.squatRatio.low }));
   } else if (limiter === 'reactive' && r != null && now.rsi != null && now.contactMs != null) {
     const why = [
-      ...(now.rsi < T.rsi.good ? [`跳深 RSI ${fixed(now.rsi, 2)}，不到 ${fixed(T.rsi.good, 1)}`] : []),
-      ...(now.contactMs > T.contactMs ? [`触地 ${Math.round(now.contactMs)} ms，超过 ${T.contactMs} ms，反弹偏慢`] : []),
+      ...(now.rsi < T.rsi.good ? [tr('跳深 RSI {rsi}，不到 {good}', { rsi: fixed(now.rsi, 2), good: fixed(T.rsi.good, 1) })] : []),
+      ...(now.contactMs > T.contactMs ? [tr('触地 {contactMs} ms，超过 {contactMs2} ms，反弹偏慢', { contactMs: Math.round(now.contactMs), contactMs2: T.contactMs })] : []),
     ];
-    reasons.push(`深蹲是体重的 ${fixed(r, 2)} 倍，力量够了；${why.join('，')}：练反应。`);
+    reasons.push(tr('深蹲是体重的 {r} 倍，力量够了；{why}：练反应。', { r: fixed(r, 2), why: why.join(tr('，')) }));
   } else if (limiter === 'transfer' && r != null && now.rsi != null) {
-    reasons.push(`深蹲是体重的 ${fixed(r, 2)} 倍，跳深 RSI ${fixed(now.rsi, 2)}，两项都过线：把能力转成摸高，多练助跑摸高跳和冲刺。`);
-    if (r < T.squatRatio.good) reasons.push(`深蹲还没到 ${fixed(T.squatRatio.good, 1)} 倍体重，块里每周保留 2 次大重量。`);
+    reasons.push(tr('深蹲是体重的 {r} 倍，跳深 RSI {rsi}，两项都过线：把能力转成摸高，多练助跑摸高跳和冲刺。', { r: fixed(r, 2), rsi: fixed(now.rsi, 2) }));
+    if (r < T.squatRatio.good) reasons.push(tr('深蹲还没到 {good} 倍体重，块里每周保留 2 次大重量。', { good: fixed(T.squatRatio.good, 1) }));
   }
   if (limiter != null && limiter !== 'strength' && fv != null) {
-    if (fv < T.fvPct.low) reasons.push(`力-速度曲线偏力量不足（FV% ${Math.round(fv)}），块里多放一个力量练习。`);
-    else if (fv > T.fvPct.high) reasons.push(`力-速度曲线偏速度不足（FV% ${Math.round(fv)}），块里多放一个速度练习。`);
+    if (fv < T.fvPct.low) reasons.push(tr('力-速度曲线偏力量不足（FV% {fv}），块里多放一个力量练习。', { fv: Math.round(fv) }));
+    else if (fv > T.fvPct.high) reasons.push(tr('力-速度曲线偏速度不足（FV% {fv}），块里多放一个速度练习。', { fv: Math.round(fv) }));
   }
-  if (eur != null && eur < T.eur.low) reasons.push(`CMJ ÷ SJ 只有 ${fixed(eur, 2)}，不到 ${fixed(T.eur.low, 1)}：下蹲反弹的弹性没用上，加反向跳和连续跳。`);
+  if (eur != null && eur < T.eur.low) reasons.push(tr('CMJ ÷ SJ 只有 {eur}，不到 {low}：下蹲反弹的弹性没用上，加反向跳和连续跳。', { eur: fixed(eur, 2), low: fixed(T.eur.low, 1) }));
   if (approach != null && standing != null && !comparable) {
-    reasons.push('助跑摸高是在墙上读的，原地摸高是用录像算的，两种口径差几厘米。录一次助跑摸高视频并填上墙上摸到的刻度，校准后才能比较助跑比原地高多少。');
+    reasons.push(tr('助跑摸高是在墙上读的，原地摸高是用录像算的，两种口径差几厘米。录一次助跑摸高视频并填上墙上摸到的刻度，校准后才能比较助跑比原地高多少。'));
   }
-  if (technique && gain != null) reasons.push(`助跑摸高只比原地高 ${fixed(gain, 1)} cm（精英篮球运动员平均高约 ${T.approachGainCm.good} cm）：练最后两步和摆臂。`);
-  if (limiter != null && !confirmed) reasons.push('这个结论只有一次测试支持，再测一次结论一致才建议换训练块。');
+  if (technique && gain != null) reasons.push(tr('助跑摸高只比原地高 {gain} cm（精英篮球运动员平均高约 {good} cm）：练最后两步和摆臂。', { gain: fixed(gain, 1), good: T.approachGainCm.good }));
+  if (limiter != null && !confirmed) reasons.push(tr('这个结论只有一次测试支持，再测一次结论一致才建议换训练块。'));
 
   // Only results that decide something now: the drop jump doesn't while strength is the limiter, the CMJ doesn't once
   // there is an approach touch.
@@ -287,7 +289,7 @@ export function diagnose(input: DunkInput): DunkDiagnosis {
   for (const k of stale) {
     // A space only between Latin and Chinese: 「跳深 RSI 是」, 「助跑摸高是」.
     const name = TESTABLE_NAME[k] + (/[A-Za-z0-9]$/.test(TESTABLE_NAME[k]) ? ' ' : '');
-    reasons.push(`${name}是 ${Math.floor(ageOf(k)! / 7)} 周前测的，建议复测，结论才跟得上现在的你。`);
+    reasons.push(tr('{name}是 {k} 周前测的，建议复测，结论才跟得上现在的你。', { name, k: Math.floor(ageOf(k)! / 7) }));
   }
 
   const missing: Missing[] = [];

@@ -2,12 +2,13 @@ import type { ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Icon } from '@/components/Icon';
+import { tr } from '@/i18n';
 import { colors } from '@/theme';
 
 export function CaptureHeader({ title, subtitle, onClose, right }: { title: string; subtitle: string; onClose: () => void; right?: ReactNode }) {
   return (
     <View style={styles.top}>
-      <Pressable accessibilityRole="button" accessibilityLabel="关闭" onPress={onClose} style={styles.iconButton}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('关闭')} onPress={onClose} style={styles.iconButton}>
         <Icon name="close" />
       </Pressable>
       <View style={{ alignItems: 'center' }}>

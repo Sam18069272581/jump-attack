@@ -3,6 +3,7 @@ import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import Svg, { Circle, Line, Text as SvgText } from 'react-native-svg';
 
 import { profileFromPower, type FvProfile } from '@/domain/fvp';
+import { decimal, tr } from '@/i18n';
 import { colors, fonts } from '@/theme';
 
 const PAD_LEFT = 36;
@@ -26,7 +27,7 @@ export function FvChart({ profile, color = colors.accent, height = 220 }: { prof
   const fTicks = [0, maxF / 2, maxF];
 
   return (
-    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={`力-速度曲线：F0 ${profile.f0.toFixed(1)} N/kg，v0 ${profile.v0.toFixed(2)} m/s`}>
+    <View style={[styles.box, { height }]} onLayout={onLayout} accessibilityRole="image" accessibilityLabel={tr('力-速度曲线：F0 {f0} N/kg，v0 {v0} m/s', { f0: decimal(profile.f0, 1), v0: decimal(profile.v0, 2) })}>
       {width > 0 && (
         <Svg width={width} height={height}>
           {fTicks.map((f) => (
@@ -42,12 +43,8 @@ export function FvChart({ profile, color = colors.accent, height = 220 }: { prof
               {String(v)}
             </SvgText>
           ))}
-          <SvgText x={width - PAD_RIGHT} y={height - 4} fill={colors.textMuted} fontSize={10} textAnchor="end">
-            速度 m/s
-          </SvgText>
-          <SvgText x={PAD_LEFT + 4} y={PAD_TOP + 10} fill={colors.textMuted} fontSize={10}>
-            力 N/kg
-          </SvgText>
+          <SvgText x={width - PAD_RIGHT} y={height - 4} fill={colors.textMuted} fontSize={10} textAnchor="end">{tr('速度 m/s')}</SvgText>
+          <SvgText x={PAD_LEFT + 4} y={PAD_TOP + 10} fill={colors.textMuted} fontSize={10}>{tr('力 N/kg')}</SvgText>
           <Line x1={x(0)} y1={y(opt.f0)} x2={x(opt.v0)} y2={y(0)} stroke={colors.textSoft} strokeWidth={1.5} strokeDasharray="5 5" />
           <Line x1={x(0)} y1={y(profile.f0)} x2={x(profile.v0)} y2={y(0)} stroke={color} strokeWidth={2.5} />
           {profile.points.map((p) => (

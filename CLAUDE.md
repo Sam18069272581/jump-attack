@@ -37,8 +37,9 @@ Expo 相关规则：@mobile/AGENTS.md
 ## Git 工作流（严格遵守）
 
 - **Conventional Commits**：提交信息写成 `<type>(<scope>): <描述>`，scope 可省。type 只用 `feat`（新功能）、`fix`（修 bug）、`docs`、`refactor`、`test`、`perf`、`style`、`build`、`ci`、`chore`、`revert`。破坏性改动在 type 后加 `!`，正文写 `BREAKING CHANGE:`。例：`feat(home): 灵活度和体能耐力收进「辅助」`。
-- **Feature Branch**：每项工作一个分支，从最新的 `main` 拉出来，不直接往 `main` 推。
-- **Squash merge**：PR 一律 squash 合并，一个 PR 在 `main` 上只留一个提交。PR 标题就是 squash 后的提交信息，所以 PR 标题也必须符合 Conventional Commits。
+- **Feature Branch**：从最新的 `main` 拉分支，不直接往 `main` 推。相近的工作放进同一个分支，不要每个小改动都开新分支。
+- **普通合并**：PR 用 merge commit 合并（Create a merge commit），不 squash、不 rebase，分支上的每个提交都保留在 `main` 上。所以分支里每个提交都要符合 Conventional Commits，按步骤拆小提交；PR 标题也照这个格式写。
+- **清理分支**：PR 合并后删掉它的远程分支。
 
 ## 完成标准
 

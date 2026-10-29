@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { newSessionId, saveSession } from '@/db/repo';
+import { tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -35,11 +36,11 @@ export function RunningScreen({ children }: { children: ReactNode }) {
 export function Stepper({ value, onChange, min = 0, max = Infinity, label }: { value: number; onChange: (v: number) => void; min?: number; max?: number; label: string }) {
   return (
     <View style={styles.stepper}>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${label}减一`} disabled={value <= min} onPress={() => onChange(value - 1)} style={[styles.stepBtn, value <= min && styles.off]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('{label}减一', { label })} disabled={value <= min} onPress={() => onChange(value - 1)} style={[styles.stepBtn, value <= min && styles.off]}>
         <Text style={styles.stepBtnText}>−</Text>
       </Pressable>
       <Text style={styles.stepValue}>{value}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${label}加一`} disabled={value >= max} onPress={() => onChange(value + 1)} style={[styles.stepBtn, value >= max && styles.off]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={tr('{label}加一', { label })} disabled={value >= max} onPress={() => onChange(value + 1)} style={[styles.stepBtn, value >= max && styles.off]}>
         <Text style={styles.stepBtnText}>+</Text>
       </Pressable>
     </View>
@@ -47,10 +48,10 @@ export function Stepper({ value, onChange, min = 0, max = Infinity, label }: { v
 }
 
 /** Asks before ending a test that is still running. */
-export function confirmStop(onStop: () => void, message = '会按现在的进度出成绩。') {
-  Alert.alert('结束测试？', message, [
-    { text: '继续测试', style: 'cancel' },
-    { text: '结束', style: 'destructive', onPress: onStop },
+export function confirmStop(onStop: () => void, message = tr('会按现在的进度出成绩。')) {
+  Alert.alert(tr('结束测试？'), message, [
+    { text: tr('继续测试'), style: 'cancel' },
+    { text: tr('结束'), style: 'destructive', onPress: onStop },
   ]);
 }
 
@@ -69,7 +70,7 @@ export function useSaveResult(metricCode: string) {
       router.replace({ pathname: '/conditioning/result', params: { metric: metricCode, session } });
     } catch (e) {
       setBusy(false);
-      Alert.alert('保存失败', String(e));
+      Alert.alert(tr('保存失败'), String(e));
     }
   }
 

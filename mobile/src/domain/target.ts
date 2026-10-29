@@ -6,13 +6,15 @@ import { dayReadiness } from './readiness';
 import type { RecoveryDay } from './recovery';
 import { roundLoad, STOP_LOSS, velocityLoss, type LvProfile } from './vbt';
 
+import { decimal, localized, tr } from '@/i18n';
+
 /**
  * The day's pass line for strength work. A day is read from three signals and takes the worst of them:
  * recovery (HRV, resting HR, sleep), today's CMJ, and the warm-up set's bar speed. A fair day allows 5 %
  * and a poor day 10 %, either on the load or on the velocity, as `tolerance` decides.
  */
 
-export const STATE_LABEL: Record<DayState, string> = { good: '好', fair: '一般', poor: '差', unknown: '未知' };
+export const STATE_LABEL: Record<DayState, string> = localized({ good: '好', fair: '一般', poor: '差', unknown: '未知' });
 
 /** Days of warm-up history the day's warm-up is compared with. */
 export const WARMUP_WINDOW_DAYS = 30;
@@ -75,7 +77,7 @@ export function readDay(inputs: DayInputs, date: ISODate, ignore?: 'cmj' | 'warm
   const reasons = [...r.signals];
   if (r.recovery.status === 'fair') reasons.push(...r.recovery.warnings);
   if (warmup && (warmup.state === 'fair' || warmup.state === 'poor')) {
-    reasons.push(`热身 ${warmup.load} kg 速度 ${warmup.v.toFixed(2)} m/s，是 30 天均值的 ${Math.round(warmup.pct * 100)}%`);
+    reasons.push(tr('热身 {load} kg 速度 {v} m/s，是 30 天均值的 {pct}%', { load: warmup.load, v: decimal(warmup.v, 2), pct: Math.round(warmup.pct * 100) }));
   }
   const knee = kneeStatus(inputs.pain ?? [], date);
   const kneeBad = knee?.light === 'red' || knee?.light === 'stop';
@@ -130,9 +132,9 @@ export function setTarget(baseKg: number, profile: LvProfile | null, state: DayS
  * slower than today's fastest set of the exercise.
  */
 export function checkSet(v: number, minV: number | null, fastestToday: number | null): { stop: boolean; why: string | null } {
-  if (minV != null && v < minV) return { stop: true, why: `这组 ${v.toFixed(2)} m/s，低于今天的达标线 ${minV.toFixed(2)} m/s` };
+  if (minV != null && v < minV) return { stop: true, why: tr('这组 {v} m/s，低于今天的达标线 {minV} m/s', { v: decimal(v, 2), minV: decimal(minV, 2) }) };
   if (fastestToday != null && velocityLoss(fastestToday, v) >= STOP_LOSS) {
-    return { stop: true, why: `比今天最快的一组（${fastestToday.toFixed(2)} m/s）慢了 ${Math.round(velocityLoss(fastestToday, v) * 100)}%` };
+    return { stop: true, why: tr('比今天最快的一组（{fastestToday} m/s）慢了 {fastestToday2}%', { fastestToday: decimal(fastestToday, 2), fastestToday2: Math.round(velocityLoss(fastestToday, v) * 100) }) };
   }
   return { stop: false, why: null };
 }
@@ -145,7 +147,7 @@ export function allowanceText(state: DayState, block: BlockType | null): string 
   const pct = Math.round((1 - plain.loadFactor) * 100);
   const withSpeed =
     tracked.velocityTolerance > 0
-      ? `测了速度的组保持重量，速度低 ${Math.round(tracked.velocityTolerance * 100)}% 以内仍算完成`
-      : `测了速度的组减重 ${Math.round((1 - tracked.loadFactor) * 100)}%，速度要达到目标`;
-  return `今天状态${STATE_LABEL[state]}：推荐重量减 ${pct}%；${withSpeed}。`;
+      ? tr('测了速度的组保持重量，速度低 {velocityTolerance}% 以内仍算完成', { velocityTolerance: Math.round(tracked.velocityTolerance * 100) })
+      : tr('测了速度的组减重 {p}%，速度要达到目标', { p: Math.round((1 - tracked.loadFactor) * 100) });
+  return tr('今天状态{STATE_LABEL}：推荐重量减 {pct}%；{withSpeed}。', { STATE_LABEL: STATE_LABEL[state], pct, withSpeed });
 }
