@@ -1,0 +1,62 @@
+# Weekly dependency updates, grouped so a week brings at most a couple of PRs.
+#
+# Expo Go on the phone only runs SDK 58, so anything tied to the SDK stays where `npx expo install` put it:
+# Expo's own packages only get patch releases within SDK 58, and React / React Native and the native libraries Expo
+# Go ships with are not touched at all. Moving to a new SDK is done by hand with `npx expo install expo@^59 --fix`.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /mobile
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # Versions chosen by the Expo SDK: patch releases only.
+      - dependency-name: expo
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: 'expo-*'
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: '@expo/*'
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: '@expo-google-fonts/*'
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: jest-expo
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: eslint-config-expo
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: typescript
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: '@types/react'
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      - dependency-name: jest
+        update-types: [version-update:semver-major]
+      # Built into Expo Go: exact versions, never updated here.
+      - dependency-name: react
+      - dependency-name: react-dom
+      - dependency-name: react-test-renderer
+      - dependency-name: react-native
+      - dependency-name: 'react-native-*'
+      - dependency-name: '@react-native/*'
+      - dependency-name: '@react-native-community/*'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Europe/Berlin
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ['*']
