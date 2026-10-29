@@ -169,7 +169,8 @@ export type QualityFlag =
   /** No floor markers: no run-up speed, and lengths come from gravity's scale. */
   | 'no-markers'
   /** The markers' scale and gravity's differ: the lines weren't tapped where the athlete ran, or weren't 3 m apart.
-   *  Lengths and the run-up speed go by gravity's scale, unless its fall was cut short (`short-fall`). */
+   *  Lengths and the run-up speed go by gravity's scale, unless its fall was cut short (`short-fall`); on a run-up that
+   *  comes at the camera (`curved`) the run-up speed stays on the lines'. */
   | 'off-line'
   /** They differ, but gravity's fall was cut short (`hang`): its scale rests on the rise alone, and isn't the better
    *  of the two. Lengths, the run-up speed and the take-off's horizontal velocity stay on the lines' scale, and their
@@ -181,7 +182,9 @@ export type QualityFlag =
   | 'gaps'
   /** The take-off foot was the one away from the camera. */
   | 'far-foot'
-  /** The body grows or shrinks over the run-up: it comes at the camera, so speeds along the picture read low. */
+  /** The body grows or shrinks over the run-up: it comes at the camera, and lengths and speeds read in the picture are
+   *  off by about as much (their errors take that in). Its slant alone puts the lines' scale apart from gravity's
+   *  (`off-line`): the run-up speed then stays on the lines' 3 m. */
   | 'curved'
   /** The free fall stops early (a hand on the rim): only the rise is used. */
   | 'hang'
@@ -1265,8 +1268,13 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
     if (ca && cb && cb.t !== ca.t) {
       const dt = abs(cb.t - ca.t);
       // The hips cross the lines where they are in the picture: 3 m apart, or where the lines are off, as far apart as
-      // gravity's scale makes them along the athlete's path.
-      const v = (linesScale != null ? markers.distanceM : abs(xb - xa) * gravityScale) / dt;
+      // gravity's scale makes them along the athlete's path. Not so on a run-up that comes at the camera (`curved`): its
+      // slant alone puts the two scales apart, the 3 m line nearer the lens than the take-off line, and lines laid on its
+      // path are 3 m apart along it. Moved onto gravity's scale, the run-up speed read 0.56 m/s high at 15° and 0.81 at
+      // 20° (medians of 100 clips of the probes'), 0.05 and 0.09 on the 3 m. It stays on the lines', with their errors
+      // and the gap between the scales, as for lines a little off.
+      const onLines = linesScale != null || flags.includes('curved');
+      const v = (onLines ? markers.distanceM : abs(xb - xa) * gravityScale) / dt;
       // Each crossing's place: the jitter a 10 Hz filter leaves (white noise keeps 2·10/fps of its variance), and the
       // tap (`tapAlong`). Its time: that over the hips' speed there, which at the take-off line is the plant's, about
       // half the run-up's.
@@ -1285,9 +1293,9 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
       // the gap: each crossing's distance from the middle over its speed, summed, over the time between them. That is 1
       // at an even speed with the middle halfway, and 1.5–1.7 in the synthetic clips: without it, lines 0.3 m nearer than
       // the athlete ran, with a hand on the rim, had the run-up speed cover the truth in 83 of 100.
-      const gravityRel = linesScale != null ? 0 : 1.96 * gravityScaleRel;
+      const gravityRel = onLines ? 0 : 1.96 * gravityScaleRel;
       const xm = markers.picture ? toWorld(frame, { x: markers.picture.width / 2, y: markers.picture.height / 2 }).x : (xa + xb) / 2;
-      const k = linesScale != null ? max(1, (abs(xa - xm) / max(1, ca.speed) + abs(xb - xm) / max(1, cb.speed)) / dt) : 1;
+      const k = onLines ? max(1, (abs(xa - xm) / max(1, ca.speed) + abs(xb - xm) / max(1, cb.speed)) / dt) : 1;
       metrics.approach = measured('approach', v, v * (hypot(1.96 * rel, sizeChange, gravityRel) + k * (scalesApart + unseen)));
     }
   }

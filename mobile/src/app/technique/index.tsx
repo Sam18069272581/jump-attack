@@ -13,7 +13,7 @@ import { deleteTechniqueTake, listTechniqueTakes, reachByDay, techniqueVideoUris
 import { shortDate, toISODate } from '@/domain/dates';
 import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { MetricKey } from '@/domain/technique';
-import { FLAG_TEXT, formatMeasured, METRIC_ORDER, METRIC_TEXT, shownFlags } from '@/domain/techniqueText';
+import { flagText, formatMeasured, METRIC_ORDER, METRIC_TEXT, shownFlags } from '@/domain/techniqueText';
 import { clearPoseRuns, downloadPoseLib, POSE_DOWNLOAD_BYTES, poseLibReady } from '@/media/poseLib';
 import { pruneTakes } from '@/media/takes';
 import { useAthlete } from '@/state/athlete';
@@ -184,7 +184,7 @@ export default function Technique() {
                   ))}
                   {shownFlags(t.flags).map((f) => (
                     <Text key={f} style={styles.warn}>
-                      {FLAG_TEXT[f]}
+                      {flagText(f, t.flags)}
                     </Text>
                   ))}
                   <Button label="删除这条记录" variant="secondary" onPress={() => remove(t)} />

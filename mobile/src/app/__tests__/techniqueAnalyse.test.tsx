@@ -9,7 +9,7 @@ import { addTrial, ensureSession, listTrials } from '@/db/repo';
 import { listTechniqueTakes } from '@/db/technique';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { LM, type Pt } from '@/domain/pose';
-import { FLAG_TEXT, PROBLEM_TEXT } from '@/domain/techniqueText';
+import { FLAG_TEXT, flagText, PROBLEM_TEXT } from '@/domain/techniqueText';
 import { asWire, poseScene, type PoseScene } from '@/domain/testing/poseScene';
 
 import TechniqueAnalyse from '../technique/analyse';
@@ -249,6 +249,22 @@ it.each([
   await press(r.root, '保存');
   const [trial] = await listTrials(mockDb, session);
   expect((trial.detail as { markers: { tapPx?: number } }).markers.tapPx).toBeCloseTo(tapPx, 6);
+});
+
+it('on a run-up that comes at the camera, the lines laid on its path, says its slant puts the two scales apart rather than that the lines are off', async () => {
+  // The 3 m line is nearer the phone than the take-off line: that alone puts the lines' scale apart from gravity's.
+  const scene = poseScene({ curveDeg: 15, seed: 500 });
+  const onPath = (xM: number) => scene.floorPoint(xM, -xM * Math.tan((15 * Math.PI) / 180));
+  await open(scene, { uri: 'file:///picked/IMG_0018.MOV', fps: '0', source: 'import', session: 'tt-12' });
+  await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+  await tapLine(scene, onPath(0));
+  await tapLine(scene, onPath(-3));
+  await press(r.root, '开始分析');
+  await answerReads();
+  const shown = texts(r.root);
+  expect(shown).toContain(FLAG_TEXT.curved);
+  expect(shown).toContain(flagText('off-line', ['curved', 'off-line']));
+  expect(shown).not.toContain(FLAG_TEXT['off-line']);
 });
 
 it('measures a take filmed in the app without the floor lines, says what that leaves out, and keeps its video', async () => {

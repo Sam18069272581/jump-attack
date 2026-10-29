@@ -932,6 +932,26 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
     expect(Object.entries(tally).filter(([, c]) => c.n < 40 || chanceOfSoFew(c.covered, c.n) < 0.05)).toEqual([]);
   });
 
+  it.each([15, 20])('lines laid where the athlete ran, on a run-up that comes in at %i° to the picture: the run-up speed is the 3 m between them over the time it took', (curveDeg) => {
+    // The slant alone puts the two scales apart, the 3 m line nearer the lens: no sign the lines are off, and along the
+    // run-up they are 3 m apart. Moved onto gravity's scale, the run-up speed read 0.56 m/s high at 15° and 0.81 at 20°
+    // (medians of 100 clips of the probes'), 0.05 and 0.09 on the 3 m. Read and tapped as the test above.
+    for (const seed of [500, 501, 502]) {
+      const scene = poseScene({ seed, curveDeg });
+      const { frames, target } = readAsTheScreen(scene);
+      const finger = normals(seed * 7919);
+      const tap = (xM: number) => {
+        const p = scene.floorPoint(xM, -xM * Math.tan((curveDeg * Math.PI) / 180));
+        return { x: p.x + TAP_PX * finger(), y: p.y + TAP_PX * finger() };
+      };
+      const markers = { a: tap(-3), b: tap(0), distanceM: 3, picture: { width: scene.width, height: scene.height }, tapPx: TAP_PX };
+      const result = resultOf(analyseTechnique({ frames, captureFps: 240, markers, target }));
+      const approach = result.metrics.approach!;
+      expect([seed, result.flags.includes('curved'), result.flags.includes('off-line'), Math.abs(approach.value - scene.truth.approachSpeed!) < 0.4]).toEqual([seed, true, true, true]);
+      expect([seed, misses(scene, result).filter((x) => /^approach:/.test(x))]).toEqual([seed, []]);
+    }
+  });
+
   it('no lines, and the run-up comes in at 3–4°, too little to flag as curved: the take-off still covers the truth in 95 % of clips', () => {
     // The body's size changes by 3–6 % along such a run-up (a straight one's by about 1 %), and its floor slopes by a
     // third of a degree, which the floor fit takes for the phone's roll. Read as the screen reads it, 40 clips at each.

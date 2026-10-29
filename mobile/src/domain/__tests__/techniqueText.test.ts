@@ -1,5 +1,5 @@
 import { PASS_LINE } from '../technique';
-import { FLAG_TEXT, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, shownFlags } from '../techniqueText';
+import { FLAG_TEXT, flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, shownFlags } from '../techniqueText';
 
 describe('formatMeasured', () => {
   it('writes the figure with its 95 % error, to the figure’s own precision', () => {
@@ -60,6 +60,22 @@ it('when the scales disagree, says the vertical take-off velocity is less sure t
   // It rests on the parabola's curvature as gravity's scale does, off the line and after a short fall alike.
   expect(FLAG_TEXT['off-line']).toMatch(/垂直速度.*误差/);
   expect(FLAG_TEXT['short-fall']).toMatch(/垂直速度.*误差/);
+});
+
+it('on a run-up that came at the camera, says its slant puts the two apart rather than that the lines are off, and that the run-up speed stays on their 3 m', () => {
+  // Lines laid on such a run-up are one nearer the phone than the other: that alone puts their scale apart from gravity's.
+  const curvedOff = flagText('off-line', ['curved', 'off-line']);
+  expect(curvedOff).toMatch(/斜/);
+  expect(curvedOff).not.toMatch(/没点在|不是相隔|贴错|点错/);
+  expect(curvedOff).toMatch(/助跑速度.*3 米/);
+  expect(curvedOff).toMatch(/步长.*刹车.*重力/);
+  expect(curvedOff).not.toMatch(/助跑速度[^；]*重力/);
+  expect(flagText('off-line', ['off-line'])).toBe(FLAG_TEXT['off-line']);
+  expect(flagText('hang', ['curved', 'hang'])).toBe(FLAG_TEXT.hang);
+  // Nor does the slant's own line say which way they are off: in the synthetic clips the last step and braking read a
+  // little high on gravity's scale or without lines, and low on lines laid on such a run-up.
+  expect(FLAG_TEXT.curved).not.toMatch(/偏小|偏大/);
+  expect(FLAG_TEXT.curved).toMatch(/误差/);
 });
 
 it('when a hand on the rim cut the fall short, says so rather than that the lines are off, and that the lengths stay on the lines', () => {

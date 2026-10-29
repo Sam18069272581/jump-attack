@@ -44,11 +44,23 @@ export const FLAG_TEXT: Record<QualityFlag, string> = {
   'scale-broken': '两条线算出的比例和重力对不上：多半是拍摄帧率选错了，或者线点错了。速度、时间和长度先不给，改好再分析一次。',
   gaps: '中间有一段没认出运动员。',
   'far-foot': '起跳脚是离手机远的那只，挡得多，触地时间可能不够准。',
-  curved: '助跑斜着朝手机跑来：沿画面量的速度会偏小。',
+  curved: '助跑斜着朝手机跑来：从画面上量的长度和速度会有些出入，误差已经按斜的程度放宽。',
   hang: '手碰到篮筐，腾空没有完整的自由落体：起跳速度只用了上升段。',
   'cut-off': '视频在落地前就结束了。',
   unseen: '有的关键时刻视频里看不到（在视频开始之前，或者那几帧没认出人），靠它算的数就不给了。',
 };
+
+/**
+ * 'off-line' on a run-up that comes at the camera (`curved`): its slant alone puts the two scales apart, the lines one
+ * nearer the phone than the other, so the lines aren't blamed, and the run-up speed stays on their 3 m.
+ */
+const OFF_LINE_CURVED_TEXT =
+  '助跑斜着跑，两条线离手机一远一近，按两条线把画面换算成米，就和按腾空下落（重力）换算的对不上。最后一步步长和踏跳刹车改按重力换算，助跑速度还是用两条线之间的 3 米来算；哪边对说不准，这几项和起跳水平速度、垂直速度、起跳角度的误差都按两边之差放宽。';
+
+/** What a flag shown says, given all the clip's flags. */
+export function flagText(flag: QualityFlag, flags: QualityFlag[]): string {
+  return flag === 'off-line' && flags.includes('curved') ? OFF_LINE_CURVED_TEXT : FLAG_TEXT[flag];
+}
 
 /**
  * The flags to show, in order. After a hang that put gravity's scale apart from the lines' (`short-fall`), 'off-line'
