@@ -9,11 +9,14 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChange
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Rise, tick } from '@/components/motion';
+import { OutcomeButtons } from '@/components/OutcomeButtons';
 import { PoseReader, type ClipInfo, type PoseReaderHandle } from '@/components/PoseReader';
 import { PulseProgress } from '@/components/PulseProgress';
 import { Button, Chip } from '@/components/ui';
+import { addDunkAttempt } from '@/db/dunkAttempts';
 import { addTechniqueTake, reachByDay, type TechniqueSource } from '@/db/technique';
 import { toISODate } from '@/domain/dates';
+import { BALL_NAME, formatJumpHeight, jumpHeightCm, type Ball, type Outcome } from '@/domain/dunkAttempts';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
 import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { Pt } from '@/domain/pose';
@@ -21,6 +24,7 @@ import { analyseTechnique, TAP_PT, TAP_PX, type Markers, type TechniqueProblem, 
 import { coarseFrames, coarseStep, denseFrames, denseSquares, framesFromWire, JUMP_WINDOW, MARKER_GAP_M, planWindow, TAP_REACH_S, windowOf } from '@/domain/techniqueRead';
 import { flagText, formatError, formatMeasured, METRIC_ORDER, METRIC_TEXT, problemText, shownFlags } from '@/domain/techniqueText';
 import { decimal, localized, tr } from '@/i18n';
+import { keepTake } from '@/media/takes';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
@@ -74,10 +78,12 @@ function styleText(s: TechniqueResult['style']): string {
  * touch. It only measures: no diagnosis.
  */
 export default function TechniqueAnalyse() {
-  const params = useLocalSearchParams<{ uri: string; fps: string; source: TechniqueSource; session: string }>();
+  const params = useLocalSearchParams<{ uri: string; fps: string; source: TechniqueSource; session: string; rim?: string; ball?: Ball }>();
   const db = useSQLiteContext();
   const { current } = useAthlete();
   const camera = params.source === 'camera';
+  // A dunk attempt filmed from the attempts screen: saved as the attempt, with its video, by saying how it went.
+  const attempt = params.rim && params.ball ? { rimCm: Number(params.rim), ball: params.ball } : null;
   const player = useVideoPlayer(params.uri, (p) => {
     p.muted = true;
     p.pause();
@@ -98,6 +104,8 @@ export default function TechniqueAnalyse() {
   const [phase, setPhase] = useState<Phase>({ name: 'setup' });
   const [reach, setReach] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  /** A dunk attempt saved with its video but not analysed. */
+  const [recordOnly, setRecordOnly] = useState(false);
   /** Bumped to read the clip on a fresh page after the page failed: the clip wouldn't open, the model wouldn't start. */
   const [readerRun, setReaderRun] = useState(0);
 
@@ -215,6 +223,24 @@ export default function TechniqueAnalyse() {
     }
   }
 
+  async function saveAttempt(outcome: Outcome) {
+    if (!attempt || !current) return;
+    setSaving(true);
+    try {
+      // A take filmed in the app is already in the app's folder; a picked clip is a temporary copy.
+      const videoUri = camera ? params.uri : await keepTake(params.uri);
+      const trialId =
+        phase.name === 'done' && !recordOnly
+          ? await addTechniqueTake(db, current.id, { sessionId: params.session, result: phase.result, captureFps: fps, source: camera ? 'camera' : 'import', markers })
+          : null;
+      await addDunkAttempt(db, current.id, { rimCm: attempt.rimCm, ball: attempt.ball, outcome, trialId, videoUri });
+      router.back();
+    } catch (e) {
+      Alert.alert(tr('保存失败'), String(e));
+      setSaving(false);
+    }
+  }
+
   const running = phase.name === 'running';
   const result = phase.name === 'done' ? phase.result : null;
   const ready = clip != null && total > 0 && athlete != null && linesDone;
@@ -229,6 +255,7 @@ export default function TechniqueAnalyse() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        {attempt && <Text style={styles.cardTitle}>{`${attempt.rimCm} cm · ${BALL_NAME[attempt.ball]}`}</Text>}
         <View
           accessibilityLabel={tr('视频')}
           style={[styles.video, { aspectRatio: clip ? Math.max(0.75, clip.width / clip.height) : 16 / 9 }]}
@@ -297,7 +324,7 @@ export default function TechniqueAnalyse() {
           />
         )}
 
-        {phase.name === 'setup' && (
+        {phase.name === 'setup' && !recordOnly && (
           <>
             <View style={styles.steps}>
               {STEPS.map((s) => {
@@ -382,14 +409,23 @@ export default function TechniqueAnalyse() {
       </ScrollView>
 
       <View style={styles.footer}>
-        {phase.name === 'setup' && <Button label={startLabel} onPress={analyse} disabled={!ready} />}
-        {result && <Button label={tr('保存')} onPress={save} busy={saving} />}
-        {(result || phase.name === 'failed') && (
+        {phase.name === 'setup' && !recordOnly && <Button label={startLabel} onPress={analyse} disabled={!ready} />}
+        {attempt && phase.name === 'setup' && !recordOnly && <Button label={tr('不分析，直接记结果')} variant="ghost" onPress={() => setRecordOnly(true)} />}
+        {attempt && (result || phase.name === 'failed' || recordOnly) ? (
+          <>
+            <Text style={styles.ask}>{result && !recordOnly ? tr('这次结果怎样？点一下就保存') : tr('没测弹跳高度，录像和结果照样保存')}</Text>
+            <OutcomeButtons onPick={saveAttempt} disabled={saving} height={64} />
+          </>
+        ) : (
+          result && <Button label={tr('保存')} onPress={save} busy={saving} />
+        )}
+        {(result || phase.name === 'failed' || recordOnly) && (
           <Button
             label={tr('重新点选')}
             variant="secondary"
             onPress={() => {
               if (phase.name === 'failed' && phase.problem === 'error') setReaderRun((n) => n + 1);
+              setRecordOnly(false);
               setPhase({ name: 'setup' });
             }}
           />
@@ -401,6 +437,7 @@ export default function TechniqueAnalyse() {
 
 function Summary({ result, fps, reach }: { result: TechniqueResult; fps: number; reach: number | null }) {
   const cells = (['vz', 'angle', 'approach'] as const).filter((k) => result.metrics[k]);
+  const height = result.metrics.vz ? jumpHeightCm(result.metrics.vz) : null;
   return (
     <View style={styles.card}>
       <Text style={styles.cardTitle}>{tr('{style} · {fps} 帧/秒', { style: styleText(result.style), fps })}</Text>
@@ -423,6 +460,14 @@ function Summary({ result, fps, reach }: { result: TechniqueResult; fps: number;
           );
         })}
       </View>
+      {height && (
+        <View accessibilityLabel={tr('弹跳高度')} style={styles.height}>
+          <Text style={styles.metricName}>
+            {tr('弹跳高度')} <Text style={[styles.metricValue, height.status !== 'ok' && { color: colors.textMuted }]}>{formatJumpHeight(height)}</Text>
+          </Text>
+          <Text style={styles.muted}>{tr('离地后重心升高多少：起跳垂直速度² ÷ 2g，不是摸高')}</Text>
+        </View>
+      )}
       <Text style={styles.reach}>{reach != null ? tr('今天助跑摸高 {reach} cm', { reach: decimal(reach, APPROACH_TOUCH.decimals) }) : tr('今天还没测助跑摸高')}</Text>
     </View>
   );
@@ -457,4 +502,6 @@ const styles = StyleSheet.create({
   metricValue: { color: colors.text, fontFamily: fonts.numeric, fontSize: 17 },
   events: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   footer: { paddingHorizontal: 16, paddingTop: 8, gap: 6 },
+  height: { alignItems: 'center', gap: 2 },
+  ask: { color: colors.textSoft, fontSize: 13, textAlign: 'center' },
 });

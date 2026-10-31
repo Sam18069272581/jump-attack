@@ -1,29 +1,43 @@
-import { useFocusEffect } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Icon } from '@/components/Icon';
 import { KeyboardDoneBar } from '@/components/KeyboardDoneBar';
 import { PressScale } from '@/components/motion';
-import { Card } from '@/components/ui';
+import { OUTCOME_COLOR, OutcomeButtons } from '@/components/OutcomeButtons';
+import { Button, Card } from '@/components/ui';
 import { addDunkAttempt, deleteDunkAttempt, listDunkAttempts } from '@/db/dunkAttempts';
+import { newSessionId } from '@/db/repo';
+import { listTechniqueTakes, techniqueVideoUris } from '@/db/technique';
 import { shortDate, toISODate } from '@/domain/dates';
 import { RIM_CM } from '@/domain/dunk';
-import { attemptSummary, BALL_NAME, firstDunk, OUTCOME_NAME, rimProblem, type Ball, type DunkAttempt, type Outcome } from '@/domain/dunkAttempts';
+import { attemptSummary, BALL_NAME, firstDunk, jumpHeightCm, OUTCOME_NAME, rimProblem, type Ball, type DunkAttempt, type Outcome } from '@/domain/dunkAttempts';
 import { parseNumber } from '@/domain/entry';
-import { tr } from '@/i18n';
+import type { Measured } from '@/domain/technique';
+import { decimal, tr } from '@/i18n';
+import { poseLibReady } from '@/media/poseLib';
+import { isWeb } from '@/media/runtime';
+import { pruneTakes } from '@/media/takes';
 import { useAthlete } from '@/state/athlete';
 import { todayISO } from '@/state/training';
 import { colors, fonts, radius, text } from '@/theme';
 
 const BALLS: Ball[] = ['basketball', 'volleyball'];
-const OUTCOMES: Outcome[] = ['made', 'rim', 'short'];
-const OUTCOME_COLOR: Record<Outcome, string> = { made: colors.good, rim: colors.rim, short: colors.textMuted };
+
+/** The filmed attempts listed below today's. */
+const FILMED_SHOWN = 20;
 
 const timeOf = (at: string) => new Date(at).toTimeString().slice(0, 5);
+const filmed = (a: DunkAttempt) => a.videoUri != null || a.trialId != null;
 
-/** One tap per attempt at the rim: the real result that touch height only predicts. */
+/**
+ * Each attempt at the rim: the real result that touch height only predicts. Filmed (in the app or a slow-motion clip),
+ * the take-off analysis measures how high the jump went and the attempt keeps its video; one tap logs it without.
+ */
 export default function Attempts() {
   const db = useSQLiteContext();
   const { current } = useAthlete();
@@ -31,9 +45,19 @@ export default function Attempts() {
   const [attempts, setAttempts] = useState<DunkAttempt[]>([]);
   const [rimText, setRimText] = useState<string | null>(null);
   const [ball, setBall] = useState<Ball | null>(null);
+  /** The jump height of each analysed attempt, by its analysis's trial id. */
+  const [heights, setHeights] = useState<Record<number, Measured>>({});
+  const [poseReady, setPoseReady] = useState(false);
 
   const load = useCallback(async () => {
-    if (current) setAttempts(await listDunkAttempts(db, current.id));
+    if (!current) return;
+    setAttempts(await listDunkAttempts(db, current.id));
+    const takes = await listTechniqueTakes(db, current.id);
+    setHeights(Object.fromEntries(takes.filter((t) => t.metrics.vz).map((t) => [t.id, jumpHeightCm(t.metrics.vz!)])));
+    if (isWeb) return;
+    setPoseReady(poseLibReady());
+    // Videos of attempts deleted, or of filming never saved.
+    pruneTakes(await techniqueVideoUris(db));
   }, [db, current]);
 
   useFocusEffect(
@@ -66,6 +90,63 @@ export default function Attempts() {
   async function remove(id: number) {
     await deleteDunkAttempt(db, id);
     await load();
+  }
+
+  const setupParams = () => ({ session: newSessionId(), rim: String(rimCm), ball: ballNow });
+
+  function film() {
+    router.push({ pathname: '/technique/camera', params: setupParams() });
+  }
+
+  async function importClip() {
+    const res = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['videos'],
+      // Keep the original high-frame-rate file instead of a re-encoded copy.
+      preferredAssetRepresentationMode: ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Current,
+    });
+    if (res.canceled || !res.assets[0]) return;
+    router.push({ pathname: '/technique/analyse', params: { uri: res.assets[0].uri, fps: '0', source: 'import', ...setupParams() } });
+  }
+
+  const earlier = attempts
+    .filter((a) => filmed(a) && toISODate(new Date(a.at)) !== today)
+    .reverse()
+    .slice(0, FILMED_SHOWN);
+
+  function row(a: DunkAttempt, opts: { date?: boolean; deletable?: boolean }) {
+    const h = a.trialId != null ? heights[a.trialId] : undefined;
+    const body = (
+      <>
+        <Text style={styles.rowTime}>{opts.date ? shortDate(toISODate(new Date(a.at))) : timeOf(a.at)}</Text>
+        <Text style={styles.rowText}>
+          {a.rimCm} cm · {BALL_NAME[a.ball]}
+        </Text>
+        {h && <Text style={[styles.rowHeight, h.status !== 'ok' && { color: colors.textMuted }]}>{tr('弹跳 {h} cm', { h: decimal(h.value, 0) })}</Text>}
+        <Text style={[styles.rowOutcome, { color: OUTCOME_COLOR[a.outcome] }]}>{OUTCOME_NAME[a.outcome]}</Text>
+      </>
+    );
+    return (
+      <View key={a.id} style={styles.row}>
+        {filmed(a) ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={tr('看这次录像')}
+            onPress={() => router.push({ pathname: '/attempt', params: { id: String(a.id) } })}
+            style={styles.rowMain}
+          >
+            {body}
+            <Icon name="chevronRight" size={14} color={colors.textMuted} />
+          </Pressable>
+        ) : (
+          <View style={styles.rowMain}>{body}</View>
+        )}
+        {opts.deletable && (
+          <Pressable accessibilityRole="button" accessibilityLabel={tr('删除这次')} hitSlop={8} onPress={() => remove(a.id)}>
+            <Text style={styles.delete}>{tr('删除')}</Text>
+          </Pressable>
+        )}
+      </View>
+    );
   }
 
   return (
@@ -116,37 +197,34 @@ export default function Attempts() {
           {problem && <Text style={styles.problem}>{problem}</Text>}
         </Card>
 
-        <View style={styles.outcomes}>
-          {OUTCOMES.map((o) => (
-            <PressScale
-              key={o}
-              accessibilityLabel={OUTCOME_NAME[o]}
-              accessibilityState={{ disabled: !!problem }}
-              disabled={!!problem}
-              onPress={() => log(o)}
-              style={[styles.outcome, { borderColor: OUTCOME_COLOR[o] }, !!problem && styles.disabled]}
-            >
-              <Text style={[styles.outcomeText, { color: OUTCOME_COLOR[o] }]}>{OUTCOME_NAME[o]}</Text>
-            </PressScale>
-          ))}
-        </View>
+        {!isWeb && (
+          <View style={{ gap: 8 }}>
+            {poseReady ? (
+              <>
+                <Button label={tr('拍这一次')} accessibilityLabel={tr('拍这一次')} onPress={film} disabled={!!problem} />
+                <Button label={tr('导入慢动作视频')} accessibilityLabel={tr('导入慢动作视频')} variant="secondary" onPress={importClip} disabled={!!problem} />
+              </>
+            ) : (
+              <Button label={tr('先下载骨架识别模型')} accessibilityLabel={tr('先下载骨架识别模型')} variant="secondary" onPress={() => router.push('/technique')} />
+            )}
+            <Text style={[text.caption, { textAlign: 'center' }]}>{tr('从侧面拍下来，会测出这次的弹跳高度，录像和结果一起存档。没拍就直接点结果。')}</Text>
+          </View>
+        )}
+
+        <OutcomeButtons onPick={log} disabled={!!problem} />
         <Text style={[text.caption, { textAlign: 'center' }]}>{tr('每试一次点一下，记错了在下面删掉。')}</Text>
 
         {todays.length > 0 && (
           <Card style={{ gap: 4 }}>
             <Text style={text.section}>{tr('今天')}</Text>
-            {todays.map((a) => (
-              <View key={a.id} style={styles.row}>
-                <Text style={styles.rowTime}>{timeOf(a.at)}</Text>
-                <Text style={styles.rowText}>
-                  {a.rimCm} cm · {BALL_NAME[a.ball]}
-                </Text>
-                <Text style={[styles.rowOutcome, { color: OUTCOME_COLOR[a.outcome] }]}>{OUTCOME_NAME[a.outcome]}</Text>
-                <Pressable accessibilityRole="button" accessibilityLabel={tr('删除这次')} hitSlop={8} onPress={() => remove(a.id)}>
-                  <Text style={styles.delete}>{tr('删除')}</Text>
-                </Pressable>
-              </View>
-            ))}
+            {todays.map((a) => row(a, { deletable: true }))}
+          </Card>
+        )}
+
+        {earlier.length > 0 && (
+          <Card style={{ gap: 4 }}>
+            <Text style={text.section}>{tr('录像记录')}</Text>
+            {earlier.map((a) => row(a, { date: true }))}
           </Card>
         )}
       </ScrollView>
@@ -169,11 +247,9 @@ const styles = StyleSheet.create({
   segmentText: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   segmentTextOn: { color: colors.onAccent },
   problem: { color: colors.warn, fontSize: 13 },
-  outcomes: { flexDirection: 'row', gap: 10 },
-  outcome: { flex: 1, height: 88, borderRadius: radius.card, borderWidth: 2, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
-  outcomeText: { fontSize: 17, fontWeight: '700' },
-  disabled: { opacity: 0.4 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 36 },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowHeight: { color: colors.accent, fontFamily: fonts.numeric, fontSize: 15 },
   rowTime: { width: 44, color: colors.textMuted, fontFamily: fonts.numeric, fontSize: 15 },
   rowText: { flex: 1, color: colors.text, fontSize: 14 },
   rowOutcome: { fontSize: 14, fontWeight: '700' },

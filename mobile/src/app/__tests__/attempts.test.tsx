@@ -1,17 +1,24 @@
 // Drives logging dunk attempts and the home screen's attempt row against an in-memory database.
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
-import { Text, TextInput } from 'react-native';
+import { Alert, Text, TextInput } from 'react-native';
 
-import { listDunkAttempts } from '@/db/dunkAttempts';
+import { addDunkAttempt, listDunkAttempts } from '@/db/dunkAttempts';
 import { migrate } from '@/db/migrations';
 import { getAthlete, type Athlete } from '@/db/repo';
+import { addTechniqueTake, listTechniqueTakes } from '@/db/technique';
 import { openMemoryDb } from '@/db/testing/memoryDb';
+import { analyseTechnique } from '@/domain/technique';
+import { poseScene } from '@/domain/testing/poseScene';
 
+import AttemptView from '../attempt';
 import Attempts from '../attempts';
 import Home from '../(tabs)/index';
 
 const mockDb = openMemoryDb();
 const mockRouter = { push: jest.fn(), back: jest.fn(), navigate: jest.fn() };
+let mockParams: Record<string, string> = {};
+const mockPose = { ready: true };
+const mockPicked: { uri: string | null } = { uri: null };
 
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
 const mockAthlete: { current: Athlete | null } = { current: null };
@@ -25,11 +32,23 @@ jest.mock('expo-router', () => {
       return mockRouter;
     },
     Link: ({ children }: { children: React.ReactNode }) => children,
-    useLocalSearchParams: () => ({}),
+    useLocalSearchParams: () => mockParams,
     useFocusEffect: (cb: () => void) => React.useEffect(cb, [cb]),
     Stack: { Screen: () => null },
   };
 });
+
+jest.mock('@/media/poseLib', () => ({ poseLibReady: () => mockPose.ready }));
+// The app's copies of the videos: here, every one is on this phone but take-gone.mov.
+jest.mock('@/media/takes', () => ({ pruneTakes: jest.fn(), takeUri: (uri: string) => (uri.endsWith('take-gone.mov') ? null : uri) }));
+jest.mock('expo-image-picker', () => ({
+  launchImageLibraryAsync: async () => (mockPicked.uri ? { canceled: false, assets: [{ uri: mockPicked.uri }] } : { canceled: true, assets: [] }),
+  UIImagePickerPreferredAssetRepresentationMode: { Current: 'current' },
+}));
+jest.mock('expo-video', () => ({
+  useVideoPlayer: (uri: string | null) => ({ uri }),
+  VideoView: () => null,
+}));
 
 function texts(root: ReactTestInstance): string {
   return root
@@ -106,4 +125,84 @@ it('shows the real dunks on the home screen and opens the log from there', async
   expect(texts(r.root)).toContain('305 cm 篮球：最近 3 次扣进 1 次');
   await press(r.root, '扣篮尝试');
   expect(mockRouter.push).toHaveBeenCalledWith('/attempts');
+});
+
+describe('filming an attempt', () => {
+  it('films the attempt or imports its slow-motion clip, at the rim and ball set', async () => {
+    const r = await render(<Attempts />);
+    const rim = r.root.find((n) => n.type === TextInput && n.props.accessibilityLabel === '篮筐高度（cm）');
+    await act(async () => rim.props.onChangeText('300'));
+    await press(r.root, '篮球');
+    mockRouter.push.mockClear();
+    await press(r.root, '拍这一次');
+    expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/technique/camera', params: { session: expect.any(String), rim: '300', ball: 'basketball' } });
+
+    mockPicked.uri = 'file:///picked/IMG_0030.MOV';
+    await press(r.root, '导入慢动作视频');
+    expect(mockRouter.push).toHaveBeenLastCalledWith({
+      pathname: '/technique/analyse',
+      params: { uri: 'file:///picked/IMG_0030.MOV', fps: '0', source: 'import', session: expect.any(String), rim: '300', ball: 'basketball' },
+    });
+    mockPicked.uri = null;
+  });
+
+  it('sends the athlete to download the pose model first', async () => {
+    mockPose.ready = false;
+    try {
+      const r = await render(<Attempts />);
+      mockRouter.push.mockClear();
+      await press(r.root, '先下载骨架识别模型');
+      expect(mockRouter.push).toHaveBeenLastCalledWith('/technique');
+      expect(r.root.findAll((n) => n.props.accessibilityLabel === '拍这一次')).toHaveLength(0);
+    } finally {
+      mockPose.ready = true;
+    }
+  });
+
+  it('lists each filmed attempt with its jump height, and plays it back with its analysis', async () => {
+    const scene = poseScene();
+    const res = analyseTechnique({ frames: scene.frames, captureFps: 240, markers: scene.markers });
+    if (!res.ok) throw new Error(res.problem);
+    const trialId = await addTechniqueTake(mockDb, 1, { sessionId: 'att-1', result: res.result, captureFps: 240, source: 'import', markers: scene.markers });
+    const vz = res.result.metrics.vz!.value;
+    const cm = Math.round(((vz * vz) / (2 * 9.81)) * 100);
+    // Last week's, filmed: in the list of filmed attempts, not today's.
+    const id = await addDunkAttempt(mockDb, 1, { rimCm: 305, ball: 'basketball', outcome: 'rim', at: '2026-10-24T18:00:00Z', trialId, videoUri: 'file:///app/Documents/technique/take-30.mov' });
+
+    const r = await render(<Attempts />);
+    expect(texts(r.root)).toContain('录像记录');
+    expect(texts(r.root)).toContain(`弹跳 ${cm} cm`);
+    mockRouter.push.mockClear();
+    await press(r.root, '看这次录像');
+    expect(mockRouter.push).toHaveBeenLastCalledWith({ pathname: '/attempt', params: { id: String(id) } });
+
+    mockParams = { id: String(id) };
+    const v = await render(<AttemptView />);
+    const shown = texts(v.root);
+    expect(shown).toContain('碰框没进');
+    expect(shown).toContain('305 cm · 篮球');
+    expect(shown).toContain('弹跳高度');
+    expect(shown).toMatch(new RegExp(`${cm} ± \\d+ cm`));
+    expect(shown).toContain('起跳垂直速度');
+    expect(shown).toContain('助跑速度');
+    expect(v.root.findAll((n) => n.props.accessibilityLabel === '录像')).not.toHaveLength(0);
+
+    // Deleting the attempt takes its analysis with it.
+    jest.spyOn(Alert, 'alert').mockImplementationOnce((_t, _m, buttons) => buttons?.find((b) => b.style === 'destructive')?.onPress?.());
+    await press(v.root, '删除这次尝试');
+    expect((await listDunkAttempts(mockDb, 1)).find((a) => a.id === id)).toBeUndefined();
+    expect((await listTechniqueTakes(mockDb, 1)).find((t) => t.id === trialId)).toBeUndefined();
+    expect(mockRouter.back).toHaveBeenCalled();
+    mockParams = {};
+  });
+
+  it('says so when an attempt’s video is not on this phone, and when it was not analysed', async () => {
+    const id = await addDunkAttempt(mockDb, 1, { rimCm: 305, ball: 'basketball', outcome: 'short', at: '2026-10-25T18:00:00Z', videoUri: 'file:///app/Documents/technique/take-gone.mov' });
+    mockParams = { id: String(id) };
+    const v = await render(<AttemptView />);
+    expect(texts(v.root)).toContain('录像不在这台手机上');
+    expect(texts(v.root)).toContain('这次没有起跳分析。');
+    expect(v.root.findAll((n) => n.props.accessibilityLabel === '录像')).toHaveLength(0);
+    mockParams = {};
+  });
 });

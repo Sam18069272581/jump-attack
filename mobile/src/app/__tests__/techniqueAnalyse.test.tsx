@@ -4,6 +4,7 @@
 import { Text } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
+import { listDunkAttempts } from '@/db/dunkAttempts';
 import { migrate } from '@/db/migrations';
 import { addTrial, ensureSession, listTrials } from '@/db/repo';
 import { listTechniqueTakes } from '@/db/technique';
@@ -60,6 +61,9 @@ jest.mock('@/media/poseLib', () => ({
   },
   unstagePosePage: jest.fn(),
 }));
+// An imported clip kept for a dunk attempt: copied into the app's own folder, like a take filmed in it.
+const mockKeep = jest.fn(async (uri: string) => `file:///app/Documents/technique/kept-${uri.split('/').pop()}`);
+jest.mock('@/media/takes', () => ({ keepTake: (uri: string) => mockKeep(uri) }));
 jest.mock('react-native-webview', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
@@ -426,4 +430,74 @@ it('keeps saying why when the fresh page can’t be set up while an analysis wai
   } finally {
     jest.useRealTimers();
   }
+});
+
+describe('a dunk attempt', () => {
+  const attempt = (session: string) => ({ session, rim: '305', ball: 'basketball' });
+  const latest = async () => (await listDunkAttempts(mockDb, 1)).at(-1)!;
+
+  it('measures the jump, then saves the attempt with its video, its analysis and how it went', async () => {
+    const scene = poseScene();
+    await open(scene, { uri: 'file:///picked/IMG_0020.MOV', fps: '0', source: 'import', ...attempt('tt-20') });
+    expect(texts(r.root)).toContain('305 cm · 篮球');
+    await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+    await tapLine(scene, scene.markers!.b);
+    await tapLine(scene, scene.markers!.a);
+    await press(r.root, '开始分析');
+    await answerReads();
+
+    // How high the jump went: the centre of mass's rise from the take-off velocity, v² ÷ 2g.
+    const shown = texts(r.root);
+    expect(shown).toContain('弹跳高度');
+    const cm = (scene.truth.vz ** 2 / (2 * 9.81)) * 100;
+    expect(shown).toMatch(new RegExp(`${Math.round(cm)} ± \\d+ cm|${Math.round(cm) - 1} ± \\d+ cm|${Math.round(cm) + 1} ± \\d+ cm`));
+    // Saved by saying how it went, in one tap.
+    expect(r.root.findAllByType(Text).some((t) => t.props.children === '保存')).toBe(false);
+    await press(r.root, '碰框没进');
+
+    const [take] = await listTechniqueTakes(mockDb, 1);
+    expect(take.sessionId).toBe('tt-20');
+    expect(mockKeep).toHaveBeenCalledWith('file:///picked/IMG_0020.MOV');
+    expect(await latest()).toMatchObject({ rimCm: 305, ball: 'basketball', outcome: 'rim', trialId: take.id, videoUri: 'file:///app/Documents/technique/kept-IMG_0020.MOV' });
+    expect(mockRouter.back).toHaveBeenCalled();
+  });
+
+  it('keeps a take filmed in the app where it is', async () => {
+    const scene = poseScene({ fps: 60 });
+    const uri = 'file:///app/Documents/technique/take-21.mp4';
+    mockKeep.mockClear();
+    await open(scene, { uri, fps: '60', source: 'camera', ...attempt('tt-21') });
+    await tapAthlete(scene, scene.truth.takeoffFrame - 10);
+    await press(r.root, '没贴线，跳过');
+    await press(r.root, '开始分析');
+    await answerReads();
+    await press(r.root, '扣进');
+    expect(mockKeep).not.toHaveBeenCalled();
+    expect(await latest()).toMatchObject({ outcome: 'made', videoUri: uri, trialId: expect.any(Number) });
+  });
+
+  it('still saves the attempt and its video when the analysis finds no jump', async () => {
+    const scene = poseScene();
+    await open(scene, { uri: 'file:///picked/IMG_0022.MOV', fps: '0', source: 'import', ...attempt('tt-22') });
+    await tapAthlete(scene, scene.truth.takeoffFrame - 30);
+    await press(r.root, '没贴线，跳过');
+    await press(r.root, '开始分析');
+    mockState.scene = { ...scene, frames: scene.frames.map((f) => ({ ...f, poses: [] })) };
+    await answerReads();
+    expect(texts(r.root)).toContain(PROBLEM_TEXT['no-athlete'].what);
+    await press(r.root, '没够到');
+    const a = await latest();
+    expect(a).toMatchObject({ outcome: 'short', videoUri: 'file:///app/Documents/technique/kept-IMG_0022.MOV' });
+    expect(a.trialId).toBeUndefined();
+  });
+
+  it('can save the attempt and its video without analysing it', async () => {
+    const scene = poseScene();
+    await open(scene, { uri: 'file:///picked/IMG_0023.MOV', fps: '0', source: 'import', ...attempt('tt-23') });
+    await press(r.root, '不分析，直接记结果');
+    await press(r.root, '扣进');
+    const a = await latest();
+    expect(a).toMatchObject({ outcome: 'made', videoUri: 'file:///app/Documents/technique/kept-IMG_0023.MOV' });
+    expect(a.trialId).toBeUndefined();
+  });
 });
