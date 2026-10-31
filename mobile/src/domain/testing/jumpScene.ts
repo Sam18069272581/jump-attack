@@ -54,6 +54,11 @@ export type SceneOptions = {
   exposureS?: number;
   /** A bright court line painted on the floor behind the athlete, this many mm above the contact line in the picture. */
   courtLineMm?: number;
+  /**
+   * The athlete lands this many px lower in the picture than they took off (moving down across the flight): a phone
+   * above the ankles, and a landing a little nearer it. The floor and wall behind stay where they are.
+   */
+  landShiftPx?: number;
   /** Grey levels for the shoe upper and the sole. */
   shoe?: number;
   sole?: number;
@@ -90,6 +95,18 @@ function flights(o: SceneOptions): { t0: number; flightS: number }[] {
 /** The marks a careful marker would pick for every flight in the clip, by the same rules as `sceneTruth`. */
 export function sceneEvents(o: SceneOptions): { takeoff: number; landing: number }[] {
   return flights(o).map((f) => ({ takeoff: floor(f.t0 * o.fps + 1e-9) + 1, landing: ceil((f.t0 + f.flightS) * o.fps - 1e-9) }));
+}
+
+/** How far down the picture the athlete has moved by time t (`landShiftPx`), px. */
+function shiftAt(o: SceneOptions, t: number): number {
+  if (!o.landShiftPx) return 0;
+  let shift = 0;
+  for (const f of flights(o)) {
+    const s = t - f.t0;
+    if (s >= f.flightS) shift += o.landShiftPx;
+    else if (s > 0) shift += (o.landShiftPx * s) / f.flightS;
+  }
+  return shift;
 }
 
 const smooth = (a: number) => (a <= 0 ? 0 : a >= 1 ? 1 : a * a * (3 - 2 * a));
@@ -341,6 +358,7 @@ export function renderScene(o: SceneOptions, frame: number, rect: Rect, outW: nu
     if (o.bystander) p.bystander = o.bystander.x + o.bystander.swayMm * sin(2 * PI * 0.8 * t);
     const { person, feet } = shapes(o, p);
     const farPx = o.farFootPx ?? 0;
+    const shift = shiftAt(o, t);
     for (let j = 0; j < outH; j++) {
       for (let i = 0; i < outW; i++) {
         let sum = 0;
@@ -348,7 +366,7 @@ export function renderScene(o: SceneOptions, frame: number, rect: Rect, outW: nu
           for (let b = 0; b < ss; b++) {
             const vx = rect.x + (i + (a + 0.5) / ss) * sx;
             const vy = rect.y + (j + (b + 0.5) / ss) * sy;
-            sum += shade(o, person, feet, vx, vy, farPx);
+            sum += shade(o, person, feet, vx, vy, farPx, shift);
           }
         }
         acc[j * outW + i] += sum / (ss * ss);
@@ -368,16 +386,18 @@ export function renderScene(o: SceneOptions, frame: number, rect: Rect, outW: nu
   return { w: outW, h: outH, data };
 }
 
-function shade(o: SceneOptions, person: Shape[], feet: Foot[], vx: number, vy: number, farPx: number): number {
+function shade(o: SceneOptions, person: Shape[], feet: Foot[], vx: number, vy: number, farPx: number, shift = 0): number {
   const x = o.originX + vx * o.mmPerPx;
-  const z = (o.floorRow - vy) * o.mmPerPx;
+  // The athlete (with their shadow and mirror image) is drawn `shift` px lower; the floor and wall behind are not.
+  const z = (o.floorRow + shift - vy) * o.mmPerPx;
+  const backZ = (o.floorRow - vy) * o.mmPerPx;
   // Near foot's shapes come first; the far leg is drawn as if `farPx` higher up in the picture.
   for (let k = 0; k < person.length; k++) {
     const far = k >= 5 && k < 10;
     const zz = far ? z - farPx * o.mmPerPx : z;
     if (person[k].hit(x, zz)) return person[k].grey;
   }
-  let g = background(o, x, z);
+  let g = background(o, x, backZ);
   // Shadow: a dark strip on the floor right under each shoe, fading as the shoe rises. It lies on the floor, so from a
   // lens at ankle height (≈ 8 cm up, 3 m away) the few centimetres of floor it covers in depth span under 2 mm of the
   // picture's height around the contact line.
