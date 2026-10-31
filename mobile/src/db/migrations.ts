@@ -140,7 +140,29 @@ const MIGRATIONS: string[] = [
   `,
 ];
 
-export async function migrate(db: SQLiteDatabase): Promise<void> {
+/**
+ * Upgrades in progress, by database file. On the web every SQLiteDatabase opened on a file shares one SQLite
+ * connection, so a second start while the first is still upgrading (the provider mounting again) would BEGIN inside
+ * the first one's transaction, roll it back and make its COMMIT fail with "cannot commit - no transaction is active".
+ * Starts on the same file therefore wait for each other; the later one then finds the schema up to date.
+ */
+const upgrading = new Map<unknown, Promise<void>>();
+
+export function migrate(db: SQLiteDatabase): Promise<void> {
+  const key = db.databasePath ?? db;
+  const run = (upgrading.get(key) ?? Promise.resolve()).catch(() => {}).then(() => upgrade(db));
+  upgrading.set(key, run);
+  const done = () => {
+    if (upgrading.get(key) === run) upgrading.delete(key);
+  };
+  run.then(done, done);
+  return run;
+}
+
+async function upgrade(db: SQLiteDatabase): Promise<void> {
+  // A start that failed earlier can leave the shared connection inside its transaction. Nothing in it was committed,
+  // and nothing else uses the database before the upgrade, so ending it loses no data.
+  if (await db.isInTransactionAsync()) await db.execAsync('ROLLBACK');
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;

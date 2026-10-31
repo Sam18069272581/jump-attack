@@ -27,6 +27,9 @@ export function openMemoryDb(): SQLiteDatabase {
       const row = db.prepare(sql).get(...flatten(args));
       return row ? { ...row } : null;
     },
+    async isInTransactionAsync() {
+      return db.isTransaction as boolean;
+    },
     async withTransactionAsync(fn: () => Promise<void>) {
       db.exec('BEGIN');
       try {
