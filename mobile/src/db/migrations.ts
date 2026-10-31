@@ -2,7 +2,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 /**
  * Each entry upgrades the schema by one version; `PRAGMA user_version` records how far a device has got.
- * Never edit a shipped migration, append a new one.
+ * Never edit a shipped migration, append a new one, and add what it creates first to ADDS below.
  */
 const MIGRATIONS: string[] = [
   `
@@ -140,10 +140,58 @@ const MIGRATIONS: string[] = [
   `,
 ];
 
-export async function migrate(db: SQLiteDatabase): Promise<void> {
+/**
+ * What each migration above adds first, as [table] or [table, column], to tell whether it really ran. One entry per
+ * migration, in the same order.
+ */
+const ADDS: [table: string, column?: string][] = [
+  ['athlete'],
+  ['plan'],
+  ['trial', 'load_kg'],
+  ['athlete', 'leg_length_cm'],
+  ['athlete', 'rim_height_cm'],
+  ['plan', 'blocks'],
+  ['set_log', 'mean_velocity'],
+  ['dunk_attempt'],
+  ['athlete', 'goal_date'],
+  ['knee_pain'],
+  ['workout', 'session_rpe'],
+];
+
+/**
+ * Upgrades in progress, by database file. On the web every SQLiteDatabase opened on a file shares one SQLite
+ * connection, so a second start while the first is still upgrading (the provider mounting again) would BEGIN inside
+ * the first one's transaction, roll it back and make its COMMIT fail with "cannot commit - no transaction is active".
+ * Starts on the same file therefore wait for each other; the later one then finds the schema up to date.
+ */
+const upgrading = new Map<unknown, Promise<void>>();
+
+export function migrate(db: SQLiteDatabase): Promise<void> {
+  const key = db.databasePath ?? db;
+  const run = (upgrading.get(key) ?? Promise.resolve()).catch(() => {}).then(() => upgrade(db));
+  upgrading.set(key, run);
+  const done = () => {
+    if (upgrading.get(key) === run) upgrading.delete(key);
+  };
+  run.then(done, done);
+  return run;
+}
+
+async function upgrade(db: SQLiteDatabase): Promise<void> {
+  // A start that failed earlier can leave the shared connection inside its transaction. Nothing in it was committed,
+  // and nothing else uses the database before the upgrade, so ending it loses no data.
+  if (await db.isInTransactionAsync()) await db.execAsync('ROLLBACK');
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
+  // Two overlapping starts used to roll back a migration's changes while user_version still moved past it, so every
+  // later start failed. Run such a migration again; each one is all or nothing, so it is either there or missing.
+  for (let i = 0; i < Math.min(version, MIGRATIONS.length); i++) {
+    if (await has(db, ...ADDS[i])) continue;
+    await db.withTransactionAsync(async () => {
+      await db.execAsync(MIGRATIONS[i]);
+    });
+  }
   while (version < MIGRATIONS.length) {
     await db.withTransactionAsync(async () => {
       await db.execAsync(MIGRATIONS[version]);
@@ -151,6 +199,11 @@ export async function migrate(db: SQLiteDatabase): Promise<void> {
     });
     version += 1;
   }
+}
+
+async function has(db: SQLiteDatabase, table: string, column?: string): Promise<boolean> {
+  const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info("${table}")`);
+  return column == null ? columns.length > 0 : columns.some((c) => c.name === column);
 }
 
 export const LATEST_VERSION = MIGRATIONS.length;
