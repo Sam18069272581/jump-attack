@@ -1,4 +1,5 @@
-import { analyseCoarse, analyseFine, bareFloor, coarseRequest, contactSeries, findFlights, footprint, type DetectKind, type FrameRequest, type Grey } from '../autoMark';
+import { analyseCoarse, analyseFine, analysePoseFine, bareFloor, coarseRequest, contactSeries, findFlights, footprint, planFromPose, type DetectKind, type FrameRequest, type Grey } from '../autoMark';
+import type { PoseFlight, Spot } from '../poseJump';
 import { defaultScene, renderScene, sceneTruth, type SceneOptions } from '../testing/jumpScene';
 
 /** Runs both passes on a synthetic clip, rendering exactly the frames and crops the detector asks for. */
@@ -268,5 +269,69 @@ describe('automatic take-off and landing', () => {
   it('reports a clip with no jump', () => {
     const r = detect(defaultScene('cmj', { takeoffS: 9, durationS: 2 }));
     expect(r).toEqual({ ok: false, problem: 'no-jump' });
+  });
+});
+
+describe('strips placed by the skeleton', () => {
+  // Where the scene's feet stand, in video px: the take-off toe at scene x 0 is (0 − originX) / mmPerPx = 180 px, the
+  // heel about 26 cm behind it and the far foot 4 cm further; the athlete (hips 920 mm up, 0.53 of stature) about
+  // 1.74 m, 580 px at 3 mm a pixel.
+  const spot = (o: SceneOptions, y: number): Spot => ({ y, left: (-300 - o.originX) / o.mmPerPx, right: (0 - o.originX) / o.mmPerPx, stature: 580 });
+
+  /** What the pose pass hands over: each event a few coarse frames either side of the truth, at the floor it stood on. */
+  function flightsFor(o: SceneOptions, shift = 0): PoseFlight[] {
+    const t = sceneTruth(o);
+    return [
+      {
+        ...(t.touchdown != null ? { touchdown: { at: [t.touchdown - 5, t.touchdown + 3] as [number, number], spot: spot(o, o.floorRow) } } : {}),
+        takeoff: { at: [t.takeoff - 5, t.takeoff + 3], spot: spot(o, o.floorRow) },
+        landing: { at: [t.landing - 3, t.landing + 5], spot: spot(o, o.floorRow + shift) },
+      },
+    ];
+  }
+
+  function detectByPose(o: SceneOptions, flights: PoseFlight[], kind: DetectKind = 'jump') {
+    const video = { width: o.width, height: o.height, frames: Math.floor(o.durationS * o.fps), captureFps: o.fps };
+    const plan = planFromPose(video, flights, kind, 8);
+    return analysePoseFine(
+      plan,
+      plan.events.map((e) => e.request.frames.map((f) => renderScene(o, f, e.request.rect, e.request.w, e.request.h))),
+    );
+  }
+
+  it('the strip pass alone misses a landing 50 px lower in the picture than the take-off', () => {
+    // 50 px at 3 mm a pixel: the strip, 17 % of the athlete (≈ 100 px) above the lowest point anything moved, then
+    // starts where the take-off foot stands.
+    const r = detect(defaultScene('cmj', { landShiftPx: 50 }));
+    expect(r.ok).toBe(false);
+  });
+
+  it('times take-off and landing each in a strip at its own floor', () => {
+    const o = defaultScene('cmj', { landShiftPx: 50 });
+    const r = detectByPose(o, flightsFor(o, 50));
+    if (!r.ok) throw new Error(r.problem);
+    const truth = sceneTruth(o);
+    expect(r.jumps).toHaveLength(1);
+    expect(Math.abs(r.jumps[0].marks[0] - truth.takeoff)).toBeLessThanOrEqual(1);
+    expect(Math.abs(r.jumps[0].marks[1] - truth.landing)).toBeLessThanOrEqual(1);
+  });
+
+  it('times a CMJ, a glossy-floor CMJ and a drop jump as closely as the strip pass does', () => {
+    for (const o of [defaultScene('cmj'), defaultScene('cmj', { shadow: 0.5, reflection: 0.3, flicker: 0.04, noise: 3, exposureS: 1 / 500 }), defaultScene('drop')]) {
+      const kind = o.kind === 'drop' ? 'drop' : 'jump';
+      const r = detectByPose(o, flightsFor(o), kind);
+      if (!r.ok) throw new Error(`${o.kind}: ${r.problem}`);
+      const t = sceneTruth(o);
+      const want = kind === 'drop' ? [t.touchdown!, t.takeoff, t.landing] : [t.takeoff, t.landing];
+      r.jumps[0].marks.forEach((m, i) => expect(Math.abs(m - want[i])).toBeLessThanOrEqual(1));
+    }
+  });
+
+  it('says it is unsure when a strip shows no take-off', () => {
+    // The take-off strip put a body height too high: nothing there ever stands.
+    const o = defaultScene('cmj');
+    const [f] = flightsFor(o);
+    const r = detectByPose(o, [{ ...f, takeoff: { ...f.takeoff, spot: { ...f.takeoff.spot, y: o.floorRow - 400 } } }]);
+    expect(r).toEqual({ ok: false, problem: 'unsure' });
   });
 });

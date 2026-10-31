@@ -8,12 +8,15 @@ import { listTrials } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { analyseJumps } from '@/domain/jumpAnalysis';
 import { defaultScene, renderScene, sceneEvents, type SceneOptions } from '@/domain/testing/jumpScene';
+import { standing } from '@/domain/testing/standing';
 
 import Analyse from '../measure/analyse';
 
 const mockDb = openMemoryDb();
 const mockRouter = { push: jest.fn(), back: jest.fn(), replace: jest.fn(), dismiss: jest.fn() };
 const mockWeb: { props: Record<string, any> | null; inject: jest.Mock; reload: jest.Mock } = { props: null, inject: jest.fn(), reload: jest.fn() };
+// The pose page, loaded only when the strip under the feet finds nothing.
+const mockPose: { props: Record<string, any> | null; inject: jest.Mock; reload: jest.Mock; ready: boolean } = { props: null, inject: jest.fn(), reload: jest.fn(), ready: false };
 const mockState: { scene: SceneOptions; params: Record<string, string> } = { scene: defaultScene('cmj'), params: {} };
 
 jest.mock('expo-sqlite', () => ({ useSQLiteContext: () => mockDb }));
@@ -45,12 +48,18 @@ jest.mock('@/media/frameGrabber', () => ({
   stageForGrabbing: async () => ({ page: 'file:///cache/jump-detect/grab.html', dir: 'file:///cache/jump-detect/' }),
   unstage: jest.fn(),
 }));
+jest.mock('@/media/poseLib', () => ({
+  ...jest.requireActual('@/media/poseLib'),
+  stagePosePage: async () => ({ page: 'file:///app/Documents/pose/run-1/page.html', dir: 'file:///app/Documents/pose/run-1', root: 'file:///app/Documents/pose' }),
+  unstagePosePage: jest.fn(),
+}));
 jest.mock('react-native-webview', () => {
   const React = jest.requireActual('react');
   const { View } = jest.requireActual('react-native');
   const WebView = React.forwardRef((props: Record<string, any>, ref: unknown) => {
-    mockWeb.props = props;
-    React.useImperativeHandle(ref, () => ({ injectJavaScript: mockWeb.inject, reload: mockWeb.reload }));
+    const page = String(props.source?.uri).includes('/pose/') ? mockPose : mockWeb;
+    page.props = props;
+    React.useImperativeHandle(ref, () => ({ injectJavaScript: page.inject, reload: page.reload }));
     return <View />;
   });
   WebView.displayName = 'WebView';
@@ -76,16 +85,60 @@ async function post(m: unknown) {
   await act(async () => mockWeb.props!.onMessage({ nativeEvent: { data: JSON.stringify(m) } }));
 }
 
+/** Answers the n-th `window.grab(...)` the screen injected, the way the page does. */
+async function answerGrab(n: number) {
+  const call = JSON.parse(/window\.grab\((.*)\); true;/.exec(mockWeb.inject.mock.calls[n][0])![1]);
+  for (let i = 0; i < call.frames.length; i += 20) {
+    const batch = call.frames.slice(i, i + 20).map((f: number) => renderScene(mockState.scene, f, call.rect, call.w, call.h).data);
+    const bytes = Buffer.concat(batch.map((b: Uint8Array) => Buffer.from(b)));
+    await post({ type: 'frames', id: call.id, from: i, w: call.w, h: call.h, data: bytes.toString('base64') });
+  }
+  await post({ type: 'done', id: call.id });
+}
+
 /** Answers each `window.grab(...)` the screen injects, the way the page does, until it stops asking. */
 async function answerGrabs() {
-  for (let n = 0; n < mockWeb.inject.mock.calls.length; n++) {
-    const call = JSON.parse(/window\.grab\((.*)\); true;/.exec(mockWeb.inject.mock.calls[n][0])![1]);
-    for (let i = 0; i < call.frames.length; i += 20) {
-      const batch = call.frames.slice(i, i + 20).map((f: number) => renderScene(mockState.scene, f, call.rect, call.w, call.h).data);
-      const bytes = Buffer.concat(batch.map((b: Uint8Array) => Buffer.from(b)));
-      await post({ type: 'frames', id: call.id, from: i, w: call.w, h: call.h, data: bytes.toString('base64') });
+  for (let n = 0; n < mockWeb.inject.mock.calls.length; n++) await answerGrab(n);
+}
+
+/**
+ * The pose model's reading of the scene's athlete at file frame f: standing on the scene's floor (lower in the picture
+ * as `landShiftPx` carries them nearer the lens), lifted by the flight, side-on, 580 px tall (≈ 1.74 m at 3 mm a px).
+ */
+function scenePose(o: SceneOptions, f: number): number[] {
+  const tau = f / o.fps - o.takeoffS;
+  const liftMm = tau > 0 && tau < o.flightS ? (9810 / 2) * tau * (o.flightS - tau) : 0;
+  const shift = (o.landShiftPx ?? 0) * Math.max(0, Math.min(1, tau / o.flightS));
+  const p = standing({ x: (-160 - o.originX) / o.mmPerPx, floor: o.floorRow + shift - liftMm / o.mmPerPx, stature: 580 });
+  return p.flatMap((q) => [q.x / o.width, q.y / o.height, q.z, q.v]);
+}
+
+/** Answers the frame page's grabs and the pose page's reads, the way the pages do, until neither is asked anything more. */
+async function answerAll() {
+  let g = 0;
+  let q = 0;
+  for (;;) {
+    if (mockPose.props && !mockPose.ready) {
+      mockPose.ready = true;
+      await act(async () => mockPose.props!.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'ready', duration: mockState.scene.durationS, width: mockState.scene.width, height: mockState.scene.height }) } }));
+      continue;
     }
-    await post({ type: 'done', id: call.id });
+    if (g < mockWeb.inject.mock.calls.length) {
+      await answerGrab(g++);
+      continue;
+    }
+    if (q < mockPose.inject.mock.calls.length) {
+      const call = /window\.(follow|everyone|crops)\((.*)\); true;/.exec(mockPose.inject.mock.calls[q++][0]);
+      if (!call) continue;
+      const req = JSON.parse(call[2]);
+      const items = req.frames.map((f: number) => [f, f / req.fps, scenePose(mockState.scene, f)]);
+      const say = (m: unknown) => act(async () => mockPose.props!.onMessage({ nativeEvent: { data: JSON.stringify(m) } }));
+      for (let i = 0; i < items.length; i += 40) await say({ type: 'poses', id: req.id, items: items.slice(i, i + 40) });
+      await say({ type: 'done', id: req.id });
+      continue;
+    }
+    await act(async () => {});
+    if (g === mockWeb.inject.mock.calls.length && q === mockPose.inject.mock.calls.length && !(mockPose.props && !mockPose.ready)) break;
   }
 }
 
@@ -93,6 +146,9 @@ async function open(scene: SceneOptions, params: Record<string, string>) {
   mockState.scene = scene;
   mockState.params = { uri: 'file:///picked/IMG_0003.MOV', fps: '0', ...params };
   mockWeb.inject.mockClear();
+  mockPose.inject.mockClear();
+  mockPose.props = null;
+  mockPose.ready = false;
   await act(async () => {
     r = create(<Analyse />);
   });
@@ -187,7 +243,8 @@ it('follows the athlete tapped when someone else moves more, and lets a key fram
 it('says why nothing was found and what to change', async () => {
   await open(defaultScene('cmj', { takeoffS: 9, durationS: 2 }), { metric: 'cmj', session: 'cmj-2' });
   await press(r.root, '开始分析');
-  await answerGrabs();
+  // The strip finds nothing, and then neither does the skeleton.
+  await answerAll();
   const shown = texts(r.root);
   expect(shown).toContain('选中的片段里没认出跳跃');
   expect(shown).toContain('建议：');
@@ -197,6 +254,36 @@ it('says why nothing was found and what to change', async () => {
   await press(r.root, '手动逐帧标');
   expect(mockRouter.push).not.toHaveBeenCalledWith(expect.objectContaining({ pathname: '/measure/mark' }));
   expect(mockRouter.replace).toHaveBeenCalledWith(expect.objectContaining({ pathname: '/measure/mark' }));
+});
+
+it('falls back to the skeleton when the strip under the feet finds no jump: a landing nearer a phone set above the ankles', async () => {
+  // The clip that started this (2026-10-31): the landing 50 px lower in the picture than the take-off, so the one strip
+  // the coarse pass places misses the take-off (domain/autoMark tests). Nobody tapped: the pose page searches for them.
+  const scene = defaultScene('cmj', { landShiftPx: 50 });
+  await open(scene, { metric: 'cmj', session: 'cmj-pose' });
+  await press(r.root, '开始分析');
+  await answerAll();
+  expect(mockPose.inject.mock.calls.some(([js]) => js.startsWith('window.everyone('))).toBe(true);
+  const shown = texts(r.root);
+  expect(shown).toContain('认出 1 跳，计入 1 跳');
+
+  await press(r.root, '第 1 跳');
+  const frameOf = (name: string) => Number(new RegExp(`^${name}\\n#(\\d+)$`, 'm').exec(texts(r.root))?.[1]);
+  const truth = sceneEvents(scene)[0];
+  expect(Math.abs(frameOf('起跳') - truth.takeoff)).toBeLessThanOrEqual(1);
+  expect(Math.abs(frameOf('落地') - truth.landing)).toBeLessThanOrEqual(1);
+});
+
+it('says the skeleton could not start when the strip finds nothing and the pose page fails', async () => {
+  await open(defaultScene('cmj', { landShiftPx: 50 }), { metric: 'cmj', session: 'cmj-pose-2' });
+  await press(r.root, '开始分析');
+  await answerGrabs();
+  // The model can't be fetched (offline, the first time).
+  await act(async () => {});
+  await act(async () => mockPose.props!.onMessage({ nativeEvent: { data: JSON.stringify({ type: 'error', stage: 'model', message: 'Failed to fetch' }) } }));
+  const shown = texts(r.root);
+  expect(shown).toContain('骨架识别没能启动');
+  expect(shown).toContain('手动逐帧标');
 });
 
 describe('several clips picked at once', () => {
@@ -218,7 +305,7 @@ describe('several clips picked at once', () => {
   it('skips a clip with nothing to save, and hands the rest on when marking by hand', async () => {
     await open(defaultScene('cmj', { takeoffS: 9, durationS: 2 }), { metric: 'cmj', session: 'cmj-q2', queue });
     await press(r.root, '开始分析');
-    await answerGrabs();
+    await answerAll();
     await press(r.root, '跳过这段，看下一段');
     expect(mockRouter.replace).toHaveBeenLastCalledWith(expect.objectContaining({ pathname: '/measure/analyse', params: expect.objectContaining({ uri: 'file:///picked/IMG_0004.MOV' }) }));
 
