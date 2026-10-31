@@ -9,7 +9,7 @@ import { addTrial, ensureSession, listTrials } from '@/db/repo';
 import { listTechniqueTakes } from '@/db/technique';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { LM, type Pt } from '@/domain/pose';
-import { FLAG_TEXT, flagText, PROBLEM_TEXT } from '@/domain/techniqueText';
+import { FLAG_TEXT, flagText, PROBLEM_TEXT, problemText } from '@/domain/techniqueText';
 import { asWire, poseScene, type PoseScene } from '@/domain/testing/poseScene';
 
 import TechniqueAnalyse from '../technique/analyse';
@@ -303,6 +303,38 @@ it('says when it never found the athlete, and what to change', async () => {
   expect(shown).toContain(PROBLEM_TEXT['no-athlete'].advice);
   await press(r.root, '重新点选');
   expect(texts(r.root)).toContain('开始分析');
+});
+
+it.each([
+  ['imported', 'import'],
+  ['filmed in the app', 'camera'],
+] as const)('with no lines, a 240 fps clip timed at 120, %s: says the fall fits no athlete, and what can be done from there', async (_, source) => {
+  // The file says 120 fps. An import can still be set to 240; a take filmed in the app can't, and is at its real rate.
+  const scene = poseScene({ seed: 17 });
+  await open(scene, { uri: 'file:///picked/IMG_0012.MOV', fps: '120', source, session: 'tt-13' }, 120);
+  await tapAthlete(scene, scene.truth.takeoffFrame - 60);
+  await press(r.root, '没贴线，跳过');
+  await press(r.root, '开始分析');
+  await answerReads();
+  const shown = texts(r.root);
+  const text = problemText('frame-rate', { camera: source === 'camera' });
+  expect(shown).toContain(text.what);
+  expect(shown).toContain(text.advice);
+  if (source === 'camera') expect(shown).not.toContain(PROBLEM_TEXT['frame-rate'].what);
+});
+
+it('with no lines, a slow-motion clip left at its file’s 30 fps: when the jump can’t be told, it says again to pick 240', async () => {
+  // Timed at the file's rate, the flight lasts eight times too long, and a run-up stride can pass for it. The page's own
+  // reminder names the cause the problem's advice can't.
+  const scene = poseScene({ seed: 6 });
+  await open(scene, { uri: 'file:///picked/IMG_0013.MOV', fps: '0', source: 'import', session: 'tt-14' }, 30);
+  await tapAthlete(scene, scene.truth.takeoffFrame - 60);
+  await press(r.root, '没贴线，跳过');
+  await press(r.root, '开始分析');
+  await answerReads();
+  const shown = texts(r.root);
+  expect(shown).toContain(PROBLEM_TEXT['unclear-jump'].what);
+  expect(shown).toContain('这个视频是 30 fps。如果是用 iPhone「慢动作」拍的，拍摄帧率选 240（120 fps 慢动作选 120）。');
 });
 
 it('says so when the page can’t read the clip', async () => {

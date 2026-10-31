@@ -55,6 +55,14 @@ export type TechniqueProblem =
   | 'no-jump'
   /** A flight, but no plant before it in the clip. */
   | 'no-plant'
+  /** No lines, and the flight found leaves the floor nearly flat, or flat and falling too slowly for the athlete
+   *  (`STRIDE_RISE_DEG`): a stride of the run-up, taken for the jump where the floor was read wrong (a run-up that comes
+   *  at the camera, a high or rolled phone). */
+  | 'unclear-jump'
+  /** No lines, and the fall found fits no athlete: on gravity's scale the hips stand further from or closer to the ankles
+   *  than any athlete's could (`GRAVITY_LEG_M`), the frame rate set at half the real one or less, or twice it or more
+   *  (or, rarely, a fall read wrong at a low frame rate). */
+  | 'frame-rate'
   /** The two floor lines were tapped too close together to be 3 m apart: both on the same tape. */
   | 'markers';
 
@@ -139,6 +147,31 @@ export const LENS_FOV_DEG = 70;
 
 /** Shortest flight that is a jump rather than a running stride, s. */
 export const MIN_FLIGHT_S = 0.25;
+
+/**
+ * With no lines, a flight whose centre of mass leaves the floor flatter than this, degrees above level in the picture,
+ * is a run-up stride taken for the jump: `any` whatever its fall, `slowFall` when it also falls too slowly for the
+ * athlete (past `GRAVITY_LEG_M`). It is the take-off angle itself, whatever the scale. In the synthetic clips of
+ * tools/pose-validation, strides whose fall fits an athlete rose at under 8° (bar one at 39°, every figure marked
+ * imprecise), and those that fall too slowly at up to 21.8°. Jumps read flatter than they left the floor on a curved
+ * run-up with a hand on the rim: a 28° take-off down to 24.7° at 240 fps, 23.7° at 60 fps and 21° at 30 fps, a 22° one
+ * (2.2 m/s up, too little to dunk) down to 15° at 60 fps. Timed at the wrong frame rate the reading spreads: a 46°
+ * take-off at half the rate reads 23.7° or more, so `slowFall` sits between it and the strides; at a quarter, anywhere
+ * from 9° to 71°. A clip timed wrong is turned away either way: only the advice differs.
+ */
+const STRIDE_RISE_DEG = { any: 15, slowFall: 22.5 };
+
+/**
+ * With no lines, how far above the ankles the hips may stand on gravity's scale, m. At the right frame rate, athletes of
+ * 1.50–2.25 m stand 0.47–0.99 m there at 120–240 fps in the synthetic clips of tools/pose-validation, and mostly
+ * 0.39–1.27 m at 60 fps. A frame rate set at half the real one or less puts them about 1.8 m or more up, at twice it or
+ * more 0.24 m or less: the bounds sit about halfway, on a ratio scale. A frame rate off by less, as 100 fps read as 120,
+ * can't be seen. At 60 fps or less a few right ones fall outside: a 1.50 m athlete's fall read fast (about 1 in 400 at
+ * 60 fps), or a hand on the rim on a curved run-up that goes unseen and slows the fall (1–3 in 1,000 at 60 fps, 1 in
+ * 100 on a 25° run-up, up to 2 m; 1 in 40–100 of a tall athlete's clips at 30 fps; 15–60 % at 25 fps). None checked had
+ * a figure marked ok.
+ */
+const GRAVITY_LEG_M = { min: 0.35, max: 1.35 };
 
 /**
  * The body's size changes by more than this share along a run-up a couple of degrees off the picture: too little to
@@ -1099,6 +1132,16 @@ export function analyseTechnique(input: TechniqueInput): { ok: true; result: Tec
   const curvature = -2 * fy.c[2];
   if (!(curvature > 0)) return { ok: false, problem: 'no-jump' };
   const gravityScale = G / curvature;
+  // Without lines nothing else checks the floor or gravity's scale. A run-up stride taken for the jump (a floor read
+  // wrong) leaves the floor nearly flat; a third or so of them also fall too slowly for the athlete, and those can rise a
+  // little more (`STRIDE_RISE_DEG`). The rest read at an athlete's scale, some because the hand-on-the-rim check above
+  // cuts their fall short. A fall that fits no athlete otherwise is timed at the wrong frame rate (`GRAVITY_LEG_M`).
+  // Every figure would rest on either.
+  const riseDeg = (atan2(fy.c[1], abs(fx.c[1])) * 180) / PI;
+  const gravityLegM = gravityScale * max(1, legPx);
+  const slowFall = gravityLegM > GRAVITY_LEG_M.max;
+  if (!markers && riseDeg < (slowFall ? STRIDE_RISE_DEG.slowFall : STRIDE_RISE_DEG.any)) return { ok: false, problem: 'unclear-jump' };
+  if (!markers && (slowFall || gravityLegM < GRAVITY_LEG_M.min)) return { ok: false, problem: 'frame-rate' };
   const gravityScaleRel = (2 * fy.se[2]) / curvature;
   const gWithMarkers = markerScale != null ? curvature * markerScale : null;
   if (markerScale != null) {

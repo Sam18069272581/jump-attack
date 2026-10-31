@@ -48,14 +48,14 @@ const touchDownOf = (scene: PoseScene) => scene.truth.contacts.find((c) => c.dow
 
 /**
  * The frames the technique screen reads of a scene, as tools/pose-validation does: a coarse pass from a tap on the
- * athlete a quarter second before the take-off, the jump's window in it, then every frame of the window.
+ * athlete a quarter second before the take-off, the jump's window in it, then every frame of the window. The screen
+ * times them at `fps`, the rate it was told; the tap is a quarter second of real time, picked by eye.
  */
-function readAsTheScreen(scene: PoseScene): { frames: PoseFrame[]; target: Pt } {
-  const fps = scene.options.fps;
+function readAsTheScreen(scene: PoseScene, fps = scene.options.fps): { frames: PoseFrame[]; target: Pt } {
   const total = scene.frames.length;
   const wire = asWire(scene);
   const read = (frames: number[]) => frames.map((f) => [f, f / fps, ...wire[f].values] as WireFrame);
-  const tapAt = scene.truth.takeoffFrame - Math.round(0.25 * fps);
+  const tapAt = scene.truth.takeoffFrame - Math.round(0.25 * scene.options.fps);
   const p = scene.frames[tapAt].poses[0];
   const { forward, backward } = coarseFrames(tapAt, total, coarseStep(fps), Math.round(TAP_REACH_S * fps));
   const coarseWire = [...read(forward), ...read(backward)];
@@ -1053,6 +1053,125 @@ describe('lines tapped by hand, and no lines where the floor is hard to read', (
         const result = resultOf(analyseTechnique({ frames: scene.frames, captureFps: 240, markers: null }));
         expect([curveDeg, seed, Math.abs(result.events.plantDown! - touchDownOf(scene)) <= 2, misses(scene, result).filter((m) => /^(vz|vx|angle|plant):/.test(m))]).toEqual([curveDeg, seed, true, []]);
       }
+    }
+  });
+
+  it.each([
+    ['at 60 fps, a run-up that comes in at 25° to the picture', { fps: 60, curveDeg: 25 }, [1, 2, 3]],
+    ['a run-up at 20° and the phone rolled 3° the other way', { curveDeg: 20, rollDeg: -3 }, [1, 2]],
+    ['the phone 1.3 m up and rolled 3°, a run-up at 15°', { curveDeg: 15, rollDeg: -3, lensM: 1.3 }, [35000]],
+  ])('no lines, %s: a stride of the run-up isn’t measured as the jump, and it says the jump couldn’t be told from the run-up', (_, over, seeds) => {
+    // The floor read wrong, a stride before the plant passes for the flight. It leaves the floor nearly flat, not on a
+    // jump's steep path: at about a degree, or at up to 20° where its fall is also far too slow for the athlete's size.
+    // With no lines nothing else checks that, and every figure would rest on it.
+    for (const seed of seeds) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const r = analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: null });
+      expect([seed, r.ok ? `take-off at ${r.result.events.takeoff}, truth ${scene.truth.takeoffFrame}` : r.problem]).toEqual([seed, 'unclear-jump']);
+    }
+  });
+
+  it('no lines, at 60 fps, a run-up that comes in at 25°, read as the screen reads it: the steepest stride whose fall is far too slow is still told from a frame rate set wrong', () => {
+    // Clips of tools/pose-validation's way `curve25-60-bare`: these strides leave the floor at 20.4° and 21.8°, the
+    // steepest seen of those whose fall is too slow for any athlete.
+    for (const seed of [1033, 1034]) {
+      const scene = poseScene({ fps: 60, curveDeg: 25, markers: null, seed });
+      const { frames, target } = readAsTheScreen(scene);
+      const r = analyseTechnique({ frames, captureFps: 60, markers: null, target });
+      expect([seed, r.ok ? `take-off at ${r.result.events.takeoff}, truth ${scene.truth.takeoffFrame}` : r.problem]).toEqual([seed, 'unclear-jump']);
+    }
+  });
+
+  it.each([
+    ['a 2.25 m athlete, a run-up at 17.5° and a hand on the rim', { heightM: 2.25, curveDeg: 17.5, hangAfterS: 0.34 }, [1, 2, 3]],
+    ['at 60 fps, a 2.25 m athlete, a run-up at 15° and a hand on the rim', { fps: 60, heightM: 2.25, curveDeg: 15, hangAfterS: 0.34 }, [2, 3, 6]],
+    ['at 60 fps, a 2.25 m athlete, a run-up at 17.5° and a hand on the rim', { fps: 60, heightM: 2.25, curveDeg: 17.5, hangAfterS: 0.34 }, [1, 2, 3]],
+  ])('no lines, %s: the jump is still measured, not taken for a stride of the run-up', (_, over, seeds) => {
+    // A tall athlete's bent legs and a fall cut short by the hang put the hips up to about 1.1 times a 0.9 m leg above
+    // the ankles on gravity's scale, as far up as a stride's drop can read. The centre of mass's path tells them apart,
+    // whatever the scale: it leaves the floor at 31–46° in these jumps, and at under 8° in a stride taken for one whose
+    // fall fits an athlete.
+    for (const seed of seeds) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const r = analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: null });
+      expect([seed, r.ok ? Math.abs(r.result.events.takeoff - scene.truth.takeoffFrame) <= 1 : r.problem]).toEqual([seed, true]);
+    }
+  });
+
+  it.each([
+    ['at 120 fps, the phone 1.5 m up and rolled 3°, a run-up at 15°', { fps: 120, lensM: 1.5, curveDeg: 15, rollDeg: -3 }, [5, 6]],
+    ['a 1.50 m athlete, the phone 1.5 m up, a run-up at 17.5°', { heightM: 1.5, lensM: 1.5, curveDeg: 17.5 }, [1, 5]],
+    ['run-up strides with 0.12 s in the air, the phone 1.5 m up and rolled 1.5°, a run-up at 15°', { stepFlightS: 0.12, lensM: 1.5, curveDeg: 15, rollDeg: -1.5 }, [2, 3]],
+  ])('no lines, %s: a stride whose fall the hand-on-the-rim check cuts short isn’t measured as the jump either', (_, over, seeds) => {
+    // Cut to its first 0.15 s, such a stride's fall reads at a leg's scale (0.5–0.9 m from hip to ankle), but it still
+    // leaves the floor at under 8°, below every jump measured (15° at the flattest). Its contact time was shown as 准
+    // (130–140 ms, truth 180).
+    for (const seed of seeds) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const r = analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: null });
+      expect([seed, r.ok ? `take-off at ${r.result.events.takeoff}, truth ${scene.truth.takeoffFrame}` : r.problem]).toEqual([seed, 'unclear-jump']);
+    }
+  });
+
+  it.each([
+    ['at 60 fps, a 2.05 m athlete leaving the floor at 26° and a hand on the rim', { fps: 60, heightM: 2.05, approachSpeed: 7, vx: 4.5, vz: 2.2, plantS: 0.15, hangAfterS: 0.3 }, [1, 2, 3]],
+    ['at 60 fps, a 2.25 m athlete leaving the floor at 28°, a run-up at 17.5° and a hand on the rim', { fps: 60, heightM: 2.25, vx: 4.8, vz: 2.6, curveDeg: 17.5, hangAfterS: 0.34 }, [6, 7, 9]],
+    ['a 2.25 m athlete leaving the floor at 28°, a run-up at 17.5° and a hand on the rim', { heightM: 2.25, vx: 4.8, vz: 2.6, curveDeg: 17.5, hangAfterS: 0.34 }, [8, 9, 10]],
+    ['at 30 fps, a 2.25 m athlete leaving the floor at 28°, a run-up at 17.5° and a hand on the rim', { fps: 30, heightM: 2.25, vx: 4.8, vz: 2.6, curveDeg: 17.5, hangAfterS: 0.34 }, [2, 3, 6]],
+    ['at 60 fps, a 2.05 m athlete leaving the floor at 22°, a run-up at 17.5° and a hand on the rim', { fps: 60, heightM: 2.05, vx: 5.5, vz: 2.2, curveDeg: 17.5, hangAfterS: 0.3 }, [13, 14, 16]],
+  ])('no lines, %s: a flat jump is still measured, not taken for a stride of the run-up', (_, over, seeds) => {
+    // How steeply the centre of mass leaves the floor is the take-off angle itself, read low on a curved run-up with a
+    // hand on the rim: the 26–28° take-offs here read 21–25°, the 22° one about 16°. A stride taken for the jump whose
+    // fall fits an athlete, as these jumps' do (up to 1.2 m from hip to ankle at 30 fps), rises at under 8°.
+    for (const seed of seeds) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const r = analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: null });
+      expect([seed, r.ok ? Math.abs(r.result.events.takeoff - scene.truth.takeoffFrame) <= 1 : r.problem]).toEqual([seed, true]);
+    }
+  });
+
+  it.each([
+    ['a 1.50 m athlete at 60 fps', { fps: 60, heightM: 1.5 }],
+    ['a 1.50 m athlete with a hand on the rim', { heightM: 1.5, hangAfterS: 0.34 }],
+  ])('no lines, %s: the jump is still measured, its fall not taken for a frame rate set wrong', (_, over) => {
+    // A short athlete's hips stand about 0.5 m above the ankles on gravity's scale, over the 0.35 m bound; at 60 fps one
+    // clip in a few hundred reads below it.
+    for (const seed of [1, 2, 3]) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const r = analyseTechnique({ frames: scene.frames, captureFps: scene.options.fps, markers: null });
+      expect([seed, r.ok ? Math.abs(r.result.events.takeoff - scene.truth.takeoffFrame) <= 1 : r.problem]).toEqual([seed, true]);
+    }
+  });
+
+  it.each([
+    ['filmed at 240 fps, read at 120', {}, 120],
+    ['filmed at 240 fps, read at 60', {}, 60],
+    // A shorter athlete's flight, read at twice the rate, is often too short to be a jump at all (`no-jump`).
+    ['a 2.25 m athlete filmed at 120 fps, read at 240', { fps: 120, heightM: 2.25 }, 240],
+    ['filmed at 60 fps, read at 30', { fps: 60 }, 30],
+    ['a 1.50 m athlete filmed at 60 fps, read at 30', { fps: 60, heightM: 1.5 }, 30],
+  ])('no lines, %s: no figure, and it says the frame rate is most likely wrong', (_, over, readFps) => {
+    // Timed at half the real rate, the fall slows fourfold, and gravity's scale puts the hips about 1.8 m or more above
+    // the ankles (2 m for the 1.50 m athlete here); timed at twice it, 0.24 m or less. Athletes of 1.50–2.25 m stand
+    // 0.47–0.99 m there in the synthetic clips at 120–240 fps, mostly 0.39–1.27 m at 60 fps. These jumps still leave the
+    // floor steeply, so it names the frame rate rather than a stride. With lines, the lines' scale catches it instead
+    // (`scale-broken`).
+    for (const seed of [1, 2]) {
+      const scene = poseScene({ ...over, markers: null, seed });
+      const frames = scene.frames.map((f) => ({ ...f, t: f.frame / readFps }));
+      const r = analyseTechnique({ frames, captureFps: readFps, markers: null });
+      expect([seed, r.ok ? `measured: vz ${r.result.metrics.vz?.value}` : r.problem]).toEqual([seed, 'frame-rate']);
+    }
+  });
+
+  it('no lines, a 2.25 m athlete with a hand on the rim and a run-up at 17.5°, filmed at 240 fps and read at 120 as the screen reads it: it names the frame rate, not a stride', () => {
+    // Timed at half the rate, these jumps read flat (23.8–24.7°, against 46° at the right rate), but still steeper than
+    // any stride whose fall is too slow for the athlete (21.8° at the steepest).
+    for (const seed of [8, 17, 18]) {
+      const scene = poseScene({ heightM: 2.25, curveDeg: 17.5, hangAfterS: 0.34, markers: null, seed });
+      const { frames, target } = readAsTheScreen(scene, 120);
+      const r = analyseTechnique({ frames, captureFps: 120, markers: null, target });
+      expect([seed, r.ok ? `measured: vz ${r.result.metrics.vz?.value}` : r.problem]).toEqual([seed, 'frame-rate']);
     }
   });
 
