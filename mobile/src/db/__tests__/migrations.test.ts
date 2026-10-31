@@ -92,3 +92,62 @@ describe('migrate on the web, where every handle to the file shares one connecti
     expect(await listAthletes(connection)).toHaveLength(1);
   });
 });
+
+/** Every table's columns and every index, ignoring column order (a repaired column lands at the end). */
+async function schema(db: SQLiteDatabase): Promise<string[]> {
+  const objects = await db.getAllAsync<{ type: string; name: string }>("SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%'");
+  const out: string[] = [];
+  for (const o of objects) {
+    if (o.type !== 'table') out.push(`${o.type} ${o.name}`);
+    else for (const c of await db.getAllAsync<{ name: string; type: string }>(`PRAGMA table_info("${o.name}")`)) out.push(`${o.name}.${c.name} ${c.type}`);
+  }
+  return out.sort();
+}
+
+/**
+ * A handle that loses the `skip`-th migration the way an overlapping start used to: its changes rolled back while
+ * `PRAGMA user_version` still moved past it.
+ */
+function losingMigration(connection: SQLiteDatabase, skip: number): SQLiteDatabase {
+  let n = 0;
+  return {
+    ...connection,
+    async execAsync(sql: string) {
+      const isMigration = !sql.trimStart().startsWith('PRAGMA') && !/^(BEGIN|COMMIT|ROLLBACK)$/.test(sql.trim());
+      if (isMigration && n++ === skip) return;
+      await connection.execAsync(sql);
+    },
+  } as SQLiteDatabase;
+}
+
+describe('migrate after an earlier overlapping start lost a migration', () => {
+  it('puts back each migration the database is marked past but never got, keeping the data', async () => {
+    const reference = openMemoryDb();
+    await migrate(reference);
+    const expected = await schema(reference);
+
+    for (let skip = 0; skip < LATEST_VERSION; skip++) {
+      const connection = openMemoryDb();
+      // Later migrations that build on the lost one fail, as they did on every start after it.
+      await migrate(losingMigration(connection, skip)).catch(() => {});
+      expect(await version(connection)).toBeGreaterThan(skip);
+      await migrate(connection);
+      expect({ skip, schema: await schema(connection) }).toEqual({ skip, schema: expected });
+      expect(await listAthletes(connection)).toHaveLength(1);
+    }
+  });
+
+  it('keeps rows saved after the lost migration when it puts the migration back', async () => {
+    const connection = openMemoryDb();
+    await migrate(losingMigration(connection, 9)); // knee_pain never created
+    await connection.runAsync("UPDATE athlete SET name = 'Sam' WHERE id = 1");
+    await connection.runAsync("INSERT INTO test_session (id, athlete_id, metric_code, started_at) VALUES ('s', 1, 'cmj', '2026-10-01T10:00:00Z')");
+    await connection.runAsync("INSERT INTO trial (session_id, value) VALUES ('s', 52.5)");
+
+    await migrate(connection);
+
+    expect(await connection.getAllAsync('SELECT * FROM knee_pain')).toEqual([]);
+    expect(await listAthletes(connection)).toEqual([expect.objectContaining({ id: 1, name: 'Sam' })]);
+    expect(await listTrials(connection, 's')).toEqual([expect.objectContaining({ value: 52.5 })]);
+  });
+});
