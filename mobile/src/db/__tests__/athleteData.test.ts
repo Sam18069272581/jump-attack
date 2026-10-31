@@ -112,6 +112,22 @@ describe('importAthlete', () => {
     expect(await listBodyMass(other, r.athleteId)).toEqual([{ date: '2026-10-27', kg: 71.5 }]);
   });
 
+  it('keeps each filmed dunk attempt pointing at its own take-off analysis on the new phone', async () => {
+    const { db, mate } = await coachPhone();
+    await ensureSession(db, 'mate-tech', mate, 'takeoff_tech');
+    const trialId = await addTrial(db, { session_id: 'mate-tech', value: 3.1, fps: 240 });
+    await addDunkAttempt(db, mate, { rimCm: 305, ball: 'basketball', outcome: 'made', trialId, videoUri: 'file:///app/Documents/technique/take-9.mov' });
+    // The other phone has trials of its own, so the analysis gets another id there.
+    const { db: other } = await coachPhone();
+    const r = await importAthlete(other, await exportAthlete(db, mate));
+    if (!r.ok) throw new Error(r.problem);
+    const filmed = (await listDunkAttempts(other, r.athleteId)).find((a) => a.trialId != null)!;
+    expect(filmed).toMatchObject({ outcome: 'made', videoUri: 'file:///app/Documents/technique/take-9.mov' });
+    expect(filmed.trialId).not.toBe(trialId);
+    const trial = await other.getFirstAsync<{ value: number; athlete_id: number }>('SELECT t.value, s.athlete_id FROM trial t JOIN test_session s ON s.id = t.session_id WHERE t.id = ?', filmed.trialId!);
+    expect(trial).toEqual({ value: 3.1, athlete_id: r.athleteId });
+  });
+
   it('recognises an athlete brought back to the phone they came from, and replaces only their records', async () => {
     const { db, mate } = await coachPhone();
     // The teammate trained on their own phone for a week, then brings the newer data back.

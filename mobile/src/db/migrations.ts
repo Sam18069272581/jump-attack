@@ -138,6 +138,11 @@ const MIGRATIONS: string[] = [
   ALTER TABLE workout ADD COLUMN session_rpe REAL;
   ALTER TABLE workout ADD COLUMN duration_min REAL;
   `,
+  `
+  -- A filmed dunk attempt: its take-off analysis (a technique trial, which may be deleted on its own) and its video.
+  ALTER TABLE dunk_attempt ADD COLUMN trial_id INTEGER REFERENCES trial(id) ON DELETE SET NULL;
+  ALTER TABLE dunk_attempt ADD COLUMN video_uri TEXT;
+  `,
 ];
 
 /**
@@ -156,6 +161,7 @@ const ADDS: [table: string, column?: string][] = [
   ['athlete', 'goal_date'],
   ['knee_pain'],
   ['workout', 'session_rpe'],
+  ['dunk_attempt', 'trial_id'],
 ];
 
 /**
