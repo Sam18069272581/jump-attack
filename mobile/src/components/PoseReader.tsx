@@ -27,6 +27,8 @@ export type PoseReaderHandle = {
   follow: (frames: number[], at: Pt, onProgress?: (done: number) => void) => Promise<WireFrame[]>;
   /** Each frame read in its own square. */
   crops: (frames: number[], squares: Square[], onProgress?: (done: number) => void) => Promise<WireFrame[]>;
+  /** Everyone in each frame, searched for across the whole picture (slower): where to start following when nobody tapped. */
+  everyone: (frames: number[], onProgress?: (done: number) => void) => Promise<WireFrame[]>;
 };
 
 /** The page answers every frame within a second or two, and starts the model within several; this long without a word means it is stuck. */
@@ -110,6 +112,7 @@ export const PoseReader = forwardRef<PoseReaderHandle, { uri: string; fileFps: n
     useImperativeHandle(ref, () => ({
       follow: (frames, at, onProgress) => ask('follow', { frames, at }, onProgress),
       crops: (frames, squares, onProgress) => ask('crops', { frames, crops: squares }, onProgress),
+      everyone: (frames, onProgress) => ask('everyone', { frames }, onProgress),
     }));
 
     function onMessage(e: WebViewMessageEvent) {

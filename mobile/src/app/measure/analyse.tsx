@@ -8,6 +8,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChange
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { FrameReader, type ClipInfo, type FrameReaderHandle } from '@/components/FrameReader';
+import { PoseReader, type PoseReaderHandle } from '@/components/PoseReader';
 import { Rise, tick } from '@/components/motion';
 import { PulseProgress } from '@/components/PulseProgress';
 import { TrendChart } from '@/components/TrendChart';
@@ -15,12 +16,14 @@ import { Button, Chip, Empty } from '@/components/ui';
 import { analysisHistory, saveAnalysedTrials } from '@/db/analysis';
 import { touchOffsetFor } from '@/db/touch';
 import { realChange, type RealChange } from '@/domain/agreement';
-import { analyseCoarse, analyseFine, coarseRequest, type CoarseOptions, type DetectProblem, type Rect } from '@/domain/autoMark';
+import { analyseCoarse, analyseFine, analysePoseFine, coarseRequest, planFromPose, type CoarseOptions, type DetectedJump, type DetectProblem, type Rect, type VideoInfo } from '@/domain/autoMark';
 import { analysisKindFor, analysisTrials } from '@/domain/analysisTrials';
 import { frameCount, frameToSeconds, markingRates } from '@/domain/jump';
 import { analyseJumps, FLAG_TEXT, type JumpEvents, type JumpResult } from '@/domain/jumpAnalysis';
 import { nextClip, queuedCount } from '@/domain/importQueue';
 import { returnsToLogger } from '@/domain/marking';
+import { findPoseJumps, poseCoarseFrames, splitAt, startFrom } from '@/domain/poseJump';
+import { framesFromWire } from '@/domain/techniqueRead';
 import { best as bestOf, getMetric, type MetricDef } from '@/domain/metrics';
 import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
@@ -33,14 +36,17 @@ function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
   player.currentTime = frameToSeconds(frame, fps);
 }
 
-const PROBLEMS: Record<DetectProblem | 'error', { what: string; advice: string }> = localized({
+type Problem = DetectProblem | 'error' | 'no-pose';
+
+const PROBLEMS: Record<Problem, { what: string; advice: string }> = localized({
   shaky: { what: '画面在晃，没法分析', advice: '下次把手机放在地上或三脚架上，别手持' },
   'no-jump': { what: '选中的片段里没认出跳跃', advice: '把片段拉宽到起跳前、落地后；旁边有人在动的话，点一下运动员再试' },
   unsure: { what: '认出了跳，但没把握定准起跳和落地帧', advice: '光线暗、脚被挡住或拍得太远时容易这样；可以手动逐帧标' },
   error: { what: '读不到视频画面', advice: '可以手动逐帧标' },
+  'no-pose': { what: '脚下没认出跳跃，骨架识别没能启动', advice: '第一次用骨架识别要联网下载模型，联网后再试；也可以手动逐帧标' },
 });
 
-type Phase = { name: 'setup' } | { name: 'running'; done: number; total: number; label: string } | { name: 'done' } | { name: 'failed'; problem: DetectProblem | 'error' };
+type Phase = { name: 'setup' } | { name: 'running'; done: number; total: number; label: string } | { name: 'done' } | { name: 'failed'; problem: Problem };
 
 /**
  * Analyses a jump clip the way Arcus does: the athlete picks the part of the clip to look at and taps themselves, the
@@ -59,13 +65,18 @@ export default function Analyse() {
     p.pause();
   });
   const reader = useRef<FrameReaderHandle>(null);
+  // The pose page, loaded only when the strip under the feet finds nothing (it copies the clip and starts a model).
+  const poseReader = useRef<PoseReaderHandle>(null);
+  const [posing, setPosing] = useState(false);
+  const [poseShown, setPoseShown] = useState(false);
+  const poseMounted = useRef<(() => void) | null>(null);
 
   const [duration, setDuration] = useState(0);
   const [detectedFps, setDetectedFps] = useState<number | null>(null);
   const [captureOverride, setCaptureOverride] = useState<number | null>(null);
   const [clip, setClip] = useState<ClipInfo | null>(null);
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
-  const [target, setTarget] = useState<{ x: number; y: number } | null>(null);
+  const [target, setTarget] = useState<{ x: number; y: number; frame: number } | null>(null);
   const [phase, setPhase] = useState<Phase>({ name: 'setup' });
   const [events, setEvents] = useState<JumpEvents[]>([]);
   const [box, setBox] = useState<Rect | null>(null);
@@ -128,7 +139,75 @@ export default function Analyse() {
     const vy = (y - oy) / fit;
     if (vx < 0 || vy < 0 || vx > clip.width || vy > clip.height) return;
     tick();
-    setTarget({ x: vx, y: vy });
+    setTarget({ x: vx, y: vy, frame });
+  }
+
+  useEffect(() => {
+    if (posing && poseMounted.current) {
+      poseMounted.current();
+      poseMounted.current = null;
+    }
+  }, [posing]);
+
+  /** The pose page, loaded the first time it is needed. */
+  async function poseReaderReady(): Promise<PoseReaderHandle> {
+    if (!poseReader.current) await new Promise<void>((resolve) => ((poseMounted.current = resolve), setPosing(true)));
+    return poseReader.current!;
+  }
+
+  /**
+   * When the strip under the feet finds no jump, or can't time the one it finds: the skeleton finds the athlete, each
+   * flight and where the feet stood before and after it (domain/poseJump), and each event is timed in a strip of its
+   * own there (domain/autoMark `planFromPose`). Gives back what to show: the jumps, or why there are none.
+   */
+  async function byPose(video: VideoInfo, before: DetectProblem): Promise<DetectedJump[] | Problem> {
+    if (!clip || !reader.current) return before;
+    const detectKind = kind === 'drop' ? 'drop' : 'jump';
+    const coarse = poseCoarseFrames(video, { range: span, rebound: kind === 'repeat' });
+    const step = coarse.length > 1 ? coarse[1] - coarse[0] : 1;
+    const guess = coarse.length * 2;
+    const label1 = tr('脚下没认出，换骨架找人和起跳');
+    setPhase({ name: 'running', done: 0, total: guess, label: label1 });
+    let pose: PoseReaderHandle;
+    let wire;
+    let start: { frame: number; at: { x: number; y: number } } | null;
+    try {
+      pose = await poseReaderReady();
+      setPoseShown(true);
+      if (target) start = { frame: target.frame, at: target };
+      else {
+        // Nobody tapped: the biggest person in the middle of the stretch, or a quarter in either side.
+        const look = [0.5, 0.25, 0.75].map((u) => coarse[Math.floor(u * (coarse.length - 1))]);
+        start = startFrom(framesFromWire(await pose.everyone(look), clip.width, clip.height, fps));
+      }
+      if (!start) return before;
+      const { forward, backward } = splitAt(coarse, start.frame);
+      const ahead = await pose.follow(forward, start.at, (n) => setPhase({ name: 'running', done: n, total: guess, label: label1 }));
+      const behind = await pose.follow(backward, start.at, (n) => setPhase({ name: 'running', done: forward.length + n, total: guess, label: label1 }));
+      wire = [...ahead, ...behind];
+    } catch {
+      return 'no-pose';
+    } finally {
+      setPoseShown(false);
+    }
+    const found = findPoseJumps(framesFromWire(wire, clip.width, clip.height, fps), fps, { kind: detectKind, target: start.at });
+    if (!found.ok) return before;
+    const plan = planFromPose(video, found.flights, detectKind, step, span);
+    const read = wire.length;
+    const sum = read + plan.events.reduce((n, e) => n + e.request.frames.length, 0);
+    const label2 = tr('骨架认出 {length} 跳，逐帧定起跳和落地', { length: found.flights.length });
+    const got = [];
+    let done = read;
+    for (const e of plan.events) {
+      got.push(await reader.current.read(e.request, (n) => setPhase({ name: 'running', done: done + n, total: sum, label: label2 })));
+      done += e.request.frames.length;
+    }
+    const r = analysePoseFine(plan, got);
+    if (!r.ok) return r.problem;
+    // The athlete where they took off the first time, for the "locked" box.
+    const s0 = found.flights[0].takeoff.spot;
+    setBox({ x: s0.left - 0.2 * s0.stature, y: s0.y - s0.stature, w: s0.right - s0.left + 0.4 * s0.stature, h: s0.stature });
+    return r.jumps;
   }
 
   async function analyse() {
@@ -143,21 +222,25 @@ export default function Analyse() {
     try {
       const coarseFrames = await reader.current.read(req, (n) => setPhase({ name: 'running', done: n, total: guess, label: label0 }));
       const c = analyseCoarse(video, req, coarseFrames, kind === 'drop' ? 'drop' : 'jump', opts);
-      if (!c.ok) return setPhase({ name: 'failed', problem: c.problem });
-      setBox(c.plan.box);
-      const sum = req.frames.length + c.plan.request.frames.length;
-      const label = tr('认出 {length} 跳，逐帧定起跳和落地', { length: c.plan.jumps.length });
-      const fine = await reader.current.read(c.plan.request, (n) => setPhase({ name: 'running', done: req.frames.length + n, total: sum, label }));
-      const r = analyseFine(c.plan, fine);
-      if (!r.ok) return setPhase({ name: 'failed', problem: r.problem });
+      let jumps: DetectedJump[] | Problem;
+      if (!c.ok) jumps = c.problem === 'shaky' ? c.problem : await byPose(video, c.problem);
+      else {
+        setBox(c.plan.box);
+        const sum = req.frames.length + c.plan.request.frames.length;
+        const label = tr('认出 {length} 跳，逐帧定起跳和落地', { length: c.plan.jumps.length });
+        const fine = await reader.current.read(c.plan.request, (n) => setPhase({ name: 'running', done: req.frames.length + n, total: sum, label }));
+        const r = analyseFine(c.plan, fine);
+        jumps = r.ok ? r.jumps : await byPose(video, r.problem);
+      }
+      if (typeof jumps === 'string') return setPhase({ name: 'failed', problem: jumps });
       setEvents(
-        r.jumps.map((j) =>
+        jumps.map((j) =>
           j.marks.length === 3 ? { touchdown: j.marks[0], takeoff: j.marks[1], landing: j.marks[2], flags: j.flags } : { takeoff: j.marks[0], landing: j.marks[1], flags: j.flags },
         ),
       );
       setKeep([]);
       setPhase({ name: 'done' });
-      show(r.jumps[0].marks[0]);
+      show(jumps[0].marks[0]);
     } catch {
       setPhase({ name: 'failed', problem: 'error' });
     }
@@ -229,6 +312,13 @@ export default function Analyse() {
           <View style={[StyleSheet.absoluteFill, { opacity: running ? 1 : 0.01 }]} pointerEvents="none">
             <FrameReader ref={reader} uri={params.uri} fileFps={fileFps} onReady={setClip} onError={() => setPhase((p) => (p.name === 'done' ? p : { name: 'failed', problem: 'error' }))} style={StyleSheet.absoluteFill} />
           </View>
+          {posing && (
+            // Over the frame page while it reads, showing each frame with the athlete's skeleton. Its failures reach the
+            // analysis through the read that fails.
+            <View style={[StyleSheet.absoluteFill, { opacity: running && poseShown ? 1 : 0.01 }]} pointerEvents="none">
+              <PoseReader ref={poseReader} uri={params.uri} fileFps={fileFps} onReady={() => {}} onError={() => {}} style={StyleSheet.absoluteFill} />
+            </View>
+          )}
           {phase.name === 'setup' && (
             <Pressable accessibilityRole="button" accessibilityLabel={tr('点一下运动员')} style={StyleSheet.absoluteFill} onPress={(e) => tap(e.nativeEvent.locationX, e.nativeEvent.locationY)} />
           )}
