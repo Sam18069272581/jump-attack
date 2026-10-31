@@ -24,6 +24,7 @@
 import { MAX_CONTACT_S, MIN_CONTACT_S } from './dropJump';
 import { MAX_FLIGHT_S, MIN_FLIGHT_S } from './jump';
 import type { DetectorFlag } from './jumpAnalysis';
+import type { PoseFlight, Spot } from './poseJump';
 
 // Math's functions as locals: these loops run millions of times, and a global lookup per call is slow under Jest.
 const { abs, ceil, max, min, round } = Math;
@@ -100,7 +101,7 @@ export function coarseRequest(v: VideoInfo, opts: CoarseOptions = {}): FrameRequ
   };
 }
 
-type Window = { from: number; to: number };
+export type Window = { from: number; to: number };
 
 type JumpPlan = {
   touchdown?: Window;
@@ -211,13 +212,11 @@ export function analyseCoarse(
     }
     const a = req.frames[fl.from];
     const b = req.frames[fl.to];
-    const empties = new Set<number>();
-    for (let i = 0; i < 7; i++) empties.add(round(a + (b - a) * (0.25 + (0.5 * i) / 6)));
     jumps.push({
       ...(touchdown ? { touchdown } : {}),
       takeoff: around(fl.from - 1, fl.from),
       landing: around(fl.to, fl.to + 1),
-      empty: [...empties],
+      empty: emptyFrames(a, b),
     });
   }
   if (!jumps.length) return { ok: false, problem: 'no-jump' };
@@ -231,7 +230,14 @@ export function analyseCoarse(
     w: band.w * sx,
     h: band.h * sy,
   };
-  let scale = min(1, FINE_PERSON_PX / (tall * sy));
+  const box: Rect = { x: person.left * sx, y: top * sy, w: (person.right - person.left + 1) * sx, h: tall * sy };
+  const edge = { left: band.x === 0, right: band.x + band.w === w };
+  return { ok: true, plan: finePlanFor(kind, v.captureFps, rect, tall * sy, jumps, box, edge) };
+}
+
+/** The fine pass over `rect` (video px), drawn so an athlete `tallPx` tall is about 3 mm a pixel. */
+function finePlanFor(kind: DetectKind, captureFps: number, rect: Rect, tallPx: number, jumps: JumpPlan[], box: Rect, edge: FinePlan['edge']): FinePlan {
+  let scale = min(1, FINE_PERSON_PX / tallPx);
   if (rect.w * scale > FINE_MAX_W) scale = FINE_MAX_W / rect.w;
   const all = new Set<number>();
   for (const j of jumps) {
@@ -245,13 +251,137 @@ export function analyseCoarse(
     h: max(1, round(rect.h * scale)),
   };
   // A foot is down when it reaches within a pixel or so (≈ 3 mm) of where it stood.
-  const eps = max(1, round(tall * sy * scale * 0.0015));
-  const box: Rect = { x: person.left * sx, y: top * sy, w: (person.right - person.left + 1) * sx, h: tall * sy };
-  const edge = { left: band.x === 0, right: band.x + band.w === w };
-  return {
-    ok: true,
-    plan: { kind, captureFps: v.captureFps, request, eps, jumps, box, edge },
-  };
+  const eps = max(1, round(tallPx * scale * 0.0015));
+  return { kind, captureFps, request, eps, jumps, box, edge };
+}
+
+/** Seven frames from the middle half of a flight: the floor with nobody on it. */
+function emptyFrames(a: number, b: number): number[] {
+  const empties = new Set<number>();
+  for (let i = 0; i < 7; i++) empties.add(round(a + (b - a) * (0.25 + (0.5 * i) / 6)));
+  return [...empties];
+}
+
+/** One event the skeleton found (domain/poseJump.ts), to time in a strip of its own. */
+export type PoseEventPlan = {
+  /** Which flight of the pose pass's it belongs to, and which of its events it is. */
+  jump: number;
+  role: 'touchdown' | 'takeoff' | 'landing';
+  window: Window;
+  /** The window's frames, then the bare floor's (from the middle of the flight), all in the strip at this event's spot. */
+  request: FrameRequest;
+  eps: number;
+  edge: FinePlan['edge'];
+};
+
+export type PosePlan = { kind: DetectKind; captureFps: number; events: PoseEventPlan[] };
+
+/**
+ * The fine pass from what the skeleton found, for when the coarse strip pass found nothing or couldn't time what it
+ * found: every take-off, landing and touch-down in a strip of its own, placed at the floor and the feet the pose
+ * model saw there, so an athlete who lands nearer a phone set above the ankles (lower in the picture) is still in it.
+ * `step` is the pose pass's step in file frames; each window reaches as far past the event's bracket as the coarse
+ * pass's windows do past theirs.
+ */
+export function planFromPose(v: VideoInfo, flights: PoseFlight[], kind: DetectKind, step: number, span?: { from: number; to: number }): PosePlan {
+  const first = max(0, span?.from ?? 0);
+  const last = min(v.frames - 1, span?.to ?? v.frames - 1);
+  const reach = 2 * max(step, round(v.captureFps / COARSE_PER_S));
+  const events: PoseEventPlan[] = [];
+  flights.forEach((fl, jump) => {
+    if (kind === 'drop' && !fl.touchdown) return;
+    const empty = emptyFrames(fl.takeoff.at[1], fl.landing.at[0]);
+    const roles = [...(kind === 'drop' ? (['touchdown'] as const) : []), 'takeoff', 'landing'] as const;
+    for (const role of roles) {
+      const e = fl[role]!;
+      const window = { from: max(first, e.at[0] - reach), to: min(last, e.at[1] + reach) };
+      const { rect, tall } = stripAt(v, e.spot);
+      let scale = min(1, FINE_PERSON_PX / tall);
+      if (rect.w * scale > FINE_MAX_W) scale = FINE_MAX_W / rect.w;
+      const frames = range(window.from, window.to);
+      for (const f of empty) if (f < window.from || f > window.to) frames.push(f);
+      events.push({
+        jump,
+        role,
+        window,
+        request: { frames, rect, w: max(1, round(rect.w * scale)), h: max(1, round(rect.h * scale)) },
+        // A foot is down when it reaches within a pixel or so (≈ 3 mm) of where it stood, as in the coarse pass's plan.
+        eps: max(1, round(tall * scale * 0.0015)),
+        edge: { left: rect.x <= 0, right: rect.x + rect.w >= v.width },
+      });
+    }
+  });
+  return { kind, captureFps: v.captureFps, events };
+}
+
+/** The strip under the feet at a spot, as the coarse pass would place it for an athlete standing there. */
+function stripAt(v: VideoInfo, spot: Spot): { rect: Rect; tall: number } {
+  const tall = spot.stature;
+  const mid = (spot.left + spot.right) / 2;
+  let xa = spot.left - 0.2 * tall;
+  let xb = spot.right + 0.2 * tall;
+  if (xb - xa < 0.6 * tall) {
+    xa = mid - 0.3 * tall;
+    xb = mid + 0.3 * tall;
+  }
+  xa = max(0, xa);
+  xb = min(v.width, xb);
+  const ya = max(0, spot.y - BAND_UP * tall);
+  const yb = min(v.height, spot.y + BAND_DOWN * tall);
+  return { rect: { x: xa, y: ya, w: xb - xa, h: yb - ya }, tall };
+}
+
+/**
+ * Times each event of a pose plan in its strip, the way `analyseFine` times the coarse pass's: take-off is the first
+ * frame after the last one on the ground, landing and touch-down the first frame back on it. `frames[i]` are the
+ * frames `plan.events[i].request` asked for.
+ */
+export function analysePoseFine(plan: PosePlan, frames: Grey[][]): { ok: true; jumps: DetectedJump[] } | { ok: false; problem: DetectProblem } {
+  const hold = max(3, round(FINE_HOLD_S * plan.captureFps));
+  const timed = new Map<number, { touchdown?: number; takeoff?: number; landing?: number; edge: boolean }>();
+  let unsure = false;
+  plan.events.forEach((e, i) => {
+    const got = frames[i];
+    const n = e.window.to - e.window.from + 1;
+    const win = got.slice(0, n);
+    const empty = bareFloor(got);
+    const seq = clean(contactSeries(win, empty, e.eps, hold, 2, win.map(() => 0)));
+    let at: number | null = null;
+    if (e.role === 'takeoff') {
+      const lastDown = seq.lastIndexOf(true);
+      if (lastDown >= 0 && lastDown < n - 2) at = e.window.from + lastDown + 1;
+    } else {
+      const firstUp = seq.indexOf(false);
+      const firstDown = firstUp < 0 ? -1 : seq.indexOf(true, firstUp);
+      if (firstDown >= 0) at = e.window.from + firstDown;
+    }
+    const j = timed.get(e.jump) ?? { edge: false };
+    if (at == null) unsure = true;
+    else {
+      j[e.role] = at;
+      // The frame with the foot on the ground next to the event: before a take-off, at a landing or touch-down.
+      const down = e.role === 'takeoff' ? at - 1 : at;
+      if (atEdge(win[down - e.window.from], empty, e.edge)) j.edge = true;
+    }
+    timed.set(e.jump, j);
+  });
+  const jumps: DetectedJump[] = [];
+  for (const j of timed.values()) {
+    if (j.takeoff == null || j.landing == null || (plan.kind === 'drop' && j.touchdown == null)) continue;
+    const flightS = (j.landing - j.takeoff) / plan.captureFps;
+    if (flightS < MIN_FLIGHT_S || flightS > MAX_FLIGHT_S) continue;
+    const tagged = j.edge ? { flags: ['edge' as const] } : {};
+    if (plan.kind === 'drop') {
+      const contactS = (j.takeoff - j.touchdown!) / plan.captureFps;
+      if (contactS < MIN_CONTACT_S || contactS > MAX_CONTACT_S) {
+        unsure = true;
+        continue;
+      }
+      jumps.push({ marks: [j.touchdown!, j.takeoff, j.landing], flightS, ...tagged });
+    } else jumps.push({ marks: [j.takeoff, j.landing], flightS, ...tagged });
+  }
+  if (!jumps.length) return { ok: false, problem: unsure ? 'unsure' : 'no-jump' };
+  return { ok: true, jumps };
 }
 
 export function analyseFine(plan: FinePlan, frames: Grey[]): { ok: true; jumps: DetectedJump[] } | { ok: false; problem: DetectProblem } {
