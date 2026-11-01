@@ -25,6 +25,7 @@ const PATHS = {
   edit: ['M4 20h4L19 9l-4-4L4 16z', 'M13 7l4 4'],
   plan: ['M3 10h18M8 3v4M16 3v4M8 14h2M14 14h2M8 18h2'],
   cloud: ['M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z'],
+  camera: ['M3 8a2 2 0 0 1 2-2h2.5l2-3h5l2 3H19a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'],
 } as const;
 
 export type IconName = keyof typeof PATHS | 'gallery';
@@ -37,6 +38,7 @@ export function Icon({ name, size = 22, color = colors.text, strokeWidth = 2 }: 
       {name === 'user' && <Circle cx={12} cy={8} r={4} />}
       {name === 'info' && <Circle cx={12} cy={12} r={9} />}
       {name === 'plan' && <Rect x={3} y={5} width={18} height={16} rx={3} />}
+      {name === 'camera' && <Circle cx={12} cy={13} r={4} />}
       {name === 'gallery' ? (
         <>
           <Rect x={3} y={3} width={18} height={18} rx={3} />
