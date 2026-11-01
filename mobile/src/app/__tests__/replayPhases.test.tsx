@@ -126,7 +126,7 @@ it('reads every frame from 1.3 s before take-off to landing, and exports the pha
     ['下蹲', '22 cm'],
     ['起跳速度', '2.86 m/s'],
   ]);
-  expect(texts(r.root)).toContain('离心向心用时');
+  expect(texts(r.root)).toContain('估算的发力趋势、离心向心用时');
 });
 
 it('exports without the phases, and says why, when the head is out of the picture', async () => {

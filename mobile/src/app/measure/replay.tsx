@@ -255,7 +255,7 @@ export default function Replay() {
         {phases.name === 'settled' && phases.why && <Text style={styles.why}>{phases.why}</Text>}
         <Text style={styles.note}>
           {phases.name === 'settled' && phases.phases
-            ? tr('竖屏 720 × 1280，带水印、跳高、离心向心用时和起跳速度，可以存到相册或直接发出去。')
+            ? tr('竖屏 720 × 1280，带水印、跳高、估算的发力趋势、离心向心用时和起跳速度，可以存到相册或直接发出去。')
             : tr('竖屏 720 × 1280，带水印、起跳曲线和每跳数据，可以存到相册或直接发出去。')}
         </Text>
       </View>
