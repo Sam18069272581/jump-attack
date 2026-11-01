@@ -138,6 +138,7 @@ export function replayHtml(c: ReplayConfig): string {
   // bottom 150 px, where the apps people post to put their captions and buttons.
   var SAFE = H - 150;
   var LEFT = 36, RIGHT = W - 36;
+  var ATHLETE_TOP = 290, ATHLETE_BOTTOM = 770;
 
   // A colour mixed towards white, for lines and labels over the dark bands.
   function tint(hex, k) {
@@ -163,12 +164,15 @@ export function replayHtml(c: ReplayConfig): string {
     g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
     var vw = video.videoWidth, vh = video.videoHeight;
     if (!vw || !vh) return;
-    // Fill the picture, but never so far that the athlete is cut off; centre on them, without running off the clip.
+    // The athlete goes between the phase label and the numbers along the bottom (ATHLETE_TOP to ATHLETE_BOTTOM), so
+    // nothing is drawn over them: the clip as large as fills the picture, smaller if they wouldn't fit there, but always
+    // as wide as the picture, centred on them. Lifting them clear of the bottom can leave the bottom of the picture
+    // empty, under the dark band.
     var F = C.focus || { x: 0, y: 0, w: vw, h: vh };
-    var s = Math.min(Math.max(W / vw, H / vh), W / F.w, H / F.h), dw = vw * s, dh = vh * s;
+    var s = Math.max(W / vw, Math.min(Math.max(W / vw, H / vh), (ATHLETE_BOTTOM - ATHLETE_TOP) / F.h)), dw = vw * s, dh = vh * s;
     var cx = (F.x + F.w / 2) * s, cy = (F.y + F.h / 2) * s;
     var dx = dw <= W ? (W - dw) / 2 : Math.min(0, Math.max(W - dw, W / 2 - cx));
-    var dy = dh <= H ? (H - dh) / 2 : Math.min(0, Math.max(H - dh, H / 2 - cy));
+    var dy = Math.min(0, (ATHLETE_TOP + ATHLETE_BOTTOM) / 2 - cy);
     g.drawImage(video, dx, dy, dw, dh);
   }
 
@@ -198,12 +202,12 @@ export function replayHtml(c: ReplayConfig): string {
       var j = C.jumps[l.i], parts = String(j.label).split(' ');
       title = '第 ' + (l.i + 1) + ' 跳'; value = parts[0]; unit = parts.slice(1).join(' '); detail = j.detail; dim = !j.counted;
     }
+    // Above the athlete (ATHLETE_TOP), not over them.
     g.save(); g.shadowColor = 'rgba(0,0,0,0.45)'; g.shadowBlur = 16;
-    text(title, RIGHT, 214, '700 26px ' + CJK, SOFT, 'right');
-    g.font = '700 34px ' + CJK; var uw = unit ? g.measureText(unit).width + 10 : 0;
-    text(value, RIGHT - uw, 350, '800 150px ' + NUM, dim ? FAINT : WHITE, 'right');
-    if (unit) text(unit, RIGHT, 350, '700 34px ' + CJK, SOFT, 'right');
-    if (detail) text(detail, RIGHT, 394, '600 24px ' + CJK, SOFT, 'right');
+    text(title + (detail ? ' · ' + detail : ''), RIGHT, 150, '700 22px ' + CJK, SOFT, 'right');
+    g.font = '700 30px ' + CJK; var uw = unit ? g.measureText(unit).width + 10 : 0;
+    text(value, RIGHT - uw, 266, '800 120px ' + NUM, dim ? FAINT : WHITE, 'right');
+    if (unit) text(unit, RIGHT, 266, '700 30px ' + CJK, SOFT, 'right');
     g.restore();
   }
 
@@ -303,7 +307,7 @@ export function replayHtml(c: ReplayConfig): string {
 
   function draw(f) {
     clip();
-    band(0, 260, 0.6, 0);
+    band(0, 300, 0.62, 0);
     band(620, 760, 0, 0.72);
     band(760, H, 0.72, 0.88);
 
