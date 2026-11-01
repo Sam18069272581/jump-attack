@@ -57,6 +57,36 @@ describe('jumpPhases', () => {
     expect(r.result.lowS).toBeNull();
   });
 
+  it('traces the force as a smooth trend, up to take-off', () => {
+    // Force (× body weight) = 1 + a / g off the path smoothed at FORCE_HZ. With 3 mm of jitter (20 seeds) it stays within
+    // 0.15 body weights (RMS) of the true force and keeps the peak within 0.1; it is drawn, not read out.
+    const errs: number[] = [];
+    for (let seed = 1; seed <= 20; seed++) {
+      const scene = cmjScene({ noisePx: 1.5, seed });
+      const r = read(scene);
+      if (!r.ok) throw new Error(r.problem);
+      const { t, bw } = r.result.force;
+      expect(t).toHaveLength(bw.length);
+      expect(t.at(-1)!).toBeLessThanOrEqual(scene.truth.takeoffS);
+      expect(t.at(-1)!).toBeGreaterThan(scene.truth.takeoffS - 1 / 240 - 1e-9);
+      const truth = t.map((x) => scene.truth.force[Math.round(x * 240)]);
+      errs.push(Math.sqrt(bw.reduce((a, f, i) => a + (f - truth[i]) ** 2, 0) / bw.length));
+      expect(Math.abs(Math.max(...bw) - scene.truth.peak)).toBeLessThan(0.1);
+    }
+    expect(Math.max(...errs)).toBeLessThan(0.15);
+  });
+
+  it('keeps the force trend free of frame-to-frame zigzag', () => {
+    // The athlete's own clip zigzagged by 0.3–0.5 body weights through the push at 6 Hz; at FORCE_HZ the jitter left in
+    // the trend changes direction only with the force itself: unweighting, braking, propulsion.
+    const r = read(cmjScene({ noisePx: 1.5, driftPx: 5, seed: 3 }));
+    if (!r.ok) throw new Error(r.problem);
+    const bw = r.result.force.bw;
+    let turns = 0;
+    for (let i = 2; i < bw.length; i++) if ((bw[i] - bw[i - 1]) * (bw[i - 1] - bw[i - 2]) < 0 && Math.abs(bw[i - 1] - 1) > 0.05) turns++;
+    expect(turns).toBeLessThanOrEqual(4);
+  });
+
   it('turns away a clip that jitters too much from frame to frame', () => {
     const r = read(cmjScene({ noisePx: 6 }));
     expect(r).toEqual({ ok: false, problem: 'jitter' });

@@ -1,8 +1,8 @@
 /**
  * The phases of a standing jump, read off the path of the centre of mass in a clip with the whole body in it: when the
  * athlete starts down, the lowest point, take-off and landing, so the exported video (media/replayHtml.ts) can show
- * the eccentric, concentric and flight phases with their times and how deep the athlete dipped. It does not go into
- * the diagnosis.
+ * the eccentric, concentric and flight phases with their times, how deep the athlete dipped and the trend of the
+ * ground force. None of it goes into the diagnosis.
  *
  * 1. Scale: in flight the centre of mass falls freely, so the curvature of its path in the picture is gravity, and
  *    pixels per metre = 2c / g for y = a + bt + ct² (the same scale the technique analysis uses, domain/technique.ts).
@@ -13,12 +13,13 @@
  *    from the fastest descent back to where the centre of mass last moved no faster than while standing (`ONSET_SD`);
  *    a threshold crossed going forward is set off early by the jitter. A jump that never dips (`MIN_DIP_M`) has no
  *    eccentric phase: a squat jump.
+ * 4. The force, 1 + a / g, is only a trend to draw, off a path smoothed harder (`FORCE_HZ`), and no number of it is
+ *    shown: on the athlete's own CMJ (2026-10-31, 240 fps, whole body, front-on) the force off the 6 Hz path
+ *    zigzagged by 0.3–0.5 body weights through the push and dipped below zero once, because the segment model's centre
+ *    of mass moves as the arms and legs do (in flight it strayed 8 mm from the parabola).
  *
- * The force itself is not shown. On the athlete's own CMJ (2026-10-31, 240 fps, whole body, front-on) it zigzagged by
- * 0.3–0.5 body weights through the push and dipped below zero once, because the segment model's centre of mass moves
- * as the arms and legs do (in flight it strayed 8 mm from the parabola). The phases and the depth hold up: in
- * synthetic CMJs (domain/testing/cmjScene.ts) with 3 mm of jitter the lowest point is within 4 ms and the start within
- * 63 ms (40 seeds).
+ * The phases and the depth hold up: in synthetic CMJs (domain/testing/cmjScene.ts) with 3 mm of jitter the lowest
+ * point is within 4 ms and the start within 63 ms (40 seeds).
  */
 import { lowPass } from './barPath';
 import { G } from './jump';
@@ -31,6 +32,14 @@ import { pickAthlete, polyFit, unswap, type PoseFrame } from './technique';
  * 0.7 mm without jitter).
  */
 export const CUTOFF_HZ = 6;
+/**
+ * Low-pass cut-off (Hz) for the force trend drawn on the exported video. On the athlete's own CMJ the force off the
+ * 6 Hz path zigzagged by 0.3–0.5 body weights through the push and dipped below zero; at 3 Hz it rises and falls
+ * once, staying between 0.28 and 2.14. In synthetic CMJs with 3 mm of jitter (20 seeds) 3 Hz is 0.11 body weights RMS
+ * off the true force and 0–0.07 high at the peak (4 Hz: 0.08 RMS but still zigzags on the real clip; 2 Hz: 0.18 RMS and
+ * the peak 0.1 low).
+ */
+export const FORCE_HZ = 3;
 /**
  * The movement starts where the centre of mass last moved no faster than this many standing scatters (SD of the
  * velocity while standing). In synthetic CMJs with 3 mm of jitter (40 seeds), 1 SD put the start 32 ms late on
@@ -111,7 +120,18 @@ export type JumpPhases = {
   depthM: number;
   pxPerM: number;
   jitterM: number;
+  /** The force trend, × body weight, at every frame (s) from the start of the samples to take-off: an estimate to draw, not to read. */
+  force: { t: number[]; bw: number[] };
 };
+
+/** Central differences per second (one-sided at the ends). */
+function slope(xs: number[], fps: number): number[] {
+  return xs.map((_, i) => {
+    const a = Math.max(0, i - 1);
+    const b = Math.min(xs.length - 1, i + 1);
+    return ((xs[b] - xs[a]) * fps) / (b - a);
+  });
+}
 
 /** Fills gaps of up to `max` samples by straight lines (at either end, by the nearest sample); null if a longer one is left. */
 function fill(ys: (number | null)[], max: number): number[] | null {
@@ -182,8 +202,7 @@ export function jumpPhases(input: { samples: ComSample[]; takeoffS: number; land
   const smooth = lowPass(raw, fps, CUTOFF_HZ);
   const standPx = smooth.slice(edge, quietN).reduce((a, b) => a + b, 0) / (quietN - edge);
   const h = smooth.map((y) => (standPx - y) / pxPerM);
-  const dt = 1 / fps;
-  const v = h.map((_, i) => (h[Math.min(h.length - 1, i + 1)] - h[Math.max(0, i - 1)]) / ((Math.min(h.length - 1, i + 1) - Math.max(0, i - 1)) * dt));
+  const v = slope(h, fps);
   if (ts[quietN] == null || ts[quietN] > takeoffS || v.slice(edge, quietN).some((x) => Math.abs(x) > QUIET_V)) return { ok: false, problem: 'no-quiet' };
 
   const take = ts.findIndex((t) => t > takeoffS);
@@ -202,6 +221,9 @@ export function jumpPhases(input: { samples: ComSample[]; takeoffS: number; land
   for (let i = quietN; i <= (dip ? low : last); i++) if (sign * v[i] > sign * v[start]) start = i;
   while (start > quietN && sign * v[start - 1] > ONSET_SD * sdV) start--;
   const lowS = dip ? ts[low] : null;
+  // 4. The force trend: 1 + a / g off the path smoothed harder.
+  const accel = slope(slope(lowPass(raw, fps, FORCE_HZ).map((y) => -y / pxPerM), fps), fps);
+  const force = { t: ts.slice(0, last + 1), bw: accel.slice(0, last + 1).map((x) => Math.round((1 + x / G) * 1000) / 1000) };
   return {
     ok: true,
     result: {
@@ -214,6 +236,7 @@ export function jumpPhases(input: { samples: ComSample[]; takeoffS: number; land
       depthM: dip ? -h[low] : 0,
       pxPerM,
       jitterM,
+      force,
     },
   };
 }
