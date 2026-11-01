@@ -20,7 +20,8 @@
  */
 import { lowPass } from './barPath';
 import { G } from './jump';
-import { polyFit } from './technique';
+import { centreOfMass, LM, SIDE, type Pt } from './pose';
+import { pickAthlete, polyFit, unswap, type PoseFrame } from './technique';
 
 /** Low-pass cut-off for the path before differentiating, Hz: in the synthetic CMJs above, 8 Hz doubled the peak's error at 3 mm of jitter and 10 Hz quadrupled it. */
 export const CUTOFF_HZ = 6;
@@ -46,6 +47,37 @@ const MAX_GAP_S = 0.05;
 export const MAX_JITTER_M = 0.005;
 
 export type ComSample = { t: number; y: number | null };
+
+/** How long before take-off (s) to read the clip: standing still (`QUIET_S`, after the filter's edge) and the slowest countermovement, about 1 s. */
+export const BEFORE_TAKEOFF_S = 1.3;
+
+/** The file frames to read the pose of for one jump's force curve: every one from `BEFORE_TAKEOFF_S` before take-off to landing, none before `from`. */
+export function forceFrames(jump: { takeoff: number; landing: number }, captureFps: number, from: number): number[] {
+  const first = Math.max(from, 0, jump.takeoff - Math.round(BEFORE_TAKEOFF_S * captureFps));
+  return Array.from({ length: jump.landing - first + 1 }, (_, i) => first + i);
+}
+
+/** The points the whole body is judged by: head, shoulders, hips, knees and ankles, both sides. */
+const WHOLE_BODY = [LM.leftEar, LM.rightEar, ...(['left', 'right'] as const).flatMap((s) => [SIDE[s].shoulder, SIDE[s].hip, SIDE[s].knee, SIDE[s].ankle])];
+/** The pose model's mean visibility over those points below which a frame is left out. */
+const MIN_VISIBILITY = 0.5;
+
+/**
+ * The athlete's centre of mass (picture y, px) in each frame, by the segment model (domain/pose.ts): null where nobody
+ * was found, where part of the body is out of the picture (the model still places those points, but guesses them), or
+ * where the model barely sees the body. A jump test filmed at ankle height usually leaves the head out: no curve.
+ */
+export function comSamples(frames: PoseFrame[], picture: { width: number; height: number }, target?: Pt | null): ComSample[] {
+  const { poses } = unswap(pickAthlete(frames, target));
+  return frames.map((f, i) => {
+    const p = poses[i];
+    if (!p) return { t: f.t, y: null };
+    const pts = WHOLE_BODY.map((k) => p[k]);
+    const inside = pts.every((l) => l.x >= 0 && l.x <= picture.width && l.y >= 0 && l.y <= picture.height);
+    const seen = pts.reduce((a, l) => a + l.v, 0) / pts.length >= MIN_VISIBILITY;
+    return { t: f.t, y: inside && seen ? centreOfMass(p).y : null };
+  });
+}
 
 export type ForceCurveProblem =
   /** Long stretches with no centre of mass. */

@@ -1,5 +1,8 @@
-import { forceCurve, MAX_JITTER_M } from '../forceCurve';
+import { comSamples, forceCurve, forceFrames, MAX_JITTER_M } from '../forceCurve';
+import { centreOfMass, LM, type Pose } from '../pose';
+import type { PoseFrame } from '../technique';
 import { cmjScene } from '../testing/cmjScene';
+import { standing } from '../testing/standing';
 
 const read = (scene: ReturnType<typeof cmjScene>, over: Partial<Parameters<typeof forceCurve>[0]> = {}) =>
   forceCurve({ samples: scene.samples, takeoffS: scene.truth.takeoffS, landingS: scene.truth.landingS, fps: 240, ...over });
@@ -72,5 +75,57 @@ describe('forceCurve', () => {
   it('turns away a flight too short to scale by', () => {
     const scene = cmjScene();
     expect(read(scene, { landingS: scene.truth.takeoffS + 0.05 })).toEqual({ ok: false, problem: 'flight' });
+  });
+});
+
+describe('comSamples', () => {
+  const picture = { width: 1080, height: 1920 };
+  const lift = (p: Pose, dy: number): Pose => p.map((l) => ({ ...l, y: l.y + dy }));
+  const athlete = standing({ x: 540, floor: 1700, stature: 1000 });
+  const frames = (dys: number[], over: (p: Pose, i: number) => Pose = (p) => p): PoseFrame[] =>
+    dys.map((dy, i) => ({ frame: 100 + i, t: (100 + i) / 240, poses: [over(lift(athlete, dy), i)] }));
+
+  it('follows the centre of mass of the athlete, frame by frame', () => {
+    const s = comSamples(frames([0, -10, -25]), picture);
+    const y0 = centreOfMass(athlete).y;
+    expect(s.map((x) => x.t)).toEqual([100 / 240, 101 / 240, 102 / 240]);
+    expect(s.map((x) => x.y! - y0)).toEqual([0, -10, -25].map((d) => expect.closeTo(d, 6)));
+  });
+
+  it('leaves out frames where part of the body is out of the picture', () => {
+    // The head above the top edge: the segment model's centre of mass would be guessed, not seen.
+    const s = comSamples(
+      frames([0, 0, 0], (p, i) => (i === 1 ? p.map((l, k) => (k === LM.leftEar || k === LM.rightEar ? { ...l, y: -20 } : l)) : p)),
+      picture,
+    );
+    expect(s.map((x) => x.y === null)).toEqual([false, true, false]);
+  });
+
+  it('leaves out frames the pose model barely sees', () => {
+    const s = comSamples(
+      frames([0, 0], (p, i) => (i === 0 ? p.map((l) => ({ ...l, v: 0.2 })) : p)),
+      picture,
+    );
+    expect(s.map((x) => x.y === null)).toEqual([true, false]);
+  });
+
+  it('leaves out frames with nobody', () => {
+    const f = frames([0, 0]);
+    f[1].poses = [];
+    expect(comSamples(f, picture)[1].y).toBeNull();
+  });
+});
+
+describe('forceFrames', () => {
+  it('reads every frame from 1.3 s before take-off to landing', () => {
+    // 240 fps: 312 frames before take-off, enough for standing still and the slowest countermovement.
+    const f = forceFrames({ takeoff: 1000, landing: 1100 }, 240, 0);
+    expect(f[0]).toBe(688);
+    expect(f.at(-1)).toBe(1100);
+    expect(f).toHaveLength(413);
+  });
+
+  it('starts no earlier than the part of the clip shown', () => {
+    expect(forceFrames({ takeoff: 300, landing: 400 }, 240, 150)[0]).toBe(150);
   });
 });
