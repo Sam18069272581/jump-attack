@@ -66,7 +66,8 @@
           "photosPermission": "用于从相册导入跳跃视频。"
         }
       ],
-      "expo-localization"
+      "expo-localization",
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true

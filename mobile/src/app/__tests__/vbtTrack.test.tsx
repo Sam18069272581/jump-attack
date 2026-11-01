@@ -121,7 +121,7 @@ it('tracks a set from video, lets a rep be left out, and logs the fastest', asyn
     r = create(<TrackSet />);
   });
   expect(texts(r.root)).toContain('最外侧挂 45 cm 的标准片');
-  await press(r.root, '从相册选这一组的视频');
+  await press(r.root, '从相册导入视频');
   expect(mockWeb.props).toMatchObject({ source: { uri: 'file:///cache/bar-track/track.html' }, allowingReadAccessToURL: 'file:///cache/bar-track/' });
 
   await send({ type: 'ready', duration: 9, width: 720, height: 1280 });
@@ -161,7 +161,7 @@ it('says so when the plate was lost and nothing was found', async () => {
   await act(async () => {
     r = create(<TrackSet />);
   });
-  await press(r.root, '从相册选这一组的视频');
+  await press(r.root, '从相册导入视频');
   await send({ type: 'ready', duration: 3, width: 720, height: 1280 });
   await send({ type: 'done', samples: squatClip([]).concat([[0.7, 360, 800, 0.2]]), diameter: 200, lost: true });
   const t = texts(r.root);
@@ -175,7 +175,7 @@ it('leaves out a rep the clip cut off and says why', async () => {
   await act(async () => {
     r = create(<TrackSet />);
   });
-  await press(r.root, '从相册选这一组的视频');
+  await press(r.root, '从相册导入视频');
   await send({ type: 'ready', duration: 8, width: 720, height: 1280 });
   // The third rep rises from 7.2 s to 8.4 s; the clip ends at 7.9 s, halfway up.
   await send({ type: 'done', samples: squatClip([0.7, 0.9, 1.2], 7.9), diameter: 200, lost: false });
@@ -197,7 +197,7 @@ it('forgets the slow-motion rate chosen for the last clip', async () => {
     r = create(<TrackSet />);
   });
   mockClip.fps = 30;
-  await press(r.root, '从相册选这一组的视频');
+  await press(r.root, '从相册导入视频');
   await press(r.root, '240');
   // The next clip is a normal 60 fps video: no slow-motion choice, and its speeds are read as they are.
   mockClip.fps = 60;
@@ -213,7 +213,7 @@ it('can start again after the page crashed mid-analysis', async () => {
   await act(async () => {
     r = create(<TrackSet />);
   });
-  await press(r.root, '从相册选这一组的视频');
+  await press(r.root, '从相册导入视频');
   await send({ type: 'ready', duration: 9, width: 720, height: 1280 });
   await press(r.root, '开始分析');
   expect(texts(r.root)).toContain('正在逐帧跟踪');
@@ -228,7 +228,7 @@ it('keeps the screen still while the circle is being placed, and scrolls the res
   await act(async () => {
     r = create(<TrackSet />);
   });
-  await press(r.root, '从相册选这一组的视频');
+  await press(r.root, '从相册导入视频');
   await send({ type: 'ready', duration: 9, width: 720, height: 1280 });
   expect(r.root.findByType(ScrollView).props.scrollEnabled).toBe(false);
   await send({ type: 'done', samples: squatClip([0.7, 0.9, 1.2]), diameter: 200, lost: false });
