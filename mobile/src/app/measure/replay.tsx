@@ -11,7 +11,7 @@ import { PulseProgress } from '@/components/PulseProgress';
 import { Button, Empty } from '@/components/ui';
 import { analysisKindFor } from '@/domain/analysisTrials';
 import { toISODate } from '@/domain/dates';
-import { comSamples, forceCurve, forceFrames, type ForceCurve, type ForceCurveProblem } from '@/domain/forceCurve';
+import { comSamples, jumpPhases, phaseFrames, type JumpPhases, type JumpPhasesProblem } from '@/domain/jumpPhases';
 import { analyseJumps, type JumpEvents } from '@/domain/jumpAnalysis';
 import { getMetric } from '@/domain/metrics';
 import { startFrom } from '@/domain/poseJump';
@@ -32,21 +32,21 @@ type Msg =
   | { type: 'unsupported' }
   | { type: 'error'; message: string };
 
-/** Why a video goes out without the force curve. */
-const NO_CURVE: Record<ForceCurveProblem, string> = {
-  gaps: '没拍到全身，或者骨架跟丢了，这次导出不画发力曲线。',
-  flight: '腾空那段没读全，定不了比例，这次导出不画发力曲线。',
-  jitter: '骨架抖得太厉害，发力曲线算不准，这次导出不画。',
-  'no-quiet': '起跳前没先站稳一下，发力曲线算不了，这次导出不画。',
+/** Why a video goes out without the phases. */
+const NO_PHASES: Record<JumpPhasesProblem, string> = {
+  gaps: '没拍到全身，或者骨架跟丢了，这次导出不标离心和向心。',
+  flight: '腾空那段没读全，定不了比例，这次导出不标离心和向心。',
+  jitter: '骨架抖得太厉害，阶段分不准，这次导出不标离心和向心。',
+  'no-quiet': '起跳前没先站稳一下，这次导出不标离心和向心。',
 };
 
-type ForceState = { name: 'reading'; done: number; total: number } | { name: 'settled'; curve: ForceCurve | null; why?: string };
+type PhasesState = { name: 'reading'; done: number; total: number } | { name: 'settled'; phases: JumpPhases | null; why?: string };
 
 /**
  * Replays an analysed set in slow motion with its numbers on top (media/replayHtml), and exports it as a portrait video
  * for the share sheet: save to Photos, send to the team, post it. For a standing jump it first reads the athlete's
- * skeleton through the best jump (components/PoseReader), so the video can carry the estimated force and its phases
- * (domain/forceCurve); the pose page and the replay page don't run side by side, each holds a copy of the clip.
+ * skeleton through the best jump (components/PoseReader), so the video can carry its eccentric, concentric and flight
+ * phases (domain/jumpPhases); the pose page and the replay page don't run side by side, each holds a copy of the clip.
  */
 export default function Replay() {
   const params = useLocalSearchParams<{ uri: string; metric: string; fileFps: string; captureFps: string; from: string; to: string; events: string; box?: string; focus?: string }>();
@@ -65,18 +65,18 @@ export default function Replay() {
     const events = JSON.parse(params.events) as (JumpEvents & { counted: boolean })[];
     return analyseJumps(events, { kind, captureFps: Number(params.captureFps), boxCm: Number(params.box) || undefined, keep: events.flatMap((e, i) => (e.counted ? [i] : [])) });
   }, [kind, params.events, params.captureFps, params.box]);
-  // The force curve is for a standing jump: the highest one counted.
+  // The phases are for a standing jump: the highest one counted.
   const best = useMemo(() => {
     if (kind !== 'jump' || !analysis) return null;
     const counted = analysis.jumps.filter((j) => j.counted);
     return counted.length ? counted.reduce((a, b) => (b.jhCm > a.jhCm ? b : a)).events : null;
   }, [kind, analysis]);
-  const [force, setForce] = useState<ForceState>(() => (best ? { name: 'reading', done: 0, total: 1 } : { name: 'settled', curve: null }));
+  const [phases, setPhases] = useState<PhasesState>(() => (best ? { name: 'reading', done: 0, total: 1 } : { name: 'settled', phases: null }));
   const pose = useRef<PoseReaderHandle>(null);
   const reading = useRef<'idle' | 'running' | 'over'>('idle');
 
   const config = useMemo(() => {
-    if (!def || !kind || !analysis || force.name !== 'settled') return null;
+    if (!def || !kind || !analysis || phases.name !== 'settled') return null;
     return replayConfig({
       def,
       kind,
@@ -89,9 +89,9 @@ export default function Replay() {
       date: toISODate(new Date()),
       colors: { ink: colors.text, paper: colors.bg, card: colors.surface, accent: colors.accent, rim: colors.rim, muted: colors.textMuted, touch: colors.purple },
       ...(params.focus ? { focus: JSON.parse(params.focus) } : {}),
-      force: force.curve,
+      phases: phases.phases,
     });
-  }, [def, kind, analysis, force, params.captureFps, params.fileFps, params.from, params.to, params.focus]);
+  }, [def, kind, analysis, phases, params.captureFps, params.fileFps, params.from, params.to, params.focus]);
 
   useEffect(
     () => () => {
@@ -100,29 +100,29 @@ export default function Replay() {
     [],
   );
 
-  function settle(curve: ForceCurve | null, why?: string) {
+  function settle(found: JumpPhases | null, why?: string) {
     if (reading.current === 'over') return;
     reading.current = 'over';
-    setForce({ name: 'settled', curve, ...(why ? { why } : {}) });
+    setPhases({ name: 'settled', phases: found, ...(why ? { why } : {}) });
   }
 
-  /** Every frame of the best jump through the pose model, then its centre of mass into a force curve. */
-  async function readForce(clip: ClipInfo) {
+  /** Every frame of the best jump through the pose model, then its centre of mass into the phases. */
+  async function readPhases(clip: ClipInfo) {
     const r = pose.current;
     if (!best || !r || reading.current !== 'idle') return;
     reading.current = 'running';
     const fps = Number(params.captureFps);
-    const frames = forceFrames(best, fps, Number(params.from));
-    setForce({ name: 'reading', done: 0, total: frames.length });
+    const frames = phaseFrames(best, fps, Number(params.from));
+    setPhases({ name: 'reading', done: 0, total: frames.length });
     try {
       const start = startFrom(framesFromWire(await r.everyone([frames[0]]), clip.width, clip.height, fps));
-      if (!start) return settle(null, tr('骨架识别没找到人，这次导出不画发力曲线。'));
-      const wire = await r.follow(frames, start.at, (n) => reading.current === 'running' && setForce({ name: 'reading', done: n, total: frames.length }));
+      if (!start) return settle(null, tr('骨架识别没找到人，这次导出不标离心和向心。'));
+      const wire = await r.follow(frames, start.at, (n) => reading.current === 'running' && setPhases({ name: 'reading', done: n, total: frames.length }));
       const samples = comSamples(framesFromWire(wire, clip.width, clip.height, fps), clip, start.at);
-      const fc = forceCurve({ samples, takeoffS: best.takeoff / fps, landingS: best.landing / fps, fps });
-      settle(fc.ok ? fc.result : null, fc.ok ? undefined : tr(NO_CURVE[fc.problem]));
+      const jp = jumpPhases({ samples, takeoffS: best.takeoff / fps, landingS: best.landing / fps, fps });
+      settle(jp.ok ? jp.result : null, jp.ok ? undefined : tr(NO_PHASES[jp.problem]));
     } catch {
-      settle(null, tr('骨架识别没能启动，这次导出不画发力曲线。'));
+      settle(null, tr('骨架识别没能启动，这次导出不标离心和向心。'));
     }
   }
 
@@ -215,10 +215,10 @@ export default function Replay() {
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <View style={styles.stage}>
-        {force.name === 'reading' && (
-          <PoseReader ref={pose} uri={params.uri} fileFps={Number(params.fileFps)} onReady={readForce} onError={() => settle(null, tr('骨架识别没能启动，这次导出不画发力曲线。'))} style={StyleSheet.absoluteFill} />
+        {phases.name === 'reading' && (
+          <PoseReader ref={pose} uri={params.uri} fileFps={Number(params.fileFps)} onReady={readPhases} onError={() => settle(null, tr('骨架识别没能启动，这次导出不标离心和向心。'))} style={StyleSheet.absoluteFill} />
         )}
-        {stage && force.name === 'settled' && (
+        {stage && phases.name === 'settled' && (
           <WebView<Record<never, never>>
             ref={web}
             source={{ uri: stage.page }}
@@ -240,10 +240,10 @@ export default function Replay() {
         )}
       </View>
       <View style={styles.footer}>
-        {force.name === 'reading' && (
+        {phases.name === 'reading' && (
           <>
-            <PulseProgress progress={force.done / force.total} label={tr('正在读骨架，算发力曲线…')} />
-            <Button label={tr('跳过，不画发力曲线')} variant="ghost" onPress={() => settle(null)} />
+            <PulseProgress progress={phases.done / phases.total} label={tr('正在读骨架，分离心和向心…')} />
+            <Button label={tr('跳过，不标阶段')} variant="ghost" onPress={() => settle(null)} />
           </>
         )}
         {exporting && <PulseProgress progress={state.done / state.total} label={tr('正在导出视频…')} />}
@@ -252,10 +252,10 @@ export default function Replay() {
           <Button label={tr('再放一次')} variant="secondary" onPress={() => call('window.replay.play()')} disabled={state.name === 'loading' || exporting} style={{ flex: 1 }} />
           <Button label={tr('导出视频')} onPress={startExport} disabled={!canExport} busy={exporting || state.name === 'sharing'} style={{ flex: 1 }} />
         </View>
-        {force.name === 'settled' && force.why && <Text style={styles.why}>{force.why}</Text>}
+        {phases.name === 'settled' && phases.why && <Text style={styles.why}>{phases.why}</Text>}
         <Text style={styles.note}>
-          {force.name === 'settled' && force.curve
-            ? tr('竖屏 720 × 1280，带水印、跳高和估算的发力曲线（骨架算的，仅供参考），可以存到相册或直接发出去。')
+          {phases.name === 'settled' && phases.phases
+            ? tr('竖屏 720 × 1280，带水印、跳高、离心向心用时和起跳速度，可以存到相册或直接发出去。')
             : tr('竖屏 720 × 1280，带水印、起跳曲线和每跳数据，可以存到相册或直接发出去。')}
         </Text>
       </View>

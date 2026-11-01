@@ -1,5 +1,6 @@
 // The replay screen reads the athlete's skeleton through a counter-movement jump before it shows the replay, so the
-// exported video can carry the estimated force curve; without the whole body in the picture it exports as before.
+// exported video can carry the eccentric, concentric and flight phases; without the whole body in the picture it exports
+// as before.
 import { Text } from 'react-native';
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -8,7 +9,7 @@ import { cmjScene } from '@/domain/testing/cmjScene';
 
 import Replay from '../measure/replay';
 
-// The synthetic CMJ of domain/testing/cmjScene: 2.7 × body weight at the peak, 41.7 cm, filmed at 240 fps.
+// The synthetic CMJ of domain/testing/cmjScene: 22 cm down, 41.7 cm up, filmed at 240 fps.
 const mockScene = cmjScene({ noisePx: 0.5, quietS: 0.8 });
 const mockTakeoff = Math.round(mockScene.truth.takeoffS * 240);
 const mockLanding = Math.round(mockScene.truth.landingS * 240);
@@ -115,27 +116,30 @@ async function open() {
   await act(async () => {});
 }
 
-it('reads every frame from 1.3 s before take-off to landing, and exports the force curve with the phases', async () => {
+it('reads every frame from 1.3 s before take-off to landing, and exports the phases with their times', async () => {
   await open();
   expect(mockPose.asked[0][0]).toBe(mockTakeoff - 312);
   expect(mockPose.asked[0].at(-1)).toBe(mockLanding);
   const c = config();
-  expect(c.force.phases.map((p: { label: string }) => p.label)).toEqual(['离心', '向心', '腾空']);
-  expect(c.force.peak.label).toMatch(/^峰值 2\.[6-8]×$/);
-  expect(texts(r.root)).toContain('估算的发力曲线');
+  expect(c.phases.phases.map((p: { label: string }) => p.label)).toEqual(['离心', '向心', '腾空']);
+  expect(c.phases.stats.map((x: { label: string; value: string }) => [x.label, x.value])).toEqual([
+    ['下蹲', '22 cm'],
+    ['起跳速度', '2.86 m/s'],
+  ]);
+  expect(texts(r.root)).toContain('离心向心用时');
 });
 
-it('exports without the curve, and says why, when the head is out of the picture', async () => {
+it('exports without the phases, and says why, when the head is out of the picture', async () => {
   mockPose.cutHead = true;
   await open();
-  expect(config().force).toBeUndefined();
+  expect(config().phases).toBeUndefined();
   expect(texts(r.root)).toContain('没拍到全身');
 });
 
-it('exports without the curve when the pose model can’t start', async () => {
+it('exports without the phases when the pose model can’t start', async () => {
   mockPose.fail = true;
   await open();
-  expect(config().force).toBeUndefined();
+  expect(config().phases).toBeUndefined();
   expect(texts(r.root)).toContain('骨架识别没能启动');
 });
 
@@ -144,7 +148,7 @@ it('lets the athlete skip the reading and export as before', async () => {
   await open();
   expect(mockPages).toHaveLength(0);
   expect(texts(r.root)).toContain('正在读骨架');
-  const skip = r.root.find((n) => typeof n.props.onPress === 'function' && n.findAllByType(Text).some((t) => t.props.children === '跳过，不画发力曲线'));
+  const skip = r.root.find((n) => typeof n.props.onPress === 'function' && n.findAllByType(Text).some((t) => t.props.children === '跳过，不标阶段'));
   await act(async () => skip.props.onPress());
-  expect(config().force).toBeUndefined();
+  expect(config().phases).toBeUndefined();
 });
