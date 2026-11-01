@@ -10,7 +10,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 
 import { BarPathChart } from '@/components/BarPathChart';
-import { LIFT_SETUP } from '@/components/capture/guides';
+import CaptureStart from '@/components/capture/CaptureStart';
+import { captureGuide } from '@/components/capture/guides';
 import { Button, Card, Chip, Empty } from '@/components/ui';
 import { addVbtSet } from '@/db/vbt';
 import { analyseBarPath, countsByDefault, REP_FLAG_REASONS, trackedSet, trackTimeScale, trackWarnings, type BarAnalysis, type TrackSample } from '@/domain/barPath';
@@ -191,33 +192,25 @@ export default function TrackSet() {
 
   if (!uri) {
     return (
-      <SafeAreaView style={styles.screen} edges={['bottom']}>
-        <Stack.Screen options={{ title }} />
-        <ScrollView contentContainerStyle={styles.content}>
-          <Text style={text.muted}>{tr('拍一整组（在 App 里直接拍，或从相册导入），再圈一下杠铃片，App 自动跟踪杠铃、分出每一次，算出平均速度。不用逐帧标记。')}</Text>
-          {LIFT_SETUP.map((s, i) => (
-            <View key={s.title} style={styles.step}>
-              <Text style={styles.stepNo}>{i + 1}</Text>
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={styles.stepTitle}>{s.title}</Text>
-                <Text style={styles.stepText}>{s.text}</Text>
-              </View>
-            </View>
-          ))}
-        </ScrollView>
-        <View style={styles.footer}>
-          {/* The app's camera is a web page in a WebView, which the web version has none of. */}
-          {!isWeb && <Button label={tr('App 里直接拍')} onPress={film} />}
-          <Button label={tr('从相册选这一组的视频')} variant={isWeb ? 'primary' : 'secondary'} onPress={pick} />
-        </View>
-      </SafeAreaView>
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <CaptureStart
+          title={tr('录制 · {name}', { name: def.name })}
+          subtitle={`${Number(load) || 0} kg`}
+          guide={captureGuide('vbt')}
+          onClose={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+          onImport={pick}
+          // The app's camera is a web page in a WebView, which the web version has none of.
+          onFilm={isWeb ? undefined : film}
+        />
+      </>
     );
   }
 
   const busy = progress != null;
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen options={{ title, headerShown: true }} />
       {/* Still while the circle is dragged onto the plate, or the drag scrolls the screen instead. */}
       <ScrollView contentContainerStyle={styles.content} scrollEnabled={analysis != null} alwaysBounceVertical={false}>
         <Text style={text.muted}>
@@ -324,10 +317,6 @@ export default function TrackSet() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bg },
   content: { padding: 16, gap: 12 },
-  step: { flexDirection: 'row', gap: 12, padding: 14, borderRadius: radius.card, backgroundColor: colors.surface },
-  stepNo: { width: 28, color: COLOR, fontFamily: fonts.numericBold, fontSize: 24, textAlign: 'center' },
-  stepTitle: { color: colors.text, fontSize: 15, fontWeight: '700' },
-  stepText: { color: colors.textMuted, fontSize: 13, lineHeight: 19 },
   web: { height: 460, borderRadius: radius.card, overflow: 'hidden', backgroundColor: colors.bg },
   fpsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   rep: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.divider },

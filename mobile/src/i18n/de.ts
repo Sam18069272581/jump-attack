@@ -842,8 +842,6 @@ export const de: Record<string, string> = {
   '视频准备失败': 'Video konnte nicht vorbereitet werden',
   '中途跟丢了杠铃片，后面的次数没有算进去。': 'Die Scheibe ging unterwegs verloren; die späteren Wiederholungen sind nicht gezählt.',
   '分析不了这段视频': 'Dieses Video kann nicht analysiert werden',
-  '拍一整组（在 App 里直接拍，或从相册导入），再圈一下杠铃片，App 自动跟踪杠铃、分出每一次，算出平均速度。不用逐帧标记。': 'Filme einen ganzen Satz (direkt in der App oder aus Fotos importiert), kreise dann die Scheibe ein, und die App verfolgt die Stange, trennt die Wiederholungen und berechnet die mittlere Geschwindigkeit. Kein Markieren Bild für Bild.',
-  '从相册选这一组的视频': 'Video dieses Satzes aus der Mediathek wählen',
   '可以点某一次把它去掉（比如起杠、放杠被误算）。': 'Tippe auf eine Wiederholung, um sie zu entfernen (z. B. versehentlich gezähltes Aus- oder Einhängen).',
   '拖动圆圈套住外侧那片 45 cm 杠铃片，双指缩放，松手后会自动贴合杠铃片边缘。下面的进度条拖到这一组开始前。': 'Den Kreis über die äußere 45-cm-Scheibe ziehen und mit zwei Fingern anpassen; beim Loslassen rastet er am Scheibenrand ein. Den Fortschrittsbalken unten kurz vor den Satzbeginn ziehen.',
   '正在准备视频…': 'Video wird vorbereitet…',
@@ -1035,10 +1033,13 @@ export const de: Record<string, string> = {
   '继续{name}': '{name} beibehalten',
   '按原计划': 'Beim Plan bleiben',
 
-  // components/capture/SlowMoImport.tsx
-  '可以在 App 里直接拍（最多 60 帧，省事），也可以用 iPhone 自带相机的慢动作（240 帧，更准）拍了再导入。下面是慢动作的拍法，在 App 里拍时手机的摆法一样。': 'Direkt in der App filmen (bis 60 fps, schneller) oder mit der Zeitlupe der iPhone-Kamera (240 fps, genauer) filmen und importieren. Unten steht, wie man in Zeitlupe filmt; beim Filmen in der App das Handy genauso aufstellen.',
+  // components/capture/CaptureStart.tsx
+  '最多 60 帧，省事': 'Bis 60 fps, schneller',
+  '用 iPhone 慢动作拍的，240 帧更准': 'Mit der iPhone-Zeitlupe gefilmt, 240 fps sind genauer',
+  '怎么拍（App 里拍时手机摆法一样）': 'So wird gefilmt (beim Filmen in der App das Handy genauso aufstellen)',
+  '60 帧，拍完直接圈杠铃片': '60 fps, danach gleich die Scheibe einkreisen',
+  '用相机 60 fps 拍的一整组': 'Ein ganzer Satz, mit der Kamera-App in 60 fps gefilmt',
   'App 里直接拍': 'In der App filmen',
-  '用 iPhone 自带相机的慢动作拍，再导入这里测量。': 'Filme mit der Zeitlupe der iPhone-Kamera und importiere das Video dann hier zum Messen.',
   '网页版导入后会先播放几帧测出视频帧率；慢动作视频在逐帧页把「拍摄帧率」选成 240。浏览器逐帧定位不如 App 精确，正式测试建议用 Expo Go 版。': 'Nach dem Import spielt die Web-Version ein paar Bilder ab, um die Bildrate zu messen. Bei Zeitlupenvideos auf der Bildseite „Aufnahme-Bildrate“ auf 240 stellen. Der Browser springt ungenauer von Bild zu Bild als die App, für echte Tests besser die Expo-Go-Version nehmen.',
   '慢动作导出后每一帧仍是 1/240 秒。标记页如果显示视频只有 30 fps，把「拍摄帧率」选成 240。': 'Auch exportierte Zeitlupe hat 1/240 s pro Bild. Zeigt die Markierungsseite nur 30 fps, „Aufnahme-Bildrate“ auf 240 stellen.',
   '从相册导入视频': 'Video aus Fotos importieren',
@@ -1046,13 +1047,13 @@ export const de: Record<string, string> = {
 
   // components/capture/guides.ts
   '打开 240 fps 慢动作': '240-fps-Zeitlupe einschalten',
+  '回到这里点上面的「从相册导入视频」，拖两头截取要分析的那段，App 自动找出每一跳的起跳和落地，不准可以逐帧调。': 'Komm hierher zurück und tippe oben auf „Video aus Fotos importieren“. Zieh die beiden Enden, um den Abschnitt zuzuschneiden; die App findet Absprung und Landung jedes Sprungs. Stimmt ein Bild nicht, kannst du es Bild für Bild korrigieren.',
   'iPhone 设置 → 相机 → 录制慢动作，选「1080p，240 fps」。只需设一次。': 'iPhone-Einstellungen → Kamera → Slo-Mo aufnehmen, „1080p mit 240 fps“ wählen. Nur einmal nötig.',
   '把手机放稳': 'Handy ruhig aufstellen',
   '放在地面或三脚架上，别手持。距离约 1.5 米，镜头对准脚踝高度，脚和地面都要在画面里。': 'Auf den Boden oder ein Stativ stellen, nicht in der Hand halten. Etwa 1,5 m Abstand, Objektiv auf Knöchelhöhe, Füße und Boden im Bild.',
   '用「慢动作」拍': 'Mit „Slo-Mo“ filmen',
   '打开相机切到「慢动作」。起跳前 2 秒开拍，落地站稳 2 秒后再停，让整个跳跃都在慢放段里。': 'Kamera öffnen und auf „Slo-Mo“ stellen. 2 s vor dem Absprung starten und 2 s nach einer sicheren Landung stoppen, damit der ganze Sprung im verlangsamten Teil liegt.',
   '导入自动分析': 'Importieren und automatisch auswerten',
-  '回到这里点下面的按钮选视频，框出要分析的那段、点一下运动员，App 自动找出每一跳的起跳和落地，不准可以逐帧调。': 'Komm hierher zurück, tippe unten auf den Knopf und wähle das Video. Markiere den Abschnitt und tippe auf den Athleten. Die App findet Absprung und Landung jedes Sprungs; stimmt ein Bild nicht, kannst du es Bild für Bild korrigieren.',
   '手机放稳（地面或三脚架），别手持': 'Handy ruhig aufstellen (Boden oder Stativ), nicht in der Hand',
   '距离约 1.5 米，镜头对准脚踝': 'Etwa 1,5 m Abstand, Objektiv auf Knöchelhöhe',
   '完成一次起跳并落地后，点击停止': 'Einmal springen, landen, dann Stopp tippen',
