@@ -3,10 +3,11 @@
  * page only draws. Pure, so the export check in tools/jump-analysis-validation builds the same page as the app.
  */
 // Relative imports: tools/jump-analysis-validation compiles this file on its own.
+import type { ForceCurve } from '../domain/forceCurve';
 import { flightCurve, type Analysis, type AnalysisKind, type JumpResult } from '../domain/jumpAnalysis';
 import type { MetricDef } from '../domain/metrics';
 
-import type { ReplayConfig } from './replayHtml';
+import type { ReplayConfig, ReplayForce } from './replayHtml';
 
 import { decimal, tr } from '@/i18n';
 
@@ -23,6 +24,26 @@ function label(j: JumpResult): { label: string; detail: string } {
   return { label: `${cm(j.jhCm)} cm`, detail: tr('滞空 {ftS}', { ftS: ms(j.ftS) }) };
 }
 
+/** The force curve in file frames (real time × capture rate, as the jump's own frames are), with its labels. */
+function forceOf(fc: ForceCurve, captureFps: number): ReplayForce {
+  const at = (t: number) => Math.round(t * captureFps);
+  const peak = decimal(fc.peak.value, 1);
+  const phases: ReplayForce['phases'] = [];
+  if (fc.lowS != null && fc.eccentricS != null) phases.push({ label: tr('离心'), from: at(fc.startS), to: at(fc.lowS), time: ms(fc.eccentricS), tone: 'ecc' });
+  phases.push({ label: tr('向心'), from: at(fc.lowS ?? fc.startS), to: at(fc.takeoffS), time: ms(fc.concentricS), tone: 'con' });
+  phases.push({ label: tr('腾空'), from: at(fc.takeoffS), to: at(fc.landingS), time: ms(fc.landingS - fc.takeoffS), tone: 'air' });
+  const depth = fc.lowS != null ? tr('下蹲 {cm} cm', { cm: Math.round(fc.depthM * 100) }) + ' · ' : '';
+  return {
+    frames: fc.t.map(at),
+    values: fc.force.map((f) => Math.round(f * 100) / 100),
+    top: Math.max(3, Math.ceil(fc.peak.value * 2) / 2),
+    peak: { frame: at(fc.peak.t), label: tr('峰值 {f}×', { f: peak }) },
+    phases,
+    title: tr('发力 · 估算（×体重）'),
+    summary: depth + tr('峰值 {f} 倍体重', { f: peak }),
+  };
+}
+
 export function replayConfig(o: {
   def: MetricDef;
   kind: AnalysisKind;
@@ -35,6 +56,8 @@ export function replayConfig(o: {
   date: string;
   colors: ReplayConfig['colors'];
   focus?: ReplayConfig['focus'];
+  /** The estimated force of one jump, when the whole body was in the picture (domain/forceCurve.ts). */
+  force?: ForceCurve | null;
 }): ReplayConfig {
   const { analysis, kind } = o;
   const s = analysis.summary;
@@ -90,5 +113,6 @@ export function replayConfig(o: {
     brand: 'JUMP ATTACK',
     speed: slower > 1.05 ? tr('1/{slower} 慢放', { slower: Math.round(slower) }) : tr('原速'),
     colors: o.colors,
+    ...(o.force ? { force: forceOf(o.force, o.captureFps) } : {}),
   };
 }

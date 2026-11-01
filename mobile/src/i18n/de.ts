@@ -1823,6 +1823,14 @@ export const de: Record<string, string> = {
   // media/replayHtml.ts
   ' · 第 ': ' · Sprung ',
   ' 跳': '',
+  '离心': 'Exzentrisch',
+  '向心': 'Konzentrisch',
+  '下蹲 {cm} cm': 'Absenken {cm} cm',
+  '峰值 {f}×': 'Spitze {f}×',
+  '发力 · 估算（×体重）': 'Kraft · Schätzung (× Körpergewicht)',
+  '峰值 {f} 倍体重': 'Spitze {f} × Körpergewicht',
+  '离地': 'Über dem Boden',
+  '第 ': 'Sprung ',
   '起跳曲线 · 重心高度': 'Absprungkurve · Schwerpunkthöhe',
 
   // state/bodyMass.ts
