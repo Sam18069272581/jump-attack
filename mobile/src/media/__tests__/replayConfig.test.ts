@@ -1,4 +1,6 @@
+import { jumpPhases } from '@/domain/jumpPhases';
 import { analyseJumps } from '@/domain/jumpAnalysis';
+import { cmjScene } from '@/domain/testing/cmjScene';
 import { getMetric, REPEATED_JUMP } from '@/domain/metrics';
 
 import { replayConfig } from '../replayConfig';
@@ -55,5 +57,61 @@ describe('replayConfig', () => {
     expect(r.jumps[1].label).toMatch(/^\d\.\d\d RSI$/);
     expect(r.headline).toMatchObject({ label: '10/5 RSI', unit: '' });
     expect(r.stats.map((s) => s.label)).toEqual(['GCT-CV', 'DRI-CV', '平均触地']);
+  });
+
+  describe('with the phases', () => {
+    // The synthetic CMJ of domain/testing/cmjScene: take-off at 2.86 m/s, 22 cm down, filmed at 240 fps.
+    const scene = cmjScene();
+    const jp = jumpPhases({ samples: scene.samples, takeoffS: scene.truth.takeoffS, landingS: scene.truth.landingS, fps: 240 });
+    if (!jp.ok) throw new Error(jp.problem);
+    const takeoff = Math.round(scene.truth.takeoffS * 240);
+    const landing = Math.round(scene.truth.landingS * 240);
+    const cmj = analyseJumps([{ takeoff, landing }], { kind: 'jump', captureFps: 240 });
+    const f = replayConfig({ def: getMetric('cmj')!, kind: 'jump', analysis: cmj, video: 'clip.mov', fileFps: 240, captureFps: 240, from: 0, to: landing + 60, date: '', colors, phases: jp.result }).phases!;
+
+    it('names the phases with their times, in file frames', () => {
+      expect(f.phases.map((p) => [p.label, p.tone])).toEqual([
+        ['离心', 'ecc'],
+        ['向心', 'con'],
+        ['腾空', 'air'],
+      ]);
+      expect(f.phases[0].from).toBe(Math.round(jp.result.startS * 240));
+      expect(f.phases[1].to).toBe(takeoff);
+      expect(f.phases[2]).toMatchObject({ from: takeoff, to: landing });
+      // Flight 2v/g = 2 × 2.86 / 9.81 = 583 ms.
+      expect(f.phases[2].time).toBe('583 ms');
+    });
+
+    it('carries the force trend up to take-off, in file frames, marked as an estimate and with no peak', () => {
+      expect(f.force!.frames[0]).toBe(0);
+      expect(f.force!.frames.at(-1)).toBeLessThanOrEqual(takeoff);
+      expect(f.force!.values).toHaveLength(f.force!.frames.length);
+      expect(f.force!.values[40]).toBeCloseTo(1, 1);
+      // Peak 2.7 × body weight: the scale tops out at the next half above it, 3 at least.
+      expect(f.force!.top).toBe(3);
+      expect(f.title).toBe('发力 · 估算');
+      expect(JSON.stringify(f)).not.toContain('峰值');
+    });
+
+    it('sums up the depth and the take-off speed, g × flight / 2', () => {
+      // 9.81 × 0.583 / 2 = 2.86 m/s.
+      expect(f.stats).toEqual([
+        { label: '下蹲', value: '22 cm', at: Math.round(jp.result.lowS! * 240) },
+        { label: '起跳速度', value: '2.86 m/s', at: takeoff },
+      ]);
+    });
+
+    it('has no eccentric phase in a squat jump', () => {
+      const sj = cmjScene({ unweightDip: 0, unweightS: 0.001, brakeS: 0.12, peak: 2.4 });
+      const r = jumpPhases({ samples: sj.samples, takeoffS: sj.truth.takeoffS, landingS: sj.truth.landingS, fps: 240 });
+      if (!r.ok) throw new Error(r.problem);
+      const g = replayConfig({ def: getMetric('sj')!, kind: 'jump', analysis: cmj, video: 'clip.mov', fileFps: 240, captureFps: 240, from: 0, to: 600, date: '', colors, phases: r.result }).phases!;
+      expect(g.phases.map((p) => p.label)).toEqual(['向心', '腾空']);
+      expect(g.stats.map((x) => x.label)).toEqual(['起跳速度']);
+    });
+
+    it('is left out when there is none', () => {
+      expect(c.phases).toBeUndefined();
+    });
   });
 });

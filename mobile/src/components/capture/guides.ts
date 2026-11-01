@@ -3,6 +3,11 @@ import { localized } from '@/i18n';
 
 /** Filming instructions for one kind of test, shared by in-app recording and the Expo Go slow-motion import. */
 export type CaptureGuide = {
+  /** Under the two choices at the top of the start screen: why film in the app, why import instead. */
+  film: string;
+  import: string;
+  /** Heading over the steps. */
+  stepsTitle: string;
   /** Steps for filming with the system camera's slow-motion mode, then importing. */
   steps: { title: string; text: string }[];
   /** Reminders over the live viewfinder. */
@@ -16,13 +21,16 @@ export type CaptureGuide = {
 };
 
 const SLOW_MO_SETUP = { title: '打开 240 fps 慢动作', text: 'iPhone 设置 → 相机 → 录制慢动作，选「1080p，240 fps」。只需设一次。' };
+/** The choices for a test filmed in slow motion: the app's camera is quicker, the system camera's 240 fps more exact. */
+const SLOW_MO_CHOICE = { film: '最多 60 帧，省事', import: '用 iPhone 慢动作拍的，240 帧更准', stepsTitle: '怎么拍（App 里拍时手机摆法一样）' };
 
 const JUMP: CaptureGuide = {
+  ...SLOW_MO_CHOICE,
   steps: [
     SLOW_MO_SETUP,
     { title: '把手机放稳', text: '放在地面或三脚架上，别手持。距离约 1.5 米，镜头对准脚踝高度，脚和地面都要在画面里。' },
     { title: '用「慢动作」拍', text: '打开相机切到「慢动作」。起跳前 2 秒开拍，落地站稳 2 秒后再停，让整个跳跃都在慢放段里。' },
-    { title: '导入自动分析', text: '回到这里点下面的按钮选视频，框出要分析的那段、点一下运动员，App 自动找出每一跳的起跳和落地，不准可以逐帧调。' },
+    { title: '导入自动分析', text: '回到这里点上面的「从相册导入视频」，拖两头截取要分析的那段，App 自动找出每一跳的起跳和落地，不准可以逐帧调。' },
   ],
   checks: ['手机放稳（地面或三脚架），别手持', '距离约 1.5 米，镜头对准脚踝'],
   feetOverlay: true,
@@ -33,6 +41,7 @@ const JUMP: CaptureGuide = {
 };
 
 const DROP_JUMP: CaptureGuide = {
+  ...SLOW_MO_CHOICE,
   steps: [
     SLOW_MO_SETUP,
     { title: '侧面拍箱子和落点', text: '手机放在地面或三脚架上，距离约 2 米，镜头对准脚踝高度。箱子边缘和落地点都要在画面里。' },
@@ -48,6 +57,7 @@ const DROP_JUMP: CaptureGuide = {
 };
 
 const REPEATED_JUMP: CaptureGuide = {
+  ...SLOW_MO_CHOICE,
   steps: [
     SLOW_MO_SETUP,
     { title: '把手机放稳', text: '放在地面或三脚架上，距离约 1.5 米，镜头对准脚踝高度。原地连跳，脚别跳出画面。' },
@@ -63,6 +73,7 @@ const REPEATED_JUMP: CaptureGuide = {
 };
 
 const APPROACH_TOUCH: CaptureGuide = {
+  ...SLOW_MO_CHOICE,
   steps: [
     SLOW_MO_SETUP,
     { title: '侧面拍起跳点', text: '手机放在地面或三脚架上，距离约 3 米，镜头对准脚踝高度。最后一步和落地点都要在画面里。' },
@@ -78,6 +89,7 @@ const APPROACH_TOUCH: CaptureGuide = {
 };
 
 const SPRINT: CaptureGuide = {
+  ...SLOW_MO_CHOICE,
   steps: [
     SLOW_MO_SETUP,
     { title: '侧对跑道放好手机', text: '三脚架放在跑道侧面，起点线和终点线都要在画面里（10 m 大约要站 8–10 米远）。手机横放，别手持。' },
@@ -102,6 +114,9 @@ export const LIFT_SETUP = [
 ];
 
 const LIFT: CaptureGuide = {
+  film: '60 帧，拍完直接圈杠铃片',
+  import: '用相机 60 fps 拍的一整组',
+  stepsTitle: '怎么拍',
   steps: LIFT_SETUP,
   checks: ['手机放稳，侧对杠铃端头', '外侧是 45 cm 标准片，整个行程都在画面里'],
   feetOverlay: false,
@@ -112,7 +127,7 @@ const LIFT: CaptureGuide = {
 };
 
 // Shown in the current language (i18n).
-localized([JUMP, DROP_JUMP, REPEATED_JUMP, APPROACH_TOUCH, SPRINT, LIFT_SETUP, LIFT], 'title', 'text', 'checks', 'recordingHint', 'doneHint', 'tips');
+localized([JUMP, DROP_JUMP, REPEATED_JUMP, APPROACH_TOUCH, SPRINT, LIFT_SETUP, LIFT], 'film', 'import', 'stepsTitle', 'title', 'text', 'checks', 'recordingHint', 'doneHint', 'tips');
 
 export function captureGuide(category: Category, code?: string): CaptureGuide {
   if (code === 'dj_rsi') return DROP_JUMP;

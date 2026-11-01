@@ -1,8 +1,7 @@
-import Slider from '@react-native-community/slider';
 import { useEventListener } from 'expo';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useVideoPlayer, VideoView, type VideoPlayer } from 'expo-video';
+import { useVideoPlayer, VideoView, type VideoPlayer, type VideoThumbnail } from 'expo-video';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -12,6 +11,7 @@ import { PoseReader, type PoseReaderHandle } from '@/components/PoseReader';
 import { Rise, tick } from '@/components/motion';
 import { PulseProgress } from '@/components/PulseProgress';
 import { TrendChart } from '@/components/TrendChart';
+import { TrimBar } from '@/components/TrimBar';
 import { Button, Chip, Empty } from '@/components/ui';
 import { analysisHistory, saveAnalysedTrials } from '@/db/analysis';
 import { touchOffsetFor } from '@/db/touch';
@@ -24,12 +24,17 @@ import { nextClip, queuedCount } from '@/domain/importQueue';
 import { returnsToLogger } from '@/domain/marking';
 import { findPoseJumps, poseCoarseFrames, splitAt, startFrom } from '@/domain/poseJump';
 import { framesFromWire } from '@/domain/techniqueRead';
+import { stripTimes } from '@/domain/trim';
 import { best as bestOf, getMetric, type MetricDef } from '@/domain/metrics';
 import { decimal, localized, tr } from '@/i18n';
 import { useAthlete } from '@/state/athlete';
 import { colors, fonts, radius } from '@/theme';
 
 const FPS_CHOICES = [60, 120, 240];
+/** Pictures in the filmstrip of the trim bar. */
+const STRIP_CELLS = 10;
+/** How long after a trim handle is let go the analysis starts by itself: time to reach for the other end first. */
+const AUTO_START_MS = 2000;
 
 // AVPlayer seeks exactly by default (zero tolerance), so this lands on the requested frame.
 function seekToFrame(player: VideoPlayer, frame: number, fps: number) {
@@ -76,6 +81,9 @@ export default function Analyse() {
   const [captureOverride, setCaptureOverride] = useState<number | null>(null);
   const [clip, setClip] = useState<ClipInfo | null>(null);
   const [range, setRange] = useState<{ from: number; to: number } | null>(null);
+  const [thumbnails, setThumbnails] = useState<VideoThumbnail[]>([]);
+  /** Set when a trim handle is let go: the analysis starts by itself a moment later, unless the trim is touched again. */
+  const [armed, setArmed] = useState<number | null>(null);
   const [target, setTarget] = useState<{ x: number; y: number; frame: number } | null>(null);
   const [phase, setPhase] = useState<Phase>({ name: 'setup' });
   const [events, setEvents] = useState<JumpEvents[]>([]);
@@ -92,7 +100,17 @@ export default function Analyse() {
     setDuration(d);
     const rate = availableVideoTracks[0]?.frameRate;
     if (rate && rate > 0) setDetectedFps(Math.round(rate));
+    filmstrip(d);
   });
+
+  /** The trim bar's pictures; the bar works without them, as a plain strip. */
+  async function filmstrip(d: number) {
+    try {
+      setThumbnails(await player.generateThumbnailsAsync(stripTimes(d, STRIP_CELLS), { maxWidth: 160 }));
+    } catch {
+      // No pictures: the strip stays plain.
+    }
+  }
 
   const athleteId = current?.id;
   useEffect(() => {
@@ -127,6 +145,17 @@ export default function Analyse() {
     seekToFrame(player, f, fileFps);
   }
 
+  // The analysis the timer starts is the one of the render it fires after.
+  const startAnalysis = useRef(analyse);
+  useEffect(() => {
+    startAnalysis.current = analyse;
+  });
+  useEffect(() => {
+    if (armed == null || phase.name !== 'setup' || !clip) return;
+    const timer = setTimeout(() => startAnalysis.current(), AUTO_START_MS);
+    return () => clearTimeout(timer);
+  }, [armed, phase.name, clip]);
+
   // Video pixels ↔ the video box on screen (the player letterboxes the picture).
   const fit = clip && view.w ? Math.min(view.w / clip.width, view.h / clip.height) : 0;
   const ox = clip ? (view.w - clip.width * fit) / 2 : 0;
@@ -140,6 +169,8 @@ export default function Analyse() {
     if (vx < 0 || vy < 0 || vx > clip.width || vy > clip.height) return;
     tick();
     setTarget({ x: vx, y: vy, frame });
+    // Tapping the athlete after trimming: the countdown starts over.
+    setArmed((a) => (a == null ? a : a + 1));
   }
 
   useEffect(() => {
@@ -212,6 +243,7 @@ export default function Analyse() {
 
   async function analyse() {
     if (!clip || !reader.current || !kind) return;
+    setArmed(null);
     const video = { width: clip.width, height: clip.height, frames: total, captureFps: fps };
     const opts: CoarseOptions = { range: span, ...(target ? { target } : {}), rebound: kind === 'repeat' };
     const req = coarseRequest(video, opts);
@@ -338,27 +370,25 @@ export default function Analyse() {
 
         {phase.name === 'setup' && (
           <>
-            <Text style={styles.lead}>{tr('{p}再把片段拉到第一次起跳前、最后一次落地后。', { p: target ? tr('已点选运动员。') : tr('点一下画面里的运动员（旁边有人在动时一定要点）。') })}</Text>
-            <RangeRow
-              label={tr('开始')}
-              value={span.from}
-              max={Math.max(1, total - 1)}
+            <TrimBar
+              total={total}
+              span={span}
+              frame={frame}
               fps={fps}
-              onChange={(f) => {
-                setRange({ from: Math.min(f, span.to - 1), to: span.to });
-                show(f);
+              thumbnails={thumbnails}
+              onChange={(next, moved) => {
+                setArmed(null);
+                setRange(next);
+                show(next[moved]);
               }}
+              onScrub={show}
+              onRelease={() => setArmed((a) => (a ?? 0) + 1)}
             />
-            <RangeRow
-              label={tr('结束')}
-              value={span.to}
-              max={Math.max(1, total - 1)}
-              fps={fps}
-              onChange={(f) => {
-                setRange({ from: span.from, to: Math.max(f, span.from + 1) });
-                show(f);
-              }}
-            />
+            <Text style={styles.lead}>
+              {armed != null
+                ? tr('马上自动开始分析…')
+                : tr('{p}再拖两头的黄色把手，截到第一次起跳前、最后一次落地后，松手后自动开始分析。', { p: target ? tr('已点选运动员。') : tr('点一下画面里的运动员（旁边有人在动时一定要点）。') })}
+            </Text>
             <View style={styles.fpsRow}>
               <Text style={styles.muted}>{tr('拍摄帧率{p}', { p: detectedFps ? tr('（视频 {detectedFps} fps）', { detectedFps }) : '' })}</Text>
               <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -421,27 +451,6 @@ export default function Analyse() {
         {queued > 0 && phase.name !== 'running' && <Button label={tr('跳过这段，看下一段')} variant="ghost" onPress={skip} />}
       </View>
     </SafeAreaView>
-  );
-}
-
-function RangeRow({ label, value, max, fps, onChange }: { label: string; value: number; max: number; fps: number; onChange: (f: number) => void }) {
-  return (
-    <View style={styles.rangeRow}>
-      <Text style={styles.rangeLabel}>{label}</Text>
-      <Slider
-        accessibilityLabel={tr('片段{label}', { label })}
-        style={{ flex: 1 }}
-        minimumValue={0}
-        maximumValue={max}
-        step={1}
-        value={value}
-        onValueChange={(v) => onChange(Math.round(v))}
-        minimumTrackTintColor={colors.accent}
-        maximumTrackTintColor={colors.border}
-        thumbTintColor={colors.text}
-      />
-      <Text style={styles.rangeTime}>{decimal((value / fps), 2)} s</Text>
-    </View>
   );
 }
 
@@ -593,9 +602,6 @@ const styles = StyleSheet.create({
   badgeText: { color: '#FFFFFF', fontFamily: fonts.numeric, fontSize: 18 },
   badgeTime: { color: 'rgba(255,255,255,0.7)', fontFamily: fonts.numeric, fontSize: 12 },
   lead: { color: colors.textSoft, fontSize: 13, lineHeight: 19 },
-  rangeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rangeLabel: { color: colors.textMuted, fontSize: 12, width: 28 },
-  rangeTime: { color: colors.text, fontFamily: fonts.numeric, fontSize: 16, width: 56, textAlign: 'right' },
   fpsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   muted: { color: colors.textMuted, fontSize: 12, lineHeight: 18 },
   warn: { color: colors.warn, fontSize: 12, lineHeight: 18 },

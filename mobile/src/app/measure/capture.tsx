@@ -4,7 +4,7 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 
 import { captureGuide } from '@/components/capture/guides';
-import SlowMoImport from '@/components/capture/SlowMoImport';
+import CaptureStart from '@/components/capture/CaptureStart';
 import { listTrials } from '@/db/repo';
 import { analysisKindFor } from '@/domain/analysisTrials';
 import { firstClip, IMPORT_LIMIT } from '@/domain/importQueue';
@@ -59,10 +59,15 @@ export default function Capture() {
   const manual = def?.capture.includes('manual') && !returnsToLogger(extra.from) ? () => router.push({ pathname: '/measure/entry', params: pass }) : undefined;
 
   return (
-    <SlowMoImport
+    <CaptureStart
       title={tr('录制 · {name}', { name: def?.name ?? metric })}
       subtitle={tr('第 {attempt} 次', { attempt })}
       guide={captureGuide(def?.category ?? 'jump', def?.code)}
+      note={
+        isWeb
+          ? tr('网页版导入后会先播放几帧测出视频帧率；慢动作视频在逐帧页把「拍摄帧率」选成 240。浏览器逐帧定位不如 App 精确，正式测试建议用 Expo Go 版。')
+          : tr('慢动作导出后每一帧仍是 1/240 秒。标记页如果显示视频只有 30 fps，把「拍摄帧率」选成 240。')
+      }
       onClose={close}
       onImport={importVideo}
       onFilm={film}
