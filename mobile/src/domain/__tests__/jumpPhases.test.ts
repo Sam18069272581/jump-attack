@@ -1,43 +1,51 @@
-import { comSamples, forceCurve, forceFrames, MAX_JITTER_M } from '../forceCurve';
+import { comSamples, jumpPhases, MAX_JITTER_M, phaseFrames } from '../jumpPhases';
 import { centreOfMass, LM, type Pose } from '../pose';
 import type { PoseFrame } from '../technique';
 import { cmjScene } from '../testing/cmjScene';
 import { standing } from '../testing/standing';
 
-const read = (scene: ReturnType<typeof cmjScene>, over: Partial<Parameters<typeof forceCurve>[0]> = {}) =>
-  forceCurve({ samples: scene.samples, takeoffS: scene.truth.takeoffS, landingS: scene.truth.landingS, fps: 240, ...over });
+const read = (scene: ReturnType<typeof cmjScene>, over: Partial<Parameters<typeof jumpPhases>[0]> = {}) =>
+  jumpPhases({ samples: scene.samples, takeoffS: scene.truth.takeoffS, landingS: scene.truth.landingS, fps: 240, ...over });
 
-describe('forceCurve', () => {
-  it('reads the phases, depth and peak force of a clean CMJ', () => {
-    // Synthetic CMJ (testing/cmjScene): peak 2.7 × body weight, take-off at 2.86 m/s (41.7 cm), 22 cm down.
+describe('jumpPhases', () => {
+  it('reads the phases and the depth of a clean CMJ', () => {
+    // Synthetic CMJ (testing/cmjScene): take-off at 2.86 m/s (41.7 cm), 22 cm down.
     const scene = cmjScene();
     const r = read(scene);
     if (!r.ok) throw new Error(r.problem);
     const { truth } = scene;
     expect(r.result.pxPerM).toBeCloseTo(500, -1);
-    // The 6 Hz filter rounds the peak off a little and smears the onset by a few tens of ms.
-    expect(Math.abs(r.result.peak.value - truth.peak)).toBeLessThan(0.1);
     expect(Math.abs(r.result.lowS! - truth.lowS)).toBeLessThan(2 / 240);
     expect(Math.abs(r.result.startS - truth.startS)).toBeLessThan(0.04);
     expect(Math.abs(r.result.depthM - truth.depthM)).toBeLessThan(0.005);
     expect(r.result.concentricS).toBeCloseTo(truth.takeoffS - truth.lowS, 2);
     expect(r.result.eccentricS!).toBeCloseTo(truth.lowS - truth.startS, 1);
-    // One force per frame from the window's start to take-off, standing at 1 × body weight.
-    expect(r.result.force.length).toBe(r.result.t.length);
-    expect(r.result.t[r.result.t.length - 1]).toBeLessThanOrEqual(truth.takeoffS);
-    expect(r.result.force[40]).toBeCloseTo(1, 1);
   });
 
-  it('stays within 0.25 × body weight of the peak with 3 mm of jitter', () => {
-    // 1.5 px at 500 px/m is 3 mm: the jitter of the centre of mass assumed for a 1080p clip filmed whole-body.
-    for (const seed of [1, 2, 3, 4, 5]) {
+  it('holds the lowest point, the start and the depth with 3 mm of jitter', () => {
+    // 1.5 px at 500 px/m is 3 mm, about the 2.8 mm measured on the athlete's own whole-body clip. Over 40 seeds the
+    // lowest point stays within 4 ms and the depth within 5 mm; the start comes 32 ms late on average, 63 ms at most.
+    const late: number[] = [];
+    for (let seed = 1; seed <= 40; seed++) {
       const scene = cmjScene({ noisePx: 1.5, seed });
       const r = read(scene);
       if (!r.ok) throw new Error(r.problem);
-      expect(Math.abs(r.result.peak.value - scene.truth.peak)).toBeLessThan(0.25);
-      expect(Math.abs(r.result.lowS! - scene.truth.lowS)).toBeLessThan(0.01);
-      expect(r.result.jitterM).toBeLessThan(MAX_JITTER_M);
+      expect(Math.abs(r.result.lowS! - scene.truth.lowS)).toBeLessThan(0.005);
+      expect(Math.abs(r.result.startS - scene.truth.startS)).toBeLessThan(0.07);
+      expect(Math.abs(r.result.depthM - scene.truth.depthM)).toBeLessThan(0.005);
+      expect(r.result.jitterM).toBeCloseTo(0.003, 3);
+      late.push(r.result.startS - scene.truth.startS);
     }
+    expect(late.reduce((a, b) => a + b, 0) / late.length).toBeLessThan(0.04);
+  });
+
+  it('takes the centre of mass wandering off the parabola in flight for what it is, not jitter', () => {
+    // The athlete's own clip strayed 8 mm from the parabola as the legs tucked and reached, with 2.8 mm of jitter.
+    const scene = cmjScene({ noisePx: 1.4, driftPx: 5 });
+    const r = read(scene);
+    if (!r.ok) throw new Error(r.problem);
+    expect(r.result.jitterM).toBeLessThan(MAX_JITTER_M);
+    expect(Math.abs(r.result.lowS! - scene.truth.lowS)).toBeLessThan(0.01);
   });
 
   it('has no eccentric phase in a squat jump', () => {
@@ -49,7 +57,7 @@ describe('forceCurve', () => {
     expect(r.result.lowS).toBeNull();
   });
 
-  it('turns away a clip too shaky to differentiate twice', () => {
+  it('turns away a clip that jitters too much from frame to frame', () => {
     const r = read(cmjScene({ noisePx: 6 }));
     expect(r).toEqual({ ok: false, problem: 'jitter' });
   });
@@ -123,16 +131,16 @@ describe('comSamples', () => {
   });
 });
 
-describe('forceFrames', () => {
+describe('phaseFrames', () => {
   it('reads every frame from 1.3 s before take-off to landing', () => {
     // 240 fps: 312 frames before take-off, enough for standing still and the slowest countermovement.
-    const f = forceFrames({ takeoff: 1000, landing: 1100 }, 240, 0);
+    const f = phaseFrames({ takeoff: 1000, landing: 1100 }, 240, 0);
     expect(f[0]).toBe(688);
     expect(f.at(-1)).toBe(1100);
     expect(f).toHaveLength(413);
   });
 
   it('starts no earlier than the part of the clip shown', () => {
-    expect(forceFrames({ takeoff: 300, landing: 400 }, 240, 150)[0]).toBe(150);
+    expect(phaseFrames({ takeoff: 300, landing: 400 }, 240, 150)[0]).toBe(150);
   });
 });

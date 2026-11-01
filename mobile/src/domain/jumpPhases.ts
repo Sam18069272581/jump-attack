@@ -1,32 +1,42 @@
 /**
- * The ground force of a vertical jump, estimated from the path of the centre of mass in a side-on clip, with the
- * phases of the movement: for the exported video (media/replayHtml.ts), where it is drawn as an estimate. It does not
- * go into the diagnosis: a force read off a video has not been checked against a force plate.
+ * The phases of a standing jump, read off the path of the centre of mass in a clip with the whole body in it: when the
+ * athlete starts down, the lowest point, take-off and landing, so the exported video (media/replayHtml.ts) can show
+ * the eccentric, concentric and flight phases with their times and how deep the athlete dipped. It does not go into
+ * the diagnosis.
  *
  * 1. Scale: in flight the centre of mass falls freely, so the curvature of its path in the picture is gravity, and
  *    pixels per metre = 2c / g for y = a + bt + ct² (the same scale the technique analysis uses, domain/technique.ts).
- * 2. The path before take-off, in metres above where the athlete stood, is smoothed with a 6 Hz low-pass (barPath
- *    `lowPass`, two passes) and differentiated twice: force = 1 + a / g, in body weights (Newton's second law for the
- *    whole body, F − mg = ma).
- * 3. Phases, as on a force plate (McMahon et al. 2018, Strength Cond J 40(4):96): the movement starts when the force
- *    first drops below standing (`ONSET_BW`, or five times the standing scatter if larger); eccentric runs from there to
- *    the lowest point (velocity zero), concentric from the lowest point to take-off. A jump that never dips
- *    (`MIN_DIP_M`) has no eccentric phase: a squat jump.
+ * 2. The path, in metres above where the athlete stood, is smoothed with a 6 Hz low-pass (barPath `lowPass`, two
+ *    passes).
+ * 3. Phases, as on a force plate (McMahon et al. 2018, Strength Cond J 40(4):96): eccentric from the start of the
+ *    movement to the lowest point (velocity zero), concentric from the lowest point to take-off. The start is found
+ *    from the fastest descent back to where the centre of mass last moved no faster than while standing (`ONSET_SD`);
+ *    a threshold crossed going forward is set off early by the jitter. A jump that never dips (`MIN_DIP_M`) has no
+ *    eccentric phase: a squat jump.
  *
- * Accuracy, from synthetic CMJs (domain/testing/cmjScene.ts, 240 fps, a known force): with 3 mm of jitter on the
- * centre of mass the peak force is within ±0.11 body weights (95 %) and the lowest point within ±2 ms; at 6 mm the
- * peak comes out about 0.16 too high (±0.19). What the synthetic clips can't hold: the segment model's centre of mass
- * against the athlete's own, as the arms swing. Hence `MAX_JITTER_M`, and the label "estimate" wherever it is shown.
+ * The force itself is not shown. On the athlete's own CMJ (2026-10-31, 240 fps, whole body, front-on) it zigzagged by
+ * 0.3–0.5 body weights through the push and dipped below zero once, because the segment model's centre of mass moves
+ * as the arms and legs do (in flight it strayed 8 mm from the parabola). The phases and the depth hold up: in
+ * synthetic CMJs (domain/testing/cmjScene.ts) with 3 mm of jitter the lowest point is within 4 ms and the start within
+ * 63 ms (40 seeds).
  */
 import { lowPass } from './barPath';
 import { G } from './jump';
 import { centreOfMass, LM, SIDE, type Pt } from './pose';
 import { pickAthlete, polyFit, unswap, type PoseFrame } from './technique';
 
-/** Low-pass cut-off for the path before differentiating, Hz: in the synthetic CMJs above, 8 Hz doubled the peak's error at 3 mm of jitter and 10 Hz quadrupled it. */
+/**
+ * Low-pass cut-off for the path, Hz. In synthetic CMJs with 3 mm of jitter (40 seeds) the start was at most 42 ms off
+ * at 4 Hz, 63 ms at 6, 71 ms at 8 and 83 ms at 10, while 4 Hz flattened the dip by twice as much as 6 Hz (1.7 against
+ * 0.7 mm without jitter).
+ */
 export const CUTOFF_HZ = 6;
-/** The movement has started once the force is this far below standing (× body weight). */
-export const ONSET_BW = 0.05;
+/**
+ * The movement starts where the centre of mass last moved no faster than this many standing scatters (SD of the
+ * velocity while standing). In synthetic CMJs with 3 mm of jitter (40 seeds), 1 SD put the start 32 ms late on
+ * average and never more than 63 ms off; 0 SD let the jitter carry it 108 ms early, 2 SD left it 44 ms late.
+ */
+export const ONSET_SD = 1;
 /** A dip shallower than this (m) is no countermovement. */
 export const MIN_DIP_M = 0.02;
 /** Standing still needed at the start of the window to know where the athlete stood, s. */
@@ -41,8 +51,9 @@ const FLIGHT_TRIM_S = 0.02;
 /** Longest stretch with no centre of mass that is filled in (s). */
 const MAX_GAP_S = 0.05;
 /**
- * The most jitter on the centre of mass (m, the SD about the flight's parabola) that a force curve is drawn with: at
- * 6 mm the synthetic peak reads 0.16 body weights high, so the line sits below it.
+ * The most frame-to-frame jitter of the centre of mass (m, from second differences in flight, which take out the
+ * parabola and the model's slow drift) that phases are read with: 2.8 mm on the athlete's own clip, so this leaves
+ * room, and turns away a clip shaken twice as hard.
  */
 export const MAX_JITTER_M = 0.005;
 
@@ -51,8 +62,8 @@ export type ComSample = { t: number; y: number | null };
 /** How long before take-off (s) to read the clip: standing still (`QUIET_S`, after the filter's edge) and the slowest countermovement, about 1 s. */
 export const BEFORE_TAKEOFF_S = 1.3;
 
-/** The file frames to read the pose of for one jump's force curve: every one from `BEFORE_TAKEOFF_S` before take-off to landing, none before `from`. */
-export function forceFrames(jump: { takeoff: number; landing: number }, captureFps: number, from: number): number[] {
+/** The file frames to read the pose of for one jump's phases: every one from `BEFORE_TAKEOFF_S` before take-off to landing, none before `from`. */
+export function phaseFrames(jump: { takeoff: number; landing: number }, captureFps: number, from: number): number[] {
   const first = Math.max(from, 0, jump.takeoff - Math.round(BEFORE_TAKEOFF_S * captureFps));
   return Array.from({ length: jump.landing - first + 1 }, (_, i) => first + i);
 }
@@ -65,7 +76,7 @@ const MIN_VISIBILITY = 0.5;
 /**
  * The athlete's centre of mass (picture y, px) in each frame, by the segment model (domain/pose.ts): null where nobody
  * was found, where part of the body is out of the picture (the model still places those points, but guesses them), or
- * where the model barely sees the body. A jump test filmed at ankle height usually leaves the head out: no curve.
+ * where the model barely sees the body. A jump test filmed at ankle height usually leaves the head out: no phases.
  */
 export function comSamples(frames: PoseFrame[], picture: { width: number; height: number }, target?: Pt | null): ComSample[] {
   const { poses } = unswap(pickAthlete(frames, target));
@@ -79,23 +90,17 @@ export function comSamples(frames: PoseFrame[], picture: { width: number; height
   });
 }
 
-export type ForceCurveProblem =
+export type JumpPhasesProblem =
   /** Long stretches with no centre of mass. */
   | 'gaps'
   /** No flight long enough, or a flight that doesn't fall: no scale. */
   | 'flight'
-  /** The centre of mass wobbles too much to differentiate twice. */
+  /** The centre of mass jitters too much from frame to frame. */
   | 'jitter'
   /** The clip starts with the athlete already moving: nowhere to measure standing from. */
   | 'no-quiet';
 
-export type ForceCurve = {
-  /** Real time (s) of each estimate, one per frame from the window's start to take-off. */
-  t: number[];
-  /** Ground force, × body weight. */
-  force: number[];
-  /** Height of the centre of mass above standing (m), at the same times. */
-  heightM: number[];
+export type JumpPhases = {
   startS: number;
   /** The lowest point; null without a countermovement. */
   lowS: number | null;
@@ -103,7 +108,6 @@ export type ForceCurve = {
   landingS: number;
   eccentricS: number | null;
   concentricS: number;
-  peak: { value: number; t: number };
   depthM: number;
   pxPerM: number;
   jitterM: number;
@@ -136,7 +140,7 @@ function fill(ys: (number | null)[], max: number): number[] | null {
   return out as number[];
 }
 
-export function forceCurve(input: { samples: ComSample[]; takeoffS: number; landingS: number; fps: number }): { ok: true; result: ForceCurve } | { ok: false; problem: ForceCurveProblem } {
+export function jumpPhases(input: { samples: ComSample[]; takeoffS: number; landingS: number; fps: number }): { ok: true; result: JumpPhases } | { ok: false; problem: JumpPhasesProblem } {
   const { takeoffS, landingS, fps } = input;
   if (input.samples.length < 4) return { ok: false, problem: 'gaps' };
   // One sample per frame: a frame the pose model sent nothing for is a gap like one it found nobody in.
@@ -162,11 +166,14 @@ export function forceCurve(input: { samples: ComSample[]; takeoffS: number; land
   );
   const pxPerM = (2 * fit.c[2]) / G;
   if (!(pxPerM > 0)) return { ok: false, problem: 'flight' };
-  const jitterM = fit.sd / pxPerM;
+  // White jitter of SD σ gives second differences of SD σ√6.
+  const flightYs = inFlight.map((i) => ys[i]);
+  const d2 = flightYs.slice(2).map((y, i) => y - 2 * flightYs[i + 1] + flightYs[i]);
+  const jitterM = Math.sqrt(d2.reduce((s2, d) => s2 + d * d, 0) / d2.length / 6) / pxPerM;
   if (jitterM > MAX_JITTER_M) return { ok: false, problem: 'jitter' };
 
-  // 2. Height above standing, smoothed, and its second derivative. The flight goes through the filter too, so the
-  // filter has no edge at take-off.
+  // 2. Height above standing, smoothed, and its velocity. The flight goes through the filter too, so the filter has
+  // no edge at take-off.
   const edge = Math.round(EDGE_S * fps);
   const quietN = edge + Math.round(QUIET_S * fps);
   const end = ts.findIndex((t) => t > landingS - FLIGHT_TRIM_S);
@@ -177,53 +184,33 @@ export function forceCurve(input: { samples: ComSample[]; takeoffS: number; land
   const h = smooth.map((y) => (standPx - y) / pxPerM);
   const dt = 1 / fps;
   const v = h.map((_, i) => (h[Math.min(h.length - 1, i + 1)] - h[Math.max(0, i - 1)]) / ((Math.min(h.length - 1, i + 1) - Math.max(0, i - 1)) * dt));
-  const a = v.map((_, i) => (v[Math.min(v.length - 1, i + 1)] - v[Math.max(0, i - 1)]) / ((Math.min(v.length - 1, i + 1) - Math.max(0, i - 1)) * dt));
   if (ts[quietN] == null || ts[quietN] > takeoffS || v.slice(edge, quietN).some((x) => Math.abs(x) > QUIET_V)) return { ok: false, problem: 'no-quiet' };
 
   const take = ts.findIndex((t) => t > takeoffS);
   const last = (take < 0 ? ts.length : take) - 1;
-  const force = a.slice(0, last + 1).map((x) => 1 + x / G);
-  const quietF = force.slice(edge, quietN);
-  const meanF = quietF.reduce((s, x) => s + x, 0) / quietF.length;
-  const sdF = Math.sqrt(quietF.reduce((s, x) => s + (x - meanF) ** 2, 0) / Math.max(1, quietF.length - 1));
+  const quietV = v.slice(edge, quietN);
+  const sdV = Math.sqrt(quietV.reduce((s2, x) => s2 + x * x, 0) / quietV.length);
 
   // 3. Phases.
-  let low = 0;
-  for (let i = 0; i <= last; i++) if (h[i] < h[low]) low = i;
+  let low = quietN;
+  for (let i = quietN; i <= last; i++) if (h[i] < h[low]) low = i;
   const dip = -h[low] >= MIN_DIP_M;
-  const below = 1 - Math.max(ONSET_BW, 5 * sdF);
-  let start = dip ? low : 0;
-  if (dip) {
-    // Back from the lowest point to where the force first fell below standing.
-    let first = -1;
-    for (let i = quietN; i <= low; i++)
-      if (force[i] < below) {
-        first = i;
-        break;
-      }
-    start = first < 0 ? low : first;
-  } else {
-    // A squat jump: it starts when the force first rises above standing.
-    const above = 1 + Math.max(ONSET_BW, 5 * sdF);
-    const first = force.findIndex((f, i) => i >= quietN && f > above);
-    start = first < 0 ? 0 : first;
-  }
-  let peak = start;
-  for (let i = start; i <= last; i++) if (force[i] > force[peak]) peak = i;
+  // From the fastest movement of the first phase (down in a CMJ, up in a squat jump) back to where the centre of mass
+  // was last as still as when standing.
+  const sign = dip ? -1 : 1;
+  let start = quietN;
+  for (let i = quietN; i <= (dip ? low : last); i++) if (sign * v[i] > sign * v[start]) start = i;
+  while (start > quietN && sign * v[start - 1] > ONSET_SD * sdV) start--;
   const lowS = dip ? ts[low] : null;
   return {
     ok: true,
     result: {
-      t: ts.slice(0, last + 1),
-      force,
-      heightM: h.slice(0, last + 1),
       startS: ts[start],
       lowS,
       takeoffS,
       landingS,
       eccentricS: lowS != null ? lowS - ts[start] : null,
       concentricS: takeoffS - (lowS ?? ts[start]),
-      peak: { value: force[peak], t: ts[peak] },
       depthM: dip ? -h[low] : 0,
       pxPerM,
       jitterM,

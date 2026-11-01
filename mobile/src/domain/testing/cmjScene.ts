@@ -1,6 +1,6 @@
 /**
- * A synthetic counter-movement jump with a known ground force, for testing the force curve read from a clip
- * (domain/forceCurve.ts) without a force plate. The force, in body weights, follows the usual shape of a CMJ on a plate
+ * A synthetic counter-movement jump with a known ground force, for testing the phases read from a clip
+ * (domain/jumpPhases.ts) without a force plate. The force, in body weights, follows the usual shape of a CMJ on a plate
  * (quiet standing, unweighting, braking, propulsion; Linthorne 2001, Am J Phys 69:1198, fig. 2): it is integrated at
  * 2 kHz into the centre of mass's path, which is then sampled at the frame rate as a phone would film it, side-on, in
  * picture pixels (y down), with the pose model's jitter added if asked.
@@ -27,6 +27,8 @@ export type CmjOptions = {
   afterS: number;
   /** Jitter of the centre of mass, px (1 SD), and the seed for it. */
   noisePx: number;
+  /** The segment model's centre of mass wandering off the parabola in flight as the legs tuck and reach (px, amplitude of one sine over the flight). */
+  driftPx: number;
   seed: number;
 };
 
@@ -42,6 +44,7 @@ export const defaultCmj = (over: Partial<CmjOptions> = {}): CmjOptions => ({
   pushS: 0.24,
   afterS: 0.3,
   noisePx: 0,
+  driftPx: 0,
   seed: 1,
   ...over,
 });
@@ -110,7 +113,7 @@ export function cmjScene(over: Partial<CmjOptions> = {}): CmjScene {
       truthForce.push(at(tt).f);
     } else if (tt < landingS) rise = y + v * (tt - takeoffS) - (G * (tt - takeoffS) ** 2) / 2;
     else rise = -0.1 * Math.sin(Math.min(1, (tt - landingS) / o.afterS) * Math.PI);
-    samples.push({ t: tt, y: o.standY - rise * o.pxPerM + o.noisePx * noise() });
+    samples.push({ t: tt, y: o.standY - rise * o.pxPerM + o.noisePx * noise() + (tt >= takeoffS && tt < landingS ? o.driftPx * Math.sin((2 * Math.PI * (tt - takeoffS)) / flight) : 0) });
   }
   return {
     samples,
