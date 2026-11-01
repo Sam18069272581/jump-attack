@@ -7,7 +7,7 @@ import { localizeHtml } from '@/i18n';
  *
  * The picture is portrait, 720 × 1280, for sharing: the clip in slow motion fills it, with the app's name as a
  * watermark and what is happening now at the top, the height climbing while the athlete is in the air, and along the
- * bottom either one jump's estimated force by phase (domain/forceCurve.ts, when the whole body was in the picture) or
+ * bottom either one jump's phases with their times (domain/jumpPhases.ts, when the whole body was in the picture) or
  * the jump curve (centre-of-mass height, domain/jumpAnalysis.flightCurve) with the set's numbers and every jump. The
  * bottom 150 px stay clear for the captions of the apps it is posted to. The page computes nothing about the jumps:
  * every number and label comes in the config.
@@ -24,19 +24,14 @@ import { localizeHtml } from '@/i18n';
 export type ReplayJump = { takeoff: number; landing: number; touchdown?: number; counted: boolean; label: string; detail: string };
 
 /**
- * One jump's estimated ground force (domain/forceCurve.ts), in the clip's file frames, with its labels: drawn as the
- * curve along the bottom, and naming the phase on screen while that jump is shown.
+ * One jump's phases (domain/jumpPhases.ts), in the clip's file frames, with their times: drawn as a timeline along the
+ * bottom, and naming the phase on screen while that jump is shown.
  */
-export type ReplayForce = {
-  /** File frame of each estimate, and the force there, × body weight. */
-  frames: number[];
-  values: number[];
-  /** Top of the curve's scale, × body weight. */
-  top: number;
-  peak: { frame: number; label: string };
-  phases: { label: string; from: number; to: number; time: string; tone: 'ecc' | 'con' | 'air' }[];
+export type ReplayPhases = {
   title: string;
-  summary: string;
+  phases: { label: string; from: number; to: number; time: string; tone: 'ecc' | 'con' | 'air' }[];
+  /** Under the timeline: how deep the athlete dipped and how fast they left the ground, each shown from file frame `at` on. */
+  stats: { label: string; value: string; at: number }[];
 };
 
 export type ReplayConfig = {
@@ -65,7 +60,7 @@ export type ReplayConfig = {
   brand: string;
   speed: string;
   colors: { ink: string; paper: string; card: string; accent: string; rim: string; muted: string; touch: string };
-  force?: ReplayForce;
+  phases?: ReplayPhases;
 };
 
 export function replayHtml(c: ReplayConfig): string {
@@ -150,9 +145,9 @@ export function replayHtml(c: ReplayConfig): string {
   var LIGHT = { ecc: tint(K.touch, 0.45), con: tint(K.accent, 0.5), air: tint(K.rim, 0.4) };
   var WHITE = '#FFFFFF', SOFT = 'rgba(255,255,255,0.75)', FAINT = 'rgba(255,255,255,0.5)';
 
-  // What is happening in a frame: the force curve's phases for the jump it covers, otherwise in the air or not.
+  // What is happening in a frame: the phases of the jump they cover, otherwise in the air or not.
   function phaseAt(f) {
-    var P = C.force && C.force.phases;
+    var P = C.phases && C.phases.phases;
     if (P && f >= P[0].from - C.captureFps && f < P[P.length - 1].to) {
       if (f < P[0].from) return { phase: '准备', color: 'rgba(23,19,14,0.6)' };
       for (var i = 0; i < P.length; i++) if (f < P[i].to) return { phase: P[i].label, color: TONE[P[i].tone] };
@@ -211,60 +206,46 @@ export function replayHtml(c: ReplayConfig): string {
     g.restore();
   }
 
-  // The estimated force along the bottom, by phase, lit up to now.
-  function forcePanel(f) {
-    var F = C.force, P = F.phases, x0 = F.frames[0], x1 = P[P.length - 1].to;
-    var top = 820, h = 170, bottom = top + h;
-    var px = function (ff) { return LEFT + ((ff - x0) / Math.max(1, x1 - x0)) * (RIGHT - LEFT); };
-    var py = function (v) { return bottom - (Math.max(0, v) / F.top) * h; };
-    text(F.title, LEFT, 800, '700 20px ' + CJK, SOFT);
-    g.setLineDash([6, 6]); g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 2;
-    g.beginPath(); g.moveTo(LEFT, py(1)); g.lineTo(RIGHT, py(1)); g.stroke(); g.setLineDash([]);
-    text('1×', RIGHT, py(1) - 8, '700 18px ' + NUM, FAINT, 'right');
-    var takeoff = P[P.length - 1].from;
-    function toneAt(ff) { for (var i = 0; i < P.length; i++) if (ff < P[i].to) return ff >= P[i].from ? LIGHT[P[i].tone] : WHITE; return LIGHT.air; }
-    function line(upto, ghost) {
-      g.lineWidth = ghost ? 3 : 5; g.lineJoin = 'round'; g.lineCap = 'round';
-      var prev = null, color = null;
-      for (var i = 0; i < F.frames.length && F.frames[i] <= upto; i++) {
-        var pt = { x: px(F.frames[i]), y: py(F.values[i]) }, c = ghost ? 'rgba(255,255,255,0.16)' : toneAt(F.frames[i]);
-        if (prev) { g.strokeStyle = c; g.beginPath(); g.moveTo(prev.x, prev.y); g.lineTo(pt.x, pt.y); g.stroke(); }
-        prev = pt; color = c;
+  // The phases along the bottom as a timeline lit up to now, each with its time once it is over, then the numbers as
+  // they become known.
+  function phasesPanel(f) {
+    var Q = C.phases, P = Q.phases, x0 = P[0].from, x1 = P[P.length - 1].to;
+    var px = function (ff) { return LEFT + ((Math.max(x0, Math.min(x1, ff)) - x0) / Math.max(1, x1 - x0)) * (RIGHT - LEFT); };
+    text(Q.title, LEFT, 800, '700 20px ' + CJK, SOFT);
+    var top = 824, h = 36;
+    P.forEach(function (p) {
+      var a = px(p.from) + 2, b = px(p.to) - 2, now = px(f);
+      rr(a, top, Math.max(4, b - a), h, 10); g.fillStyle = 'rgba(255,255,255,0.14)'; g.fill();
+      if (f > p.from) {
+        g.save(); rr(a, top, Math.max(4, b - a), h, 10); g.clip();
+        g.fillStyle = TONE[p.tone]; g.fillRect(a, top, Math.min(b, now) - a, h);
+        g.restore();
       }
-      // In the air the feet push on nothing.
-      if (upto > takeoff) {
-        g.strokeStyle = ghost ? 'rgba(255,255,255,0.16)' : LIGHT.air; g.beginPath();
-        g.moveTo(prev ? prev.x : px(takeoff), prev ? prev.y : py(0)); g.lineTo(px(takeoff), py(0)); g.lineTo(px(Math.min(upto, x1)), py(0)); g.stroke();
-      }
-      return prev;
+    });
+    if (f >= x0 && f <= x1) {
+      var X = px(f);
+      g.fillStyle = WHITE; g.fillRect(X - 2, top - 8, 4, h + 16);
+      g.beginPath(); g.arc(X, top - 8, 6, 0, 7); g.fill();
     }
-    line(x1, true);
-    var now = line(Math.min(f, x1), false);
-    if (f >= F.peak.frame) {
-      var k = F.frames.indexOf(F.peak.frame), X = px(F.peak.frame), Y = py(F.values[k]);
-      g.fillStyle = WHITE; g.beginPath(); g.arc(X, Y, 7, 0, 7); g.fill();
-      text(F.peak.label, X + 14, Y + 4, '700 20px ' + CJK, WHITE, X > W - 200 ? 'right' : 'left');
-    }
-    if (now && f <= x1) {
-      var cx = f > takeoff ? px(f) : now.x, cy = f > takeoff ? py(0) : now.y;
-      g.fillStyle = WHITE; g.beginPath(); g.arc(cx, cy, 6, 0, 7); g.fill();
-    }
-    // Each phase under its stretch of the curve, and its time in a column of its own: a short phase's stretch is too
-    // narrow to write under.
+    // Each phase's name and time in a column of its own: a short phase's stretch is too narrow to write under.
     var col = (RIGHT - LEFT) / 3;
     P.forEach(function (p, i) {
-      var a = px(p.from), b = px(p.to), on = f >= p.from, x = LEFT + (i + 3 - P.length) * col;
-      g.globalAlpha = on ? 1 : 0.3;
-      rr(a + 2, 1004, Math.max(4, b - a - 4), 8, 4); g.fillStyle = LIGHT[p.tone]; g.fill();
-      g.fillStyle = LIGHT[p.tone]; g.beginPath(); g.arc(x + 7, 1036, 7, 0, 7); g.fill();
-      text(p.label, x + 22, 1044, '700 22px ' + CJK, LIGHT[p.tone]);
+      var x = LEFT + (i + 3 - P.length) * col, on = f >= p.from;
+      g.globalAlpha = on ? 1 : 0.4;
+      g.fillStyle = LIGHT[p.tone]; g.beginPath(); g.arc(x + 7, 914, 7, 0, 7); g.fill();
+      text(p.label, x + 22, 922, '700 22px ' + CJK, LIGHT[p.tone]);
       g.globalAlpha = 1;
-      if (f >= p.to) text(p.time, x, 1084, '800 34px ' + NUM, WHITE);
+      text(f >= p.to ? p.time : '—', x, 984, '800 46px ' + NUM, f >= p.to ? WHITE : FAINT);
     });
-    text(F.summary, LEFT, 1120, '400 18px ' + CJK, FAINT);
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(LEFT, 1018, RIGHT - LEFT, 2);
+    Q.stats.forEach(function (s, i) {
+      var x = LEFT + i * (RIGHT - LEFT) / 2;
+      text(s.label, x, 1058, '600 18px ' + CJK, FAINT);
+      text(f >= s.at ? s.value : '—', x, 1108, '800 40px ' + NUM, f >= s.at ? WHITE : FAINT);
+    });
   }
 
-  // Without a force curve: the centre of mass's flight curve, the set's numbers and every jump.
+  // Without the phases: the centre of mass's flight curve, the set's numbers and every jump.
   function setPanel(f, st) {
     var top = 820, h = 130;
     text('起跳曲线 · 重心高度', LEFT, 800, '700 20px ' + CJK, SOFT);
@@ -324,7 +305,7 @@ export function replayHtml(c: ReplayConfig): string {
     bigNumber(f);
 
     if (C.note) text(C.note, RIGHT, 800, '400 16px ' + CJK, FAINT, 'right');
-    if (C.force) forcePanel(f); else setPanel(f, st);
+    if (C.phases) phasesPanel(f); else setPanel(f, st);
   }
 
   function frames() {
