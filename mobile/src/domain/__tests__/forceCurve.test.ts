@@ -66,6 +66,13 @@ describe('forceCurve', () => {
     expect(read(scene, { samples }).ok).toBe(true);
   });
 
+  it('counts frames the pose model never answered for as gaps', () => {
+    // A read that loses the athlete for 40 frames (1/6 s) sends nothing for them, not empty frames.
+    const scene = cmjScene();
+    const samples = scene.samples.filter((_, i) => i <= 150 || i >= 190);
+    expect(read(scene, { samples })).toEqual({ ok: false, problem: 'gaps' });
+  });
+
   it('turns away a clip that starts mid-movement', () => {
     const scene = cmjScene();
     const samples = scene.samples.filter((s) => s.t > 0.55);

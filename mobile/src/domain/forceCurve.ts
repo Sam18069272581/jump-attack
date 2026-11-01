@@ -137,8 +137,13 @@ function fill(ys: (number | null)[], max: number): number[] | null {
 }
 
 export function forceCurve(input: { samples: ComSample[]; takeoffS: number; landingS: number; fps: number }): { ok: true; result: ForceCurve } | { ok: false; problem: ForceCurveProblem } {
-  const { samples, takeoffS, landingS, fps } = input;
-  if (samples.length < 4) return { ok: false, problem: 'gaps' };
+  const { takeoffS, landingS, fps } = input;
+  if (input.samples.length < 4) return { ok: false, problem: 'gaps' };
+  // One sample per frame: a frame the pose model sent nothing for is a gap like one it found nobody in.
+  const at = new Map(input.samples.map((s) => [Math.round(s.t * fps), s.y]));
+  const firstFrame = Math.round(input.samples[0].t * fps);
+  const lastFrame = Math.round(input.samples[input.samples.length - 1].t * fps);
+  const samples: ComSample[] = Array.from({ length: lastFrame - firstFrame + 1 }, (_, i) => ({ t: (firstFrame + i) / fps, y: at.get(firstFrame + i) ?? null }));
   const ys = fill(
     samples.map((s) => s.y),
     Math.round(MAX_GAP_S * fps),
