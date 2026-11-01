@@ -82,6 +82,17 @@ describe('replayConfig', () => {
       expect(f.phases[2].time).toBe('583 ms');
     });
 
+    it('carries the force trend up to take-off, in file frames, marked as an estimate and with no peak', () => {
+      expect(f.force!.frames[0]).toBe(0);
+      expect(f.force!.frames.at(-1)).toBeLessThanOrEqual(takeoff);
+      expect(f.force!.values).toHaveLength(f.force!.frames.length);
+      expect(f.force!.values[40]).toBeCloseTo(1, 1);
+      // Peak 2.7 × body weight: the scale tops out at the next half above it, 3 at least.
+      expect(f.force!.top).toBe(3);
+      expect(f.title).toBe('发力 · 估算');
+      expect(JSON.stringify(f)).not.toContain('峰值');
+    });
+
     it('sums up the depth and the take-off speed, g × flight / 2', () => {
       // 9.81 × 0.583 / 2 = 2.86 m/s.
       expect(f.stats).toEqual([

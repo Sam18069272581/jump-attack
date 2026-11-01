@@ -37,7 +37,10 @@ function phasesOf(jp: JumpPhases, captureFps: number): ReplayPhases {
   if (jp.lowS != null) stats.push({ label: tr('下蹲'), value: `${Math.round(jp.depthM * 100)} cm`, at: at(jp.lowS) });
   // Take-off speed from the flight time, as the jump height is (v = g·t/2).
   stats.push({ label: tr('起跳速度'), value: `${decimal((G * flightS) / 2, 2)} m/s`, at: at(jp.takeoffS) });
-  return { title: tr('动作阶段'), phases, stats };
+  // The trend only: its peak is not shown (domain/jumpPhases `FORCE_HZ`).
+  const top = Math.max(3, Math.ceil(Math.max(...jp.force.bw) * 2) / 2);
+  const force = { frames: jp.force.t.map(at), values: jp.force.bw.map((f) => Math.round(f * 100) / 100), top };
+  return { title: tr('发力 · 估算'), phases, stats, force };
 }
 
 export function replayConfig(o: {

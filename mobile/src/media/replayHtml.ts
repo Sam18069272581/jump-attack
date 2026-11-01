@@ -24,14 +24,16 @@ import { localizeHtml } from '@/i18n';
 export type ReplayJump = { takeoff: number; landing: number; touchdown?: number; counted: boolean; label: string; detail: string };
 
 /**
- * One jump's phases (domain/jumpPhases.ts), in the clip's file frames, with their times: drawn as a timeline along the
- * bottom, and naming the phase on screen while that jump is shown.
+ * One jump's phases (domain/jumpPhases.ts), in the clip's file frames, with their times: drawn along the bottom as the
+ * force trend over a timeline, and naming the phase on screen while that jump is shown.
  */
 export type ReplayPhases = {
   title: string;
   phases: { label: string; from: number; to: number; time: string; tone: 'ecc' | 'con' | 'air' }[];
   /** Under the timeline: how deep the athlete dipped and how fast they left the ground, each shown from file frame `at` on. */
   stats: { label: string; value: string; at: number }[];
+  /** The estimated ground force up to take-off (× body weight at each file frame), drawn over the timeline with no numbers on it; `top` is the top of its scale. */
+  force: { frames: number[]; values: number[]; top: number };
 };
 
 export type ReplayConfig = {
@@ -142,7 +144,7 @@ export function replayHtml(c: ReplayConfig): string {
     return 'rgb(' + m(r) + ',' + m(gg) + ',' + m(b) + ')';
   }
   var TONE = { ecc: K.touch, con: K.accent, air: K.rim };
-  var LIGHT = { ecc: tint(K.touch, 0.45), con: tint(K.accent, 0.5), air: tint(K.rim, 0.4) };
+  var LIGHT = { ecc: tint(K.touch, 0.5), con: tint(K.accent, 0.25), air: tint(K.rim, 0.4) };
   var WHITE = '#FFFFFF', SOFT = 'rgba(255,255,255,0.75)', FAINT = 'rgba(255,255,255,0.5)';
 
   // What is happening in a frame: the phases of the jump they cover, otherwise in the air or not.
@@ -206,42 +208,66 @@ export function replayHtml(c: ReplayConfig): string {
     g.restore();
   }
 
-  // The phases along the bottom as a timeline lit up to now, each with its time once it is over, then the numbers as
-  // they become known.
+  // Along the bottom: the force trend coloured by phase and the phases under it as a timeline, lit up to now; each
+  // phase's time once it is over, then the numbers as they become known.
   function phasesPanel(f) {
-    var Q = C.phases, P = Q.phases, x0 = P[0].from, x1 = P[P.length - 1].to;
+    var Q = C.phases, P = Q.phases, F = Q.force, x0 = F.frames[0], x1 = P[P.length - 1].to;
+    var takeoff = P[P.length - 1].from;
     var px = function (ff) { return LEFT + ((Math.max(x0, Math.min(x1, ff)) - x0) / Math.max(1, x1 - x0)) * (RIGHT - LEFT); };
     text(Q.title, LEFT, 800, '700 20px ' + CJK, SOFT);
-    var top = 824, h = 36;
+    var ctop = 822, ch = 110, cbottom = ctop + ch;
+    var py = function (v) { return cbottom - (Math.max(0, v) / F.top) * ch; };
+    g.setLineDash([6, 6]); g.strokeStyle = 'rgba(255,255,255,0.3)'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(LEFT, py(1)); g.lineTo(RIGHT, py(1)); g.stroke(); g.setLineDash([]);
+    text('1× 体重', RIGHT, py(1) - 8, '600 16px ' + CJK, FAINT, 'right');
+    var toneAt = function (ff) { for (var i = 0; i < P.length; i++) if (ff < P[i].to) return ff >= P[i].from ? LIGHT[P[i].tone] : WHITE; return LIGHT.air; };
+    var line = function (upto, ghost) {
+      g.lineWidth = ghost ? 3 : 5; g.lineJoin = 'round'; g.lineCap = 'round';
+      var prev = null;
+      for (var i = 0; i < F.frames.length && F.frames[i] <= upto; i++) {
+        var pt = { x: px(F.frames[i]), y: py(F.values[i]) };
+        if (prev) { g.strokeStyle = ghost ? 'rgba(255,255,255,0.16)' : toneAt(F.frames[i]); g.beginPath(); g.moveTo(prev.x, prev.y); g.lineTo(pt.x, pt.y); g.stroke(); }
+        prev = pt;
+      }
+      // In the air the feet push on nothing.
+      if (upto > takeoff) {
+        g.strokeStyle = ghost ? 'rgba(255,255,255,0.16)' : LIGHT.air; g.beginPath();
+        g.moveTo(prev ? prev.x : px(takeoff), prev ? prev.y : py(0)); g.lineTo(px(takeoff), py(0)); g.lineTo(px(Math.min(upto, x1)), py(0)); g.stroke();
+      }
+      return prev;
+    };
+    line(x1, true);
+    var now = line(Math.min(f, x1), false);
+    if (now && f <= x1) {
+      g.fillStyle = WHITE; g.beginPath(); g.arc(f > takeoff ? px(f) : now.x, f > takeoff ? py(0) : now.y, 6, 0, 7); g.fill();
+    }
+    var top = 948, h = 12;
     P.forEach(function (p) {
       var a = px(p.from) + 2, b = px(p.to) - 2, now = px(f);
-      rr(a, top, Math.max(4, b - a), h, 10); g.fillStyle = 'rgba(255,255,255,0.14)'; g.fill();
+      rr(a, top, Math.max(4, b - a), h, h / 2.5); g.fillStyle = 'rgba(255,255,255,0.14)'; g.fill();
       if (f > p.from) {
-        g.save(); rr(a, top, Math.max(4, b - a), h, 10); g.clip();
+        g.save(); rr(a, top, Math.max(4, b - a), h, h / 2.5); g.clip();
         g.fillStyle = TONE[p.tone]; g.fillRect(a, top, Math.min(b, now) - a, h);
         g.restore();
       }
     });
-    if (f >= x0 && f <= x1) {
-      var X = px(f);
-      g.fillStyle = WHITE; g.fillRect(X - 2, top - 8, 4, h + 16);
-      g.beginPath(); g.arc(X, top - 8, 6, 0, 7); g.fill();
-    }
     // Each phase's name and time in a column of its own: a short phase's stretch is too narrow to write under.
-    var col = (RIGHT - LEFT) / 3;
+    var col = (RIGHT - LEFT) / 3, y = 990;
     P.forEach(function (p, i) {
       var x = LEFT + (i + 3 - P.length) * col, on = f >= p.from;
       g.globalAlpha = on ? 1 : 0.4;
-      g.fillStyle = LIGHT[p.tone]; g.beginPath(); g.arc(x + 7, 914, 7, 0, 7); g.fill();
-      text(p.label, x + 22, 922, '700 22px ' + CJK, LIGHT[p.tone]);
+      g.fillStyle = LIGHT[p.tone]; g.beginPath(); g.arc(x + 7, y, 7, 0, 7); g.fill();
+      text(p.label, x + 22, y + 8, '700 22px ' + CJK, LIGHT[p.tone]);
       g.globalAlpha = 1;
-      text(f >= p.to ? p.time : '—', x, 984, '800 46px ' + NUM, f >= p.to ? WHITE : FAINT);
+      text(f >= p.to ? p.time : '—', x, y + 50, '800 40px ' + NUM, f >= p.to ? WHITE : FAINT);
     });
-    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(LEFT, 1018, RIGHT - LEFT, 2);
+    var rule = 1060;
+    g.fillStyle = 'rgba(255,255,255,0.18)'; g.fillRect(LEFT, rule, RIGHT - LEFT, 2);
     Q.stats.forEach(function (s, i) {
       var x = LEFT + i * (RIGHT - LEFT) / 2;
-      text(s.label, x, 1058, '600 18px ' + CJK, FAINT);
-      text(f >= s.at ? s.value : '—', x, 1108, '800 40px ' + NUM, f >= s.at ? WHITE : FAINT);
+      text(s.label, x, rule + 52, '600 18px ' + CJK, FAINT);
+      g.font = '600 18px ' + CJK; var lw = g.measureText(s.label).width;
+      text(f >= s.at ? s.value : '—', x + lw + 14, rule + 54, '800 34px ' + NUM, f >= s.at ? WHITE : FAINT);
     });
   }
 
