@@ -186,25 +186,33 @@ describe('starting to follow', () => {
 
   // Seen in a real clip (a drop jump filmed low, in black, against dark machines): beside the athlete the model read a
   // second "person" upside down, hips at the top of the picture and legs reaching up out of it, longer than the
-  // athlete's. In another, the middle frame held only a scrap of someone at the picture's edge.
+  // athlete's. In another, the middle frame held only a scrap of someone at the picture's edge. And a clip left uncut
+  // holds the athlete walking up to the phone, biggest of all with the feet out of the picture.
   const athlete = standing({ x: 140, floor: 1150, stature: 1000 });
   const ghost = standing({ x: 200, floor: 1150, stature: 1200 }).map((l) => ({ ...l, y: 400 - (l.y - 400) }));
 
   it('skips a reading upside down (ankles above the hips), however long its legs', () => {
-    const s = startFrom([{ frame: 0, t: 0, poses: [ghost, athlete] }])!;
+    const s = startFrom([{ frame: 0, t: 0, poses: [ghost, athlete] }], { width: 720, height: 1280 })!;
     expect(s.at.x).toBeCloseTo(140, 6);
     expect(s.at.y).toBeCloseTo(1150 - 0.53 * 1000, 6);
   });
 
-  it('starts at the biggest person of all the frames, not a scrap in the first', () => {
-    const scrap = standing({ x: 10, floor: 520, stature: 150 });
-    const s = startFrom([
-      { frame: 3010, t: 0, poses: [scrap] },
-      { frame: 2196, t: 0, poses: [athlete] },
-    ])!;
-    expect(s.frame).toBe(2196);
+  const picture = { width: 720, height: 1280 };
+
+  it('skips a scrap of someone at the edge, or someone up close with the feet below the picture, for the next frame', () => {
+    const scrap = standing({ x: -10, floor: 520, stature: 150 });
+    const close = standing({ x: 360, floor: 1700, stature: 1600 });
+    const s = startFrom(
+      [
+        { frame: 3010, t: 0, poses: [scrap] },
+        { frame: 2196, t: 0, poses: [close] },
+        { frame: 3823, t: 0, poses: [athlete] },
+      ],
+      picture,
+    )!;
+    expect(s.frame).toBe(3823);
     expect(s.at.x).toBeCloseTo(athlete[LM.leftHip].x, 6);
-    expect(startFrom([{ frame: 0, t: 0, poses: [ghost] }])).toBeNull();
+    expect(startFrom([{ frame: 0, t: 0, poses: [ghost, scrap, close] }], picture)).toBeNull();
   });
 
   it('splits the coarse frames at the one nearest the start, both halves starting there', () => {

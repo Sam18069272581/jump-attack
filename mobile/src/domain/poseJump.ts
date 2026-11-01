@@ -257,24 +257,23 @@ export function findPoseJumps(
 }
 
 /**
- * Where to start following the athlete when nobody tapped them: the biggest person (longest legs) in any of `frames`,
- * at their hips. Bystanders in a jump test stand further back than the athlete, who was framed to fill the picture. A
- * reading with the ankles above the hips is a misreading (the model can see a "person" upside down in a dark, cluttered
- * picture), and a scrap of someone at the edge of one frame shouldn't win over the athlete whole in another.
+ * Where to start following the athlete when nobody tapped them: the biggest person (longest legs) in the first frame
+ * of `frames` that has anyone who can be them, at their hips. Bystanders in a jump test stand further back than the
+ * athlete, who was framed to fill the picture. Who can't be them: a reading with the ankles above the hips (the model
+ * can see a "person" upside down in a dark, cluttered picture) and, given the picture's size, anyone whose hips or
+ * ankles are outside it (a scrap at the edge, or the athlete walking up to the phone at the start of an uncut clip).
  */
-export function startFrom(frames: PoseFrame[]): { frame: number; at: Pt } | null {
-  let best: { frame: number; p: Pose; leg: number } | null = null;
+export function startFrom(frames: PoseFrame[], picture?: { width: number; height: number }): { frame: number; at: Pt } | null {
+  const POINTS = [LM.leftHip, LM.rightHip, LM.leftAnkle, LM.rightAnkle];
+  const inside = (p: Pose) => !picture || POINTS.every((i) => p[i].x >= 0 && p[i].x <= picture.width && p[i].y >= 0 && p[i].y <= picture.height);
+  const upright = (p: Pose) => min(p[LM.leftAnkle].y, p[LM.rightAnkle].y) > (p[LM.leftHip].y + p[LM.rightHip].y) / 2;
   for (const f of frames) {
-    for (const p of f.poses) {
-      const hips = (p[LM.leftHip].y + p[LM.rightHip].y) / 2;
-      if (p[LM.leftAnkle].y <= hips || p[LM.rightAnkle].y <= hips) continue;
-      const leg = legOf(p);
-      if (!best || leg > best.leg) best = { frame: f.frame, p, leg };
-    }
+    const can = f.poses.filter((p) => upright(p) && inside(p));
+    if (!can.length) continue;
+    const p = can.reduce((a, b) => (legOf(b) > legOf(a) ? b : a));
+    return { frame: f.frame, at: { x: (p[LM.leftHip].x + p[LM.rightHip].x) / 2, y: (p[LM.leftHip].y + p[LM.rightHip].y) / 2 } };
   }
-  if (!best) return null;
-  const p = best.p;
-  return { frame: best.frame, at: { x: (p[LM.leftHip].x + p[LM.rightHip].x) / 2, y: (p[LM.leftHip].y + p[LM.rightHip].y) / 2 } };
+  return null;
 }
 
 /** The coarse frames from `at` onwards and from `at` back (both start at the coarse frame nearest it, to lock on there). */
