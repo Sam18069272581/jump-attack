@@ -108,26 +108,32 @@ ${POSE_SHARED_JS}
   Batch.prototype.add = function (item) { this.items.push(item); if (this.items.length >= 12) this.flush(); };
   Batch.prototype.flush = function () { if (this.items.length) post({ type: 'poses', id: this.id, items: this.items }); this.items = []; };
 
-  /** The model on one square; when the GPU has gone, once more on the CPU. */
+  /** The model on one square, or across the whole picture without one; when the GPU has gone, once more on the CPU. */
   async function read(crop) {
+    function once() { return crop ? POSE.detect(video, W, H, crop) : POSE.search(video, W, H); }
     try {
-      return POSE.detect(video, W, H, crop);
+      return once();
     } catch (e) {
       if (!(await POSE.recover(CFG))) throw e;
-      return POSE.detect(video, W, H, crop);
+      return once();
     }
   }
 
+  /**
+   * Until the athlete is first found, and once the square around them has missed them twice, the whole picture is
+   * searched: a square around the tap can cut off someone filmed close, and one around where they were heading can
+   * miss a sudden move.
+   */
   async function follow(req) {
     var tr = new POSE.Tracker(req.at, 0), out = new Batch(req.id);
     for (var i = 0; i < req.frames.length; i++) {
       var f = req.frames[i];
       var t = await seekFrame(f, req.fps);
-      var crop = tr.crop(f, W, H);
+      var crop = tr.len && tr.misses < 2 ? tr.crop(f, W, H) : null;
       var people = await read(crop);
       var athlete = tr.update(f, people, W, H);
       out.add([f, t].concat(people));
-      if (i % 2 === 0) preview(crop, athlete);
+      if (i % 2 === 0) preview(crop || { x: 0, y: 0, s: 0 }, athlete);
       if (tr.misses > 4) { out.flush(); post({ type: 'lost', id: req.id, frame: f }); break; }
     }
     out.flush();
