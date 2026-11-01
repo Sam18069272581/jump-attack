@@ -83,11 +83,15 @@ export async function deleteTechniqueTake(db: SQLiteDatabase, id: number): Promi
   await deleteTrial(db, id);
 }
 
-/** The app's own copy of every take filmed in it, of every athlete: the files to keep (media/takes.ts `pruneTakes`). */
+/**
+ * The app's own copy of every take filmed in it and of every dunk attempt's video, of every athlete: the files to keep
+ * (media/takes.ts `pruneTakes`).
+ */
 export async function techniqueVideoUris(db: SQLiteDatabase): Promise<string[]> {
   const rows = await db.getAllAsync<{ video_uri: string }>(
     `SELECT t.video_uri FROM trial t JOIN test_session s ON s.id = t.session_id
-     WHERE s.metric_code = ? AND t.video_uri IS NOT NULL`,
+     WHERE s.metric_code = ? AND t.video_uri IS NOT NULL
+     UNION SELECT video_uri FROM dunk_attempt WHERE video_uri IS NOT NULL`,
     TECHNIQUE_CODE,
   );
   return rows.map((r) => r.video_uri);

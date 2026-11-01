@@ -20,6 +20,35 @@ export function newTakeFile(ext: string, kind: 'technique' | 'test' = 'technique
   return file;
 }
 
+/**
+ * Copies a clip picked from the photo library in with the takes, for a dunk attempt to keep its video: the picker's
+ * file is a temporary copy. Returns the copy's uri.
+ */
+export async function keepTake(uri: string): Promise<string> {
+  const source = new File(uri);
+  const ext = source.extension ? source.extension.replace(/^\.?/, '') : 'mov';
+  const dir = takesDir();
+  dir.create({ intermediates: true, idempotent: true });
+  const dest = new File(dir, `take-${Date.now()}.${ext}`);
+  await source.copy(dest);
+  return dest.uri;
+}
+
+/**
+ * Where a kept take is now, or null when it isn't on this phone (data restored from a backup, or since deleted). Found
+ * by its name, as in `pruneTakes`: iOS can move the app's folder in an update.
+ */
+export function takeUri(uri: string): string | null {
+  const name = uri.split('/').pop();
+  if (!name) return null;
+  try {
+    const file = new File(takesDir(), name);
+    return file.exists ? file.uri : null;
+  } catch {
+    return null;
+  }
+}
+
 export function dropTake(uri: string) {
   try {
     const f = new File(uri);

@@ -56,7 +56,8 @@ const clockText = (s: number) => `00:${String(Math.floor(s)).padStart(2, '0')}`;
  * button wakes once they have held. A take goes on to the analysis screen in this one's place.
  */
 export default function TechniqueCamera() {
-  const { session } = useLocalSearchParams<{ session: string }>();
+  // A dunk attempt's rim and ball, when filmed from the attempts screen: passed on, to be saved with the analysis.
+  const { session, rim, ball } = useLocalSearchParams<{ session: string; rim?: string; ball?: string }>();
   useKeepAwake();
   const camera = useRef<PoseCameraHandle>(null);
   const frames = useRef<SetupFrame[]>([]);
@@ -168,7 +169,7 @@ export default function TechniqueCamera() {
 
   function analyse(take: Recorded) {
     camera.current?.stopCamera();
-    router.replace({ pathname: '/technique/analyse', params: { uri: take.uri, fps: String(Math.round(info?.fps ?? 30)), source: 'camera', session } });
+    router.replace({ pathname: '/technique/analyse', params: { uri: take.uri, fps: String(Math.round(info?.fps ?? 30)), source: 'camera', session, ...(rim && ball && { rim, ball }) } });
   }
 
   const live = rec.name === 'live';

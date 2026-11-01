@@ -1,4 +1,4 @@
-import { attemptSummary, firstDunk, RECENT_ATTEMPTS, rimProblem, type DunkAttempt } from '../dunkAttempts';
+import { attemptSummary, firstDunk, jumpHeightCm, RECENT_ATTEMPTS, rimProblem, type DunkAttempt } from '../dunkAttempts';
 
 let nextId = 1;
 function attempt(outcome: DunkAttempt['outcome'], rimCm = 305, ball: DunkAttempt['ball'] = 'basketball', at = '2026-10-28T18:00:00Z'): DunkAttempt {
@@ -58,5 +58,19 @@ describe('rimProblem', () => {
     expect(rimProblem(30.5)).not.toBeNull(); // metres typed as centimetres
     expect(rimProblem(350)).not.toBeNull();
     expect(rimProblem(Number.NaN)).not.toBeNull();
+  });
+});
+
+describe('jumpHeightCm', () => {
+  it('turns the take-off velocity into how far the centre of mass rises: v² ÷ 2g, its error v·e ÷ g', () => {
+    // 3.30 ± 0.04 m/s: 3.30² / (2 × 9.81) = 0.555 m; (3.34² − 3.26²) / (4 × 9.81) = 3.30 × 0.04 / 9.81 = 0.0135 m.
+    const h = jumpHeightCm({ value: 3.3, error: 0.04, status: 'ok' });
+    expect(h.value).toBeCloseTo(55.5, 1);
+    expect(h.error).toBeCloseTo(1.35, 2);
+    expect(h.status).toBe('ok');
+  });
+
+  it('is as unsure as the velocity it comes from', () => {
+    expect(jumpHeightCm({ value: 3, error: 0.3, status: 'imprecise' }).status).toBe('imprecise');
   });
 });

@@ -17,12 +17,13 @@ const mockWeb: { props: Record<string, any> | null; inject: jest.Mock } = { prop
 const mockGravity: { cb: ((v: { x: number; y: number; z: number }) => void) | null } = { cb: null };
 const mockStaged = jest.fn();
 const mockDisk = { full: false, free: 64e9 };
+let mockParams: Record<string, string> = { session: 'cam-1' };
 
 jest.mock('expo-router', () => ({
   get router() {
     return mockRouter;
   },
-  useLocalSearchParams: () => ({ session: 'cam-1' }),
+  useLocalSearchParams: () => mockParams,
 }));
 jest.mock('expo-haptics', () => ({ selectionAsync: jest.fn(), notificationAsync: jest.fn(), NotificationFeedbackType: { Success: 'success' } }));
 jest.mock('react-native-safe-area-context', () => jest.requireActual('react-native-safe-area-context/jest/mock').default);
@@ -383,5 +384,24 @@ it('doesn’t start a take the phone has no room for: says so before the athlete
     expect(mockWeb.inject).toHaveBeenLastCalledWith('window.startRecording(); true;');
   } finally {
     mockDisk.free = 64e9;
+  }
+});
+
+it('passes a dunk attempt’s rim and ball on to the analysis, to be saved with it', async () => {
+  mockParams = { session: 'cam-2', rim: '300', ball: 'volleyball' };
+  try {
+    await open();
+    await press('不检查直接拍');
+    await press('开始录像');
+    await post({ type: 'recording', mime: 'video/mp4' });
+    await post({ type: 'chunk', seq: 0, data: Buffer.alloc(500, 1).toString('base64') });
+    await post({ type: 'recorded', chunks: 1, size: 500, mime: 'video/mp4', seconds: 3 });
+    await press('分析这一段');
+    expect(mockRouter.replace).toHaveBeenLastCalledWith({
+      pathname: '/technique/analyse',
+      params: expect.objectContaining({ source: 'camera', session: 'cam-2', rim: '300', ball: 'volleyball' }),
+    });
+  } finally {
+    mockParams = { session: 'cam-1' };
   }
 });

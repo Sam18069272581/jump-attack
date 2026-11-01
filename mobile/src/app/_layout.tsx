@@ -76,6 +76,7 @@ function RootStack() {
         <Stack.Screen name="conditioning/result" options={{ title: tr('测试结果'), headerBackVisible: false, gestureEnabled: false }} />
         <Stack.Screen name="dunk" options={{ title: tr('扣篮诊断') }} />
         <Stack.Screen name="attempts" options={{ title: tr('扣篮尝试') }} />
+        <Stack.Screen name="attempt" options={{ title: tr('这次扣篮') }} />
         <Stack.Screen name="technique/index" options={{ title: tr('起跳技术') }} />
         <Stack.Screen name="technique/camera" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="technique/analyse" options={{ title: tr('起跳分析') }} />
