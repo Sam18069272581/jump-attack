@@ -29,8 +29,10 @@ jest.mock('expo-router', () => ({
   },
   useLocalSearchParams: () => mockState.params,
 }));
+// Each filmstrip picture stands for the moment it was taken at.
+const mockThumbnails = jest.fn(async (times: number[]) => times.map((t) => ({ requestedTime: t })));
 jest.mock('expo-video', () => ({
-  useVideoPlayer: (uri: string) => jest.requireActual('react').useMemo(() => ({ uri, currentTime: 0 }), [uri]),
+  useVideoPlayer: (uri: string) => jest.requireActual('react').useMemo(() => ({ uri, currentTime: 0, generateThumbnailsAsync: mockThumbnails }), [uri]),
   VideoView: () => null,
 }));
 jest.mock('expo', () => {
@@ -193,6 +195,37 @@ it('analyses a 10/5 set: every rebound, its contact, and one saved trial with th
   expect(Math.abs(t.value - exact)).toBeLessThan(0.08);
   expect(t.detail).toMatchObject({ source: 'video', auto: true });
   expect(mockRouter.replace).toHaveBeenCalledWith({ pathname: '/measure/result', params: { metric: 'rj_rsi', session: 'rj-1' } });
+});
+
+it('trims the clip like the Photos app, and analyses the part kept by itself once the handles are let go', async () => {
+  const scene = defaultScene('cmj', { shadow: 0.4 });
+  await open(scene, { metric: 'cmj', session: 'cmj-trim' });
+  // A filmstrip of the whole clip under the video.
+  expect(mockThumbnails).toHaveBeenCalledWith(expect.any(Array), expect.objectContaining({ maxWidth: expect.any(Number) }));
+  expect(mockThumbnails.mock.calls[0][0].length).toBeGreaterThan(4);
+
+  // 2.6 s at 240 fps is frames 0…623; a VoiceOver step is 31 frames. Three steps in from each end keeps 93…530.
+  const handle = (label: string) => r.root.find((n) => n.props.accessibilityLabel === label && typeof n.props.onAccessibilityAction === 'function');
+  jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+  try {
+    for (let i = 0; i < 3; i++) {
+      await act(async () => handle('片段开始').props.onAccessibilityAction({ nativeEvent: { actionName: 'increment' } }));
+      await act(async () => handle('片段结束').props.onAccessibilityAction({ nativeEvent: { actionName: 'decrement' } }));
+    }
+    expect(texts(r.root)).toContain('已选 1.82 s');
+    // Nothing starts while the athlete may still be adjusting the other end.
+    await act(async () => jest.advanceTimersByTime(1500));
+    expect(mockWeb.inject).not.toHaveBeenCalled();
+    await act(async () => jest.advanceTimersByTime(500));
+  } finally {
+    jest.useRealTimers();
+  }
+  const grab = JSON.parse(/window\.grab\((.*)\); true;/.exec(mockWeb.inject.mock.calls[0][0])![1]);
+  expect(grab.frames[0]).toBe(93);
+  expect(Math.max(...grab.frames)).toBeLessThanOrEqual(530);
+
+  await answerGrabs();
+  expect(texts(r.root)).toContain('认出 1 跳，计入 1 跳');
 });
 
 it('scores no 10/5 from a set cut short, and says why nothing can be saved', async () => {
