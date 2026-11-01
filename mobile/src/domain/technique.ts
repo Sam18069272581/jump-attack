@@ -24,7 +24,7 @@
  */
 import { lowPass } from './barPath';
 import { G } from './jump';
-import { centreOfMass, jointAngle, LM, mid, SIDE, type Pose, type Pt, type Side } from './pose';
+import { centreOfMass, distanceToBody, jointAngle, LM, mid, SIDE, type Pose, type Pt, type Side } from './pose';
 import { LEVEL_DEG } from './poseSetup';
 
 const { abs, atan2, ceil, hypot, max, min, PI, round, sqrt } = Math;
@@ -408,8 +408,8 @@ const bodySize = (p: Pose) => {
 };
 
 /**
- * Follows each person from frame to frame by their hips and picks the athlete: the one nearest `target` when given,
- * otherwise the one who travels furthest (the runner, not someone standing by).
+ * Follows each person from frame to frame by their hips and picks the athlete: the one whose skeleton comes nearest
+ * `target` (a tap on them) when given, otherwise the one who travels furthest (the runner, not someone standing by).
  */
 export function pickAthlete(frames: PoseFrame[], target?: Pt | null): (Pose | null)[] {
   type Track = { last: Pt; lastFrame: number; size: number; picks: Map<number, number> };
@@ -446,8 +446,9 @@ export function pickAthlete(frames: PoseFrame[], target?: Pt | null): (Pose | nu
   const hipOf = (fi: number, pi: number) => hipCentre(frames[fi].poses[pi]);
   const score = (tr: Track) => {
     if (target) {
+      // The tap can be anywhere on the body: the person nearest it is the one whose skeleton is, not whose hips are.
       let d = Infinity;
-      for (const [fi, pi] of tr.picks) d = min(d, hypot(hipOf(fi, pi).x - target.x, hipOf(fi, pi).y - target.y));
+      for (const [fi, pi] of tr.picks) d = min(d, distanceToBody(frames[fi].poses[pi], target));
       return -d;
     }
     const hs = [...tr.picks].map(([fi, pi]) => hipOf(fi, pi));

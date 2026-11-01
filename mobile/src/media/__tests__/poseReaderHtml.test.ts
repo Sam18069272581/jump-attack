@@ -30,6 +30,7 @@ class FakeVideo {
     frameCallback: boolean,
     /** Whether WebKit takes the clip for another origin's, and locks a canvas it is drawn on. */
     private locks: boolean,
+    private size = { w: W, h: H },
   ) {
     if (frameCallback) this.requestVideoFrameCallback = (cb) => void this.callbacks.push(cb);
   }
@@ -58,16 +59,16 @@ class FakeVideo {
     this.source = v;
   }
   load() {
-    this.videoWidth = W;
-    this.videoHeight = H;
+    this.videoWidth = this.size.w;
+    this.videoHeight = this.size.h;
     Promise.resolve().then(() => this.fire('loadedmetadata'));
   }
 }
 
 type Opened = Page & { video: FakeVideo };
 
-async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback?: boolean; locked?: boolean } = {}): Promise<Opened> {
-  const video = new FakeVideo(people, o.frameCallback ?? false, o.locked ?? false);
+async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback?: boolean; locked?: boolean; size?: { w: number; h: number } } = {}): Promise<Opened> {
+  const video = new FakeVideo(people, o.frameCallback ?? false, o.locked ?? false, o.size);
   const page = runPage(poseReaderHtml({ video: 'clip.mov', bg: '#000', accent: '#f80' }), { elements: { video, view: new FakeCanvas() }, gpuFails: o.gpuFails });
   await page.next('ready');
   return { ...page, video };
@@ -86,7 +87,7 @@ async function collect(page: Opened, id: number): Promise<{ frame: number; time:
   return page.messages
     .filter((m) => m.type === 'poses' && m.id === id)
     .flatMap((m) => m.items as [number, number | null, ...number[][]][])
-    .map(([frame, time, ...people]) => ({ frame, time, people: people.map((v) => decodePose(v, W, H)) }));
+    .map(([frame, time, ...people]) => ({ frame, time, people: people.map((v) => decodePose(v, page.video.videoWidth, page.video.videoHeight)) }));
 }
 
 describe('the clip page', () => {
@@ -152,6 +153,64 @@ describe('the clip page', () => {
     const firstMissing = got.findIndex((g) => !g.people.length);
     expect(hipOf(runner(got[firstMissing].frame)!).x).toBeGreaterThan(W - 200);
     expect(got.length - firstMissing).toBe(5);
+  });
+
+  // An upright clip filmed close: the athlete about 1.3 m from the phone, 1300 of the picture's 1920 px tall, standing
+  // still with the feet at y 1750. Taps land anywhere on the body, not only on the hips.
+  const PORTRAIT = { w: 1080, h: 1920 };
+  const close: Person = () => standing({ x: 540, floor: 1750, stature: 1300, yaw: 90 });
+
+  it.each([
+    ['the head', LM.nose],
+    ['a knee', LM.leftKnee],
+    ['a foot', LM.leftAnkle],
+    ['the hips', LM.leftHip],
+  ])('locks on to an athlete filmed close wherever they were tapped (%s), and follows them', async (_, point) => {
+    const page = await openPage([close], { size: PORTRAIT });
+    const frames = Array.from({ length: 8 }, (_, i) => 100 + 4 * i);
+    const tap = close(100)![point];
+    page.win.follow({ id: 9, frames, fps: FPS, at: { x: tap.x, y: tap.y } });
+    const got = await collect(page, 9);
+    expect(got.map((g) => g.frame)).toEqual(frames);
+    for (const g of got) {
+      expect(g.people).toHaveLength(1);
+      expect(Math.abs(hipOf(g.people[0]).y - hipOf(close(g.frame)!).y)).toBeLessThan(0.5);
+    }
+    expect(page.messages.some((m) => m.type === 'lost')).toBe(false);
+  });
+
+  it('locks on to the person tapped, not a bystander whose hips are nearer the tap', async () => {
+    // The tap on the athlete's foot; a bystander behind them, smaller, with their hips beside it.
+    const bystander: Person = () => standing({ x: 800, floor: 1500, stature: 500, facing: -1 });
+    const page = await openPage([close, bystander], { size: PORTRAIT });
+    const foot = close(100)![LM.leftAnkle];
+    page.win.follow({ id: 10, frames: [100, 104, 108], fps: FPS, at: { x: foot.x, y: foot.y } });
+    const got = await collect(page, 10);
+    // Followed in a square around the athlete: one around the bystander would leave the athlete out.
+    for (const g of got) expect(g.people.some((p) => Math.abs(hipOf(p).x - 540) < 1)).toBe(true);
+  });
+
+  it('searches the whole picture again once the square has missed the athlete twice, but won’t take someone twice their size for them', async () => {
+    // Standing still at x 600; hidden from frame 120 to 131 (a frame is read every 4), while someone walks up close to the
+    // phone right there, three times the athlete's size; from 132 the athlete is back, 300 px to the right.
+    const athlete: Person = (f) => (f < 120 ? standing({ x: 600, floor: 900, stature: 380 }) : f >= 132 ? standing({ x: 900, floor: 900, stature: 380 }) : null);
+    const passer: Person = (f) => (f >= 120 && f < 132 ? standing({ x: 640, floor: 1060, stature: 1050 }) : null);
+    const page = await openPage([athlete, passer]);
+    const frames = Array.from({ length: 12 }, (_, i) => 100 + 4 * i);
+    page.win.follow({ id: 12, frames, fps: FPS, at: hipOf(athlete(100)!) });
+    const got = await collect(page, 12);
+    expect(page.messages.some((m) => m.type === 'lost' && m.id === 12)).toBe(false);
+    // Found again where they reappeared, by the search across the whole picture, and followed from there.
+    for (const g of got.filter((g) => g.frame >= 132)) expect(g.people.some((p) => Math.abs(hipOf(p).x - 900) < 1)).toBe(true);
+  });
+
+  it('finds a person taller than its squares: the whole picture is one of them', async () => {
+    const tall: Person = () => standing({ x: 540, floor: 1850, stature: 1600, yaw: 90 });
+    const page = await openPage([tall], { size: PORTRAIT });
+    page.win.everyone({ id: 11, frames: [40], fps: FPS });
+    const [g] = await collect(page, 11);
+    expect(g.people).toHaveLength(1);
+    expect(hipOf(g.people[0]).y).toBeCloseTo(hipOf(tall(40)!).y, 0);
   });
 
   it('finds everyone in the picture, once each, searching squares across it', async () => {

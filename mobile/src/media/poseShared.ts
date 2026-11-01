@@ -5,12 +5,14 @@
  *   can't be read, and starts the pose landmarker on the GPU, or the CPU when the GPU won't start;
  * - `detect(src, w, h, crop)`: the people in a square `{ x, y, s }` of a picture (video px), each as 33 × 4 numbers
  *   (x and y as shares of the whole picture, MediaPipe's depth, visibility: what domain/pose.ts `decodePose` reads);
- * - `search(src, w, h)`: everyone in the picture, read in overlapping squares;
- * - `Tracker`: follows one person from frame to frame, cropping each frame around where they should be by then.
+ * - `search(src, w, h)`: everyone in the picture, read in overlapping squares and in the whole picture at once;
+ * - `Tracker`: follows one person from frame to frame, cropping each frame around where they should be by then. It
+ *   starts from a tap, which can be anywhere on the body: the person picked is the one whose skeleton is nearest it.
  *
  * Why crops: the model's person detector looks at the picture shrunk to 224 px. An athlete filmed from 7 m is about
  * a third of the picture's height, 40-odd px at that size, too small to be found reliably; in a square of about two
- * statures around them they are half of it. The model then reads the joints from its own close-up of the person.
+ * statures around them they are half of it. The model then reads the joints from its own close-up of the person. One
+ * filmed close, taller than the squares, is found in the whole picture.
  *
  * The pages run it in IMAGE mode, each frame on its own: VIDEO mode smooths the points over time, which delays fast
  * events like toe-off by a few frames.
@@ -139,6 +141,17 @@ var POSE = (function () {
     var shank = (dist(p(25), p(27)) + dist(p(26), p(28))) / 2;
     return thigh + shank + dist(mid(p(11), p(12)), hip(v, w, h));
   }
+  function segment(p, a, b) {
+    var dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+    var u = l2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+    return dist(p, { x: a.x + u * dx, y: a.y + u * dy });
+  }
+  // How far p (px) is from the skeleton, the neck up to the nose included: domain/pose.ts distanceToBody.
+  function reach(v, p, w, h) {
+    var d = segment(p, mid(pt(v, 11, w, h), pt(v, 12, w, h)), pt(v, 0, w, h));
+    BONES.forEach(function (b) { if (b[0] !== 7) d = Math.min(d, segment(p, pt(v, b[0], w, h), pt(v, b[1], w, h))); });
+    return d;
+  }
   function seen(v) { var s = 0; for (var i = 0; i < 33; i++) s += v[4 * i + 3]; return s / 33; }
   // About 2.1 statures, centred a little above the hips: room for arms raised at the rim.
   function around(at, len) { var s = 2.7 * len; return { x: at.x - s / 2, y: at.y - 0.4 * len - s / 2, s: s }; }
@@ -171,8 +184,11 @@ var POSE = (function () {
     return kept.map(function (k) { return k.v; });
   }
 
+  /** The whole picture as one square (the model pads it): finds someone too tall for the tiles. */
+  function whole(w, h) { var s = Math.max(w, h); return { x: (w - s) / 2, y: (h - s) / 2, s: s }; }
+
   function search(src, w, h) {
-    var all = [];
+    var all = detect(src, w, h, whole(w, h));
     tiles(w, h).forEach(function (t) { all = all.concat(detect(src, w, h, t)); });
     return merge(all, w, h);
   }
@@ -189,12 +205,28 @@ var POSE = (function () {
     var g = Math.pow(1.5, Math.min(this.misses, 3));
     return { x: c.x - ((g - 1) * c.s) / 2, y: c.y - ((g - 1) * c.s) / 2, s: c.s * g };
   };
-  /** Picks the tracked person among poses (the nearest to where they should be), or null when none is near. */
+  /**
+   * Picks the tracked person among poses (the nearest to where they should be), or null when none is near; after a
+   * miss, only someone between 2/3 and 1.5 times their size. Before the first find, where they should be is the tap: the person picked is the one whose skeleton is nearest it, taken when
+   * the tap is within half a length (about 0.4 stature) of it, or their hips within 0.35 of the picture's short side.
+   */
   Tracker.prototype.update = function (f, poses, w, h) {
-    var want = this.expect(f), best = null, bestD = Infinity;
-    poses.forEach(function (v) { var d = dist(hip(v, w, h), want); if (d < bestD) { bestD = d; best = v; } });
-    var limit = this.len ? 1.2 * this.len * (1 + this.misses) : 0.35 * Math.min(w, h);
-    if (!best || bestD > limit) { this.misses++; return null; }
+    var want = this.expect(f), best = null, bestD = Infinity, ok;
+    if (this.len) {
+      var len = this.len, misses = this.misses;
+      // Once missed, the square grows or the whole picture is searched: someone else of another size (walking past
+      // close to the phone, or a misreading of a close-up) can then be nearest. The athlete's own size changes little.
+      poses.forEach(function (v) {
+        var d = dist(hip(v, w, h), want), r = length(v, w, h) / len;
+        if (misses && (r < 2 / 3 || r > 1.5)) return;
+        if (d < bestD) { bestD = d; best = v; }
+      });
+      ok = best && bestD <= 1.2 * this.len * (1 + this.misses);
+    } else {
+      poses.forEach(function (v) { var d = reach(v, want, w, h); if (d < bestD) { bestD = d; best = v; } });
+      ok = best && (bestD <= 0.5 * length(best, w, h) || dist(hip(best, w, h), want) <= 0.35 * Math.min(w, h));
+    }
+    if (!ok) { this.misses++; return null; }
     var at = hip(best, w, h), len = length(best, w, h);
     if (this.last != null && f !== this.last) {
       var dt = f - this.last, v = { x: (at.x - this.at.x) / dt, y: (at.y - this.at.y) / dt };
@@ -222,6 +254,6 @@ var POSE = (function () {
     });
   }
 
-  return { start: start, recover: recover, detect: detect, search: search, tiles: tiles, merge: merge, Tracker: Tracker, around: around, hip: hip, length: length, draw: draw };
+  return { start: start, recover: recover, detect: detect, search: search, tiles: tiles, whole: whole, merge: merge, reach: reach, Tracker: Tracker, around: around, hip: hip, length: length, draw: draw };
 })();
 `;

@@ -145,3 +145,23 @@ export const BONES: [number, number][] = [
   [LM.rightHeel, LM.rightToe],
   [LM.rightAnkle, LM.rightToe],
 ];
+
+/** The shortest distance from `p` to the segment from `a` to `b`. */
+function toSegment(p: Pt, a: Pt, b: Pt): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const u = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return dist(p, { x: a.x + u * dx, y: a.y + u * dy });
+}
+
+/**
+ * How far `at` is from a person's skeleton (the bones, and the neck up to the nose): 0 on it. Tells which person a tap
+ * was on wherever on the body it landed, where the distance to the hips would favour anyone whose hips are near a tap
+ * on a foot or the head.
+ */
+export function distanceToBody(p: Pose, at: Pt): number {
+  let best = toSegment(at, mid(p[LM.leftShoulder], p[LM.rightShoulder]), p[LM.nose]);
+  for (const [a, b] of BONES) best = Math.min(best, toSegment(at, p[a], p[b]));
+  return best;
+}

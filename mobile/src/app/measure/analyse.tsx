@@ -209,7 +209,7 @@ export default function Analyse() {
       else {
         // Nobody tapped: the biggest person in the middle of the stretch, or a quarter in either side.
         const look = [0.5, 0.25, 0.75].map((u) => coarse[Math.floor(u * (coarse.length - 1))]);
-        start = startFrom(framesFromWire(await pose.everyone(look), clip.width, clip.height, fps));
+        start = startFrom(framesFromWire(await pose.everyone(look), clip.width, clip.height, fps), clip);
       }
       if (!start) return before;
       const { forward, backward } = splitAt(coarse, start.frame);
