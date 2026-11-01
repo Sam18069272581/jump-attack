@@ -1826,6 +1826,23 @@ export const de: Record<string, string> = {
   // media/replayHtml.ts
   ' · 第 ': ' · Sprung ',
   ' 跳': '',
+  '骨架识别没找到人，这次导出不标离心和向心。': 'Die Skeletterkennung hat niemanden gefunden, dieses Video kommt ohne exzentrische und konzentrische Phase.',
+  '骨架识别没能启动，这次导出不标离心和向心。': 'Die Skeletterkennung ließ sich nicht starten, dieses Video kommt ohne exzentrische und konzentrische Phase.',
+  '正在读骨架，分离心和向心…': 'Skelett wird gelesen, exzentrische und konzentrische Phase werden bestimmt …',
+  '跳过，不标阶段': 'Überspringen, ohne Phasen',
+  '竖屏 720 × 1280，带水印、跳高、估算的发力趋势、离心向心用时和起跳速度，可以存到相册或直接发出去。': 'Hochformat 720 × 1280 mit Wasserzeichen, Sprunghöhe, geschätztem Kraftverlauf, Dauer der exzentrischen und konzentrischen Phase und Absprunggeschwindigkeit. In Fotos sichern oder direkt verschicken.',
+  '没拍到全身，或者骨架跟丢了，这次导出不标离心和向心。': 'Der ganze Körper war nicht im Bild oder das Skelett ging verloren, dieses Video kommt ohne exzentrische und konzentrische Phase.',
+  '腾空那段没读全，定不了比例，这次导出不标离心和向心。': 'Die Flugphase wurde nicht vollständig gelesen, ohne Maßstab kommt dieses Video ohne exzentrische und konzentrische Phase.',
+  '骨架抖得太厉害，阶段分不准，这次导出不标离心和向心。': 'Das Skelett wackelt zu stark, um die Phasen zu trennen, dieses Video kommt ohne sie.',
+  '起跳前没先站稳一下，这次导出不标离心和向心。': 'Vor dem Sprung gab es keinen ruhigen Stand, dieses Video kommt ohne exzentrische und konzentrische Phase.',
+  '离心': 'Exzentrisch',
+  '向心': 'Konzentrisch',
+  '下蹲': 'Absenken',
+  '起跳速度': 'Absprunggeschwindigkeit',
+  '发力 · 估算': 'Kraft · Schätzung',
+  '1× 体重': '1× Körpergewicht',
+  '离地': 'Über dem Boden',
+  '第 ': 'Sprung ',
   '起跳曲线 · 重心高度': 'Absprungkurve · Schwerpunkthöhe',
 
   // state/bodyMass.ts
