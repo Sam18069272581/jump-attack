@@ -257,17 +257,24 @@ export function findPoseJumps(
 }
 
 /**
- * Where to start following the athlete when nobody tapped them: the biggest person (longest legs) in the first frame
- * of `frames` that has anyone, at their hips. Bystanders in a jump test stand further back than the athlete, who was
- * framed to fill the picture.
+ * Where to start following the athlete when nobody tapped them: the biggest person (longest legs) in any of `frames`,
+ * at their hips. Bystanders in a jump test stand further back than the athlete, who was framed to fill the picture. A
+ * reading with the ankles above the hips is a misreading (the model can see a "person" upside down in a dark, cluttered
+ * picture), and a scrap of someone at the edge of one frame shouldn't win over the athlete whole in another.
  */
 export function startFrom(frames: PoseFrame[]): { frame: number; at: Pt } | null {
+  let best: { frame: number; p: Pose; leg: number } | null = null;
   for (const f of frames) {
-    if (!f.poses.length) continue;
-    const p = f.poses.reduce((a, b) => (legOf(b) > legOf(a) ? b : a));
-    return { frame: f.frame, at: { x: (p[LM.leftHip].x + p[LM.rightHip].x) / 2, y: (p[LM.leftHip].y + p[LM.rightHip].y) / 2 } };
+    for (const p of f.poses) {
+      const hips = (p[LM.leftHip].y + p[LM.rightHip].y) / 2;
+      if (p[LM.leftAnkle].y <= hips || p[LM.rightAnkle].y <= hips) continue;
+      const leg = legOf(p);
+      if (!best || leg > best.leg) best = { frame: f.frame, p, leg };
+    }
   }
-  return null;
+  if (!best) return null;
+  const p = best.p;
+  return { frame: best.frame, at: { x: (p[LM.leftHip].x + p[LM.rightHip].x) / 2, y: (p[LM.leftHip].y + p[LM.rightHip].y) / 2 } };
 }
 
 /** The coarse frames from `at` onwards and from `at` back (both start at the coarse frame nearest it, to lock on there). */

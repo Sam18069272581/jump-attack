@@ -1,7 +1,9 @@
 import { AIR_LEG, DOWN_LEG, findPoseJumps, JUMP_LIFT_LEG, LEG_OF_STATURE, poseCoarseFrames, splitAt, stanceRuns, STANCE_S, startFrom, STILL_LEG, type PoseFlight } from '../poseJump';
 import { defaultPoseJumpScene, poseJumpScene, poseJumpTruth, type PoseJumpSceneOptions } from '../testing/poseJumpScene';
 import { defaultPoseScene, poseScene } from '../testing/poseScene';
+import { LM } from '../pose';
 import type { PoseFrame } from '../technique';
+import { standing } from '../testing/standing';
 
 /** The coarse pass's reading of a scene: only the frames it asks for. */
 function coarse(frames: PoseFrame[], fps: number, rebound = false): PoseFrame[] {
@@ -180,6 +182,29 @@ describe('starting to follow', () => {
     expect(s.at.x).toBeCloseTo(540, -1);
     expect(s.at.y).toBeCloseTo(1150 - 0.53 * 700, -1);
     expect(startFrom([{ frame: 0, t: 0, poses: [] }])).toBeNull();
+  });
+
+  // Seen in a real clip (a drop jump filmed low, in black, against dark machines): beside the athlete the model read a
+  // second "person" upside down, hips at the top of the picture and legs reaching up out of it, longer than the
+  // athlete's. In another, the middle frame held only a scrap of someone at the picture's edge.
+  const athlete = standing({ x: 140, floor: 1150, stature: 1000 });
+  const ghost = standing({ x: 200, floor: 1150, stature: 1200 }).map((l) => ({ ...l, y: 400 - (l.y - 400) }));
+
+  it('skips a reading upside down (ankles above the hips), however long its legs', () => {
+    const s = startFrom([{ frame: 0, t: 0, poses: [ghost, athlete] }])!;
+    expect(s.at.x).toBeCloseTo(140, 6);
+    expect(s.at.y).toBeCloseTo(1150 - 0.53 * 1000, 6);
+  });
+
+  it('starts at the biggest person of all the frames, not a scrap in the first', () => {
+    const scrap = standing({ x: 10, floor: 520, stature: 150 });
+    const s = startFrom([
+      { frame: 3010, t: 0, poses: [scrap] },
+      { frame: 2196, t: 0, poses: [athlete] },
+    ])!;
+    expect(s.frame).toBe(2196);
+    expect(s.at.x).toBeCloseTo(athlete[LM.leftHip].x, 6);
+    expect(startFrom([{ frame: 0, t: 0, poses: [ghost] }])).toBeNull();
   });
 
   it('splits the coarse frames at the one nearest the start, both halves starting there', () => {
