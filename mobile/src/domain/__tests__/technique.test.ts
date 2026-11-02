@@ -1,7 +1,8 @@
 import { LM, type Pt } from '../pose';
-import { analyseTechnique, findJumpWindow, PASS_LINE, polyFit, TAP_PX, type Markers, type MetricKey, type PoseFrame, type TechniqueInput, type TechniqueResult } from '../technique';
+import { analyseTechnique, findJumpWindow, PASS_LINE, pickAthlete, polyFit, TAP_PX, type Markers, type MetricKey, type PoseFrame, type TechniqueInput, type TechniqueResult } from '../technique';
 import { coarseFrames, coarseStep, denseFrames, framesFromWire, planWindow, TAP_REACH_S, windowOf, type WireFrame } from '../techniqueRead';
 import { asWire, poseScene, type PoseScene, type PoseSceneOptions } from '../testing/poseScene';
+import { standing } from '../testing/standing';
 
 function analyse(over: Partial<PoseSceneOptions> = {}, input: Partial<TechniqueInput> = {}) {
   const scene = poseScene(over);
@@ -1294,6 +1295,24 @@ describe('findJumpWindow', () => {
     const scene = poseScene();
     const coarse = scene.frames.filter((f) => f.frame % 8 === 0 && f.frame < scene.truth.takeoffFrame - 60);
     expect(findJumpWindow(coarse, 240, { before: 1.2, after: 0.8 })).toBeNull();
+  });
+});
+
+describe('pickAthlete', () => {
+  // Filmed close and upright: the athlete 1300 px tall, feet at y 1750; behind them a smaller bystander whose hips are
+  // nearer the athlete's foot than the athlete's own hips are (566 px against 641).
+  const athlete = (dx: number) => standing({ x: 540 + dx, floor: 1750, stature: 1300, yaw: 90 });
+  const bystander = standing({ x: 800, floor: 1500, stature: 500, facing: -1 });
+  const frames: PoseFrame[] = Array.from({ length: 6 }, (_, i) => ({ frame: i, t: i / 30, poses: [bystander, athlete(4 * i)] }));
+
+  it('picks the person tapped on, wherever on the body the tap is (here a foot), not the one whose hips are nearest it', () => {
+    const foot = athlete(0)[LM.leftAnkle];
+    expect(pickAthlete(frames, { x: foot.x, y: foot.y }).every((p) => p != null && p[LM.leftHip].x > 400 && p[LM.leftHip].x < 600)).toBe(true);
+  });
+
+  it('still picks the one tapped on the hips', () => {
+    const hips = athlete(0)[LM.leftHip];
+    expect(pickAthlete(frames, { x: hips.x, y: hips.y }).every((p) => p != null && p[LM.leftHip].x < 600)).toBe(true);
   });
 });
 

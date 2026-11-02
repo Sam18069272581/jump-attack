@@ -1,4 +1,5 @@
-import { centreOfMass, decodePose, jointAngle, LANDMARK_COUNT, LANDMARK_FIELDS, LM, SEGMENTS, SIDE, type Pose, type Pt } from '../pose';
+import { centreOfMass, decodePose, distanceToBody, jointAngle, LANDMARK_COUNT, LANDMARK_FIELDS, LM, SEGMENTS, SIDE, type Pose, type Pt } from '../pose';
+import { standing } from '../testing/standing';
 
 /** A pose with every landmark at `at`, then the given ones moved. */
 function poseWith(at: Pt, moves: [number[], Pt][] = []): Pose {
@@ -70,5 +71,23 @@ describe('jointAngle', () => {
 
   it('calls a joint with a zero-length limb straight rather than failing', () => {
     expect(jointAngle({ x: 0, y: 0 }, { x: 0, y: 0 }, { x: 1, y: 0 })).toBe(180);
+  });
+});
+
+describe('distanceToBody', () => {
+  // Side-on, 1000 px tall, feet at y 1000 (domain/testing/standing.ts): the shin runs from the knee (500, 715) to the
+  // ankle (500, 961), the head line from the shoulders (500, 182) to the nose (550, 70).
+  const p = standing({ x: 500, floor: 1000, stature: 1000 });
+
+  it('is 0 on a bone, between its ends as well as at them', () => {
+    expect(distanceToBody(p, { x: 500, y: 715 })).toBe(0);
+    expect(distanceToBody(p, { x: 500, y: 800 })).toBe(0);
+  });
+
+  it('is the distance to the nearest bone: beside the shin, past the toes, above the nose', () => {
+    expect(distanceToBody(p, { x: 530, y: 800 })).toBeCloseTo(30, 6);
+    // The toe is 112 px in front of the ankle, on the floor.
+    expect(distanceToBody(p, { x: 612 + 40, y: 1000 })).toBeCloseTo(40, 6);
+    expect(distanceToBody(p, { x: 550, y: 40 })).toBeCloseTo(30, 6);
   });
 });

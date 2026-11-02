@@ -258,13 +258,19 @@ export function findPoseJumps(
 
 /**
  * Where to start following the athlete when nobody tapped them: the biggest person (longest legs) in the first frame
- * of `frames` that has anyone, at their hips. Bystanders in a jump test stand further back than the athlete, who was
- * framed to fill the picture.
+ * of `frames` that has anyone who can be them, at their hips. Bystanders in a jump test stand further back than the
+ * athlete, who was framed to fill the picture. Who can't be them: a reading with the ankles above the hips (the model
+ * can see a "person" upside down in a dark, cluttered picture) and, given the picture's size, anyone whose hips or
+ * ankles are outside it (a scrap at the edge, or the athlete walking up to the phone at the start of an uncut clip).
  */
-export function startFrom(frames: PoseFrame[]): { frame: number; at: Pt } | null {
+export function startFrom(frames: PoseFrame[], picture?: { width: number; height: number }): { frame: number; at: Pt } | null {
+  const POINTS = [LM.leftHip, LM.rightHip, LM.leftAnkle, LM.rightAnkle];
+  const inside = (p: Pose) => !picture || POINTS.every((i) => p[i].x >= 0 && p[i].x <= picture.width && p[i].y >= 0 && p[i].y <= picture.height);
+  const upright = (p: Pose) => min(p[LM.leftAnkle].y, p[LM.rightAnkle].y) > (p[LM.leftHip].y + p[LM.rightHip].y) / 2;
   for (const f of frames) {
-    if (!f.poses.length) continue;
-    const p = f.poses.reduce((a, b) => (legOf(b) > legOf(a) ? b : a));
+    const can = f.poses.filter((p) => upright(p) && inside(p));
+    if (!can.length) continue;
+    const p = can.reduce((a, b) => (legOf(b) > legOf(a) ? b : a));
     return { frame: f.frame, at: { x: (p[LM.leftHip].x + p[LM.rightHip].x) / 2, y: (p[LM.leftHip].y + p[LM.rightHip].y) / 2 } };
   }
   return null;
