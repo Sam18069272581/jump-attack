@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -90,12 +90,20 @@ function Athletes() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState<'export' | 'import' | null>(null);
 
+  // A double tap, or Return plus the button, fires twice before the name box clears; only the first adds someone.
+  const adding = useRef(false);
+
   async function add() {
-    if (!name.trim()) return;
-    const id = await createAthlete(db, name.trim());
-    setName('');
-    await reload();
-    select(id);
+    if (adding.current || !name.trim()) return;
+    adding.current = true;
+    try {
+      const id = await createAthlete(db, name.trim());
+      setName('');
+      await reload();
+      select(id);
+    } finally {
+      adding.current = false;
+    }
   }
 
   async function exportFile() {

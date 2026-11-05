@@ -3,7 +3,7 @@ import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'rea
 import { Alert, Text, TextInput, type AlertButton } from 'react-native';
 
 import { migrate } from '@/db/migrations';
-import { addTrial, createAthlete, ensureSession, getAthlete, listTrials } from '@/db/repo';
+import { addTrial, createAthlete, ensureSession, getAthlete, listAthletes, listTrials } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { deleteSavedVideos } from '@/media/videos';
 import { AthleteProvider } from '@/state/athlete';
@@ -84,4 +84,19 @@ it('clears old video copies after confirming', async () => {
   expect(alert).toHaveBeenCalled();
   expect(deleteSavedVideos).toHaveBeenCalled();
   expect((await listTrials(mockDb, 'v'))[0].video_uri).toBeNull();
+});
+
+it('adds one athlete when Add is pressed and Return hit at the same time', async () => {
+  const r = await render();
+  const before = (await listAthletes(mockDb)).length;
+  await type(r.root, '新运动员的名字', '小明');
+  // A double tap, or the Return key and the button together: both fire before the name box clears.
+  await act(async () => {
+    const add = pressable(r.root, '添加').props.onPress;
+    const submit = field(r.root, '新运动员的名字').props.onSubmitEditing;
+    await Promise.all([add(), submit()]);
+  });
+  const after = await listAthletes(mockDb);
+  expect(after.length).toBe(before + 1);
+  expect(after.filter((a) => a.name === '小明')).toHaveLength(1);
 });
