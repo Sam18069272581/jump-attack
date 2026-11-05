@@ -51,17 +51,22 @@ export function cmjReadiness(previous: number[], today: number, window = 7): { r
   return { readiness: dropPct > FATIGUE_DROP ? 'fatigued' : 'ready', dropPct };
 }
 
+/** A CMJ test session's result, and whether it was typed in or marked on video (undefined: not known, read as one kind). */
+export type CmjSessionResult = { started_at: string; best: number; source?: 'manual' | 'video' };
+
 /**
  * Readiness on `date` from CMJ session results: the day's best against the sessions on earlier days.
  * `today` is null when CMJ hasn't been tested that day.
  */
-export function readinessOn(results: { started_at: string; best: number }[], date: ISODate): { today: number | null; readiness: Readiness; dropPct: number } {
+export function readinessOn(results: CmjSessionResult[], date: ISODate): { today: number | null; readiness: Readiness; dropPct: number } {
   const dayOf = (r: { started_at: string }) => toISODate(new Date(r.started_at));
-  const todays = results.filter((r) => dayOf(r) === date).map((r) => r.best);
+  const todays = results.filter((r) => dayOf(r) === date);
   if (todays.length === 0) return { today: null, readiness: 'unknown', dropPct: 0 };
-  const before = results.filter((r) => dayOf(r) < date).map((r) => r.best);
-  const today = Math.max(...todays);
-  return { today, ...cmjReadiness(before, today) };
+  const best = todays.reduce((a, b) => (b.best > a.best ? b : a));
+  // A typed-in result (a jump mat, My Jump) and one marked on video differ by more than the 5% fatigue line, so each
+  // is read against its own kind only: one mis-marked video would otherwise drag the baseline down and hide fatigue.
+  const before = results.filter((r) => dayOf(r) < date && r.source === best.source).map((r) => r.best);
+  return { today: best.best, ...cmjReadiness(before, best.best) };
 }
 
 /** Whether a result was recorded on one of the `poor` days (days the athlete was in poor shape). */

@@ -18,6 +18,16 @@ export async function listCmjMeans(db: SQLiteDatabase, athleteId: number): Promi
   );
 }
 
+/** CMJ sessions with a jump marked on video (it has a flight time); the rest were typed in. */
+export async function listVideoCmjSessions(db: SQLiteDatabase, athleteId: number): Promise<Set<string>> {
+  const rows = await db.getAllAsync<{ id: string }>(
+    `SELECT DISTINCT s.id FROM test_session s JOIN trial t ON t.session_id = s.id
+     WHERE s.athlete_id = ? AND s.metric_code = 'cmj' AND t.flight_ms IS NOT NULL`,
+    athleteId,
+  );
+  return new Set(rows.map((r) => r.id));
+}
+
 /** Workouts given a session RPE and minutes, across the athlete's plans. */
 export async function listSessionLoads(db: SQLiteDatabase, athleteId: number): Promise<{ started_at: string; rpe: number; minutes: number }[]> {
   return db.getAllAsync(

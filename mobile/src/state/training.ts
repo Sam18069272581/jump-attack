@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { listDropJumps } from '@/db/jumps';
-import { listCmjMeans } from '@/db/load';
+import { listCmjMeans, listVideoCmjSessions } from '@/db/load';
 import { listPain } from '@/db/pain';
 import { listRecoveryDays } from '@/db/recovery';
 import { getActivePlan, listWorkouts, startWorkout, type Plan, type Workout } from '@/db/training';
@@ -44,9 +44,14 @@ export async function loadTraining(db: SQLiteDatabase, athleteId: number): Promi
   return { plan, template, workouts: await listWorkouts(db, plan.id) };
 }
 
-/** CMJ for readiness is each session's mean of its best 3 jumps (db/load.ts), today and in the baseline alike. */
+/**
+ * CMJ for readiness is each session's mean of its best 3 jumps (db/load.ts), today and in the baseline alike, marked
+ * typed-in or video so each is judged against its own kind (domain/assess.ts readinessOn).
+ */
 async function readinessInputs(db: SQLiteDatabase, athleteId: number) {
-  return Promise.all([listCmjMeans(db, athleteId), listRecoveryDays(db, athleteId)]);
+  const [means, video, recovery] = await Promise.all([listCmjMeans(db, athleteId), listVideoCmjSessions(db, athleteId), listRecoveryDays(db, athleteId)]);
+  const cmj = means.map((r) => ({ ...r, source: video.has(r.session_id) ? ('video' as const) : ('manual' as const) }));
+  return [cmj, recovery] as const;
 }
 
 export async function loadReadiness(db: SQLiteDatabase, athleteId: number, date: ISODate): Promise<DayReadiness & { streak: number }> {

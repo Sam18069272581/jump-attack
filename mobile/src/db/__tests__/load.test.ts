@@ -1,4 +1,4 @@
-import { listCmjMeans, listSessionLoads, listTestJumpDays } from '../load';
+import { listCmjMeans, listSessionLoads, listTestJumpDays, listVideoCmjSessions } from '../load';
 import { migrate } from '../migrations';
 import { addTrial, ensureSession } from '../repo';
 import { openMemoryDb } from '../testing/memoryDb';
@@ -47,4 +47,14 @@ it('counts jump-test attempts per local day', async () => {
     { date: '2026-11-02', jumps: 3 },
     { date: '2026-11-03', jumps: 3 },
   ]);
+});
+
+it('tells the CMJ sessions measured from video from the typed-in ones', async () => {
+  const db = await setup();
+  await session(db, 'typed', 'cmj', new Date(2026, 10, 2, 9), [55]);
+  await ensureSession(db, 'filmed', 1, 'cmj');
+  await addTrial(db, { session_id: 'filmed', value: 30.7, flight_ms: 500, fps: 60, detail: { source: 'video' } });
+  await ensureSession(db, 'sj', 1, 'sj');
+  await addTrial(db, { session_id: 'sj', value: 40, flight_ms: 570, fps: 240 });
+  expect(await listVideoCmjSessions(db, 1)).toEqual(new Set(['filmed']));
 });
