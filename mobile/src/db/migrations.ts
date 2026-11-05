@@ -2,7 +2,8 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 /**
  * Each entry upgrades the schema by one version; `PRAGMA user_version` records how far a device has got.
- * Never edit a shipped migration, append a new one, and add what it creates first to ADDS below.
+ * Never edit a shipped migration, append a new one. Use only CREATE TABLE, CREATE INDEX, ALTER TABLE … ADD COLUMN and
+ * INSERT, and no ';' or '--' inside strings, so a start can tell which statements a database is missing (see repair).
  */
 const MIGRATIONS: string[] = [
   `
@@ -146,25 +147,6 @@ const MIGRATIONS: string[] = [
 ];
 
 /**
- * What each migration above adds first, as [table] or [table, column], to tell whether it really ran. One entry per
- * migration, in the same order.
- */
-const ADDS: [table: string, column?: string][] = [
-  ['athlete'],
-  ['plan'],
-  ['trial', 'load_kg'],
-  ['athlete', 'leg_length_cm'],
-  ['athlete', 'rim_height_cm'],
-  ['plan', 'blocks'],
-  ['set_log', 'mean_velocity'],
-  ['dunk_attempt'],
-  ['athlete', 'goal_date'],
-  ['knee_pain'],
-  ['workout', 'session_rpe'],
-  ['dunk_attempt', 'trial_id'],
-];
-
-/**
  * Upgrades in progress, by database file. On the web every SQLiteDatabase opened on a file shares one SQLite
  * connection, so a second start while the first is still upgrading (the provider mounting again) would BEGIN inside
  * the first one's transaction, roll it back and make its COMMIT fail with "cannot commit - no transaction is active".
@@ -190,14 +172,7 @@ async function upgrade(db: SQLiteDatabase): Promise<void> {
   await db.execAsync('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   const row = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   let version = row?.user_version ?? 0;
-  // Two overlapping starts used to roll back a migration's changes while user_version still moved past it, so every
-  // later start failed. Run such a migration again; each one is all or nothing, so it is either there or missing.
-  for (let i = 0; i < Math.min(version, MIGRATIONS.length); i++) {
-    if (await has(db, ...ADDS[i])) continue;
-    await db.withTransactionAsync(async () => {
-      await db.execAsync(MIGRATIONS[i]);
-    });
-  }
+  await repair(db, Math.min(version, MIGRATIONS.length));
   while (version < MIGRATIONS.length) {
     await db.withTransactionAsync(async () => {
       await db.execAsync(MIGRATIONS[version]);
@@ -207,9 +182,55 @@ async function upgrade(db: SQLiteDatabase): Promise<void> {
   }
 }
 
-async function has(db: SQLiteDatabase, table: string, column?: string): Promise<boolean> {
+/**
+ * Before upgrades were queued, two overlapping starts could roll back a migration while user_version still moved past
+ * it, or leave one half done (its statements committed one at a time after the transaction ended, then the page
+ * closed), so every later start failed, e.g. with "no such table: trial". Runs again each statement of the first
+ * `applied` migrations that the database is missing. Nothing that is there is touched, so no record is lost.
+ */
+async function repair(db: SQLiteDatabase, applied: number): Promise<void> {
+  for (let i = 0; i < applied; i++) {
+    const created = new Set<string>();
+    const todo: string[] = [];
+    for (const statement of statements(MIGRATIONS[i])) {
+      const table = /^CREATE TABLE (\w+)/i.exec(statement)?.[1];
+      const index = /^CREATE (?:UNIQUE )?INDEX (\w+)/i.exec(statement)?.[1];
+      const column = /^ALTER TABLE (\w+) ADD COLUMN (\w+)/i.exec(statement);
+      const insert = /^INSERT INTO (\w+)/i.exec(statement)?.[1];
+      let missing: boolean;
+      if (table) missing = !(await exists(db, 'table', table));
+      else if (index) missing = !(await exists(db, 'index', index));
+      else if (column) missing = !(await hasColumn(db, column[1], column[2]));
+      // Default rows go in only with the table they belong to, never next to the person's own.
+      else if (insert) missing = created.has(insert);
+      else throw new Error(`migrations.ts can't check this statement: ${statement.slice(0, 60)}`);
+      if (!missing) continue;
+      if (table) created.add(table);
+      todo.push(statement);
+    }
+    if (todo.length === 0) continue;
+    await db.withTransactionAsync(async () => {
+      for (const statement of todo) await db.execAsync(statement);
+    });
+  }
+}
+
+/** A migration's statements, comments dropped. */
+function statements(sql: string): string[] {
+  return sql
+    .replace(/--[^\n]*/g, '')
+    .split(';')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+async function exists(db: SQLiteDatabase, type: 'table' | 'index', name: string): Promise<boolean> {
+  return (await db.getFirstAsync('SELECT 1 AS found FROM sqlite_master WHERE type = ? AND name = ?', type, name)) != null;
+}
+
+async function hasColumn(db: SQLiteDatabase, table: string, column: string): Promise<boolean> {
   const columns = await db.getAllAsync<{ name: string }>(`PRAGMA table_info("${table}")`);
-  return column == null ? columns.length > 0 : columns.some((c) => c.name === column);
+  return columns.some((c) => c.name === column);
 }
 
 export const LATEST_VERSION = MIGRATIONS.length;
