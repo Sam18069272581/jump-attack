@@ -116,3 +116,18 @@ it('keeps a lifted 1RM as the current one until it is 120 days old', async () =>
   expect(await currentSquat1rm(db, 1, '2020-06-01')).toEqual({ kg: expect.closeTo(140, 6), source: 'velocity', at: '2020-05-20' });
   expect(toISODate(new Date(2020, 4, 20, 18))).toBe('2020-05-20');
 });
+
+it('reads the best CMJ and SJ of the latest day, not whichever test came last that day', async () => {
+  const db = await setup();
+  // A fresh test in the morning, and a tired one after training the same day.
+  await jumps(db, 'cmj', 'cmj-am', [48, 50]);
+  await jumps(db, 'cmj', 'cmj-pm', [44, 45]);
+  await jumps(db, 'sj', 'sj-am', [46]);
+  await jumps(db, 'sj', 'sj-pm', [41]);
+  await db.runAsync("UPDATE test_session SET started_at = '2026-11-03T08:00:00.000Z' WHERE id IN ('cmj-am', 'sj-am')");
+  await db.runAsync("UPDATE test_session SET started_at = '2026-11-03T15:00:00.000Z' WHERE id IN ('cmj-pm', 'sj-pm')");
+
+  const inputs = await loadDunkInputs(db, (await getAthlete(db, 1))!);
+  expect(inputs.cmj).toEqual([50]);
+  expect(inputs.sj).toEqual([46]);
+});

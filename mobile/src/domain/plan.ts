@@ -126,6 +126,26 @@ export const MAX_RPE = 10;
 
 const clampRpe = (r: number) => Math.min(MAX_RPE, Math.max(MIN_RPE, r));
 
+/** A logged set's weight, kg: bodyweight or an empty hand (0) up to well past any squat on record. */
+export const SET_LOAD_RANGE_KG: [number, number] = [0, 500];
+/** A logged set's RPE: 1 (very light) to 10 (nothing left), the 10-point RPE / reps-in-reserve scale. */
+export const SET_RPE_RANGE: [number, number] = [1, 10];
+
+/**
+ * Why a set as typed can't be logged, or null. A weight of −20 or 1000 kg went into the training volume and the next
+ * session's suggested weight; an RPE of 15 into the load.
+ */
+export function setProblem(s: { reps: number; loadKg: number | null; rpe: number | null; velocity: number | null }): string | null {
+  const finite = (x: number | null) => x == null || Number.isFinite(x);
+  if (!Number.isFinite(s.reps) || s.reps <= 0 || !finite(s.loadKg) || !finite(s.rpe) || (s.velocity != null && !(s.velocity > 0 && s.velocity < 3))) {
+    return tr('次数、重量和速度要填数字');
+  }
+  const outside = (x: number | null, [lo, hi]: [number, number]) => x != null && (x < lo || x > hi);
+  if (outside(s.loadKg, SET_LOAD_RANGE_KG)) return tr('{name}一般在 {span}，检查一下输入', { name: tr('重量'), span: `${SET_LOAD_RANGE_KG.join('–')} kg` });
+  if (outside(s.rpe, SET_RPE_RANGE)) return tr('{name}一般在 {span}，检查一下输入', { name: 'RPE', span: SET_RPE_RANGE.join('–') });
+  return null;
+}
+
 export function isLoaded(p: Prescription): boolean {
   return p.kind === 'strength' || p.loaded === true;
 }

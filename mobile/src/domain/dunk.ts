@@ -150,6 +150,19 @@ export type DunkDiagnosis = {
   stale: Testable[];
 };
 
+/**
+ * One result per day, the best of that day's tests, oldest first. A second test after training is a tired one, so
+ * the diagnosis reads the day's best rather than whichever test came last.
+ */
+export function bestEachDay(rows: { started_at: string; best: number }[]): number[] {
+  const byDay = new Map<ISODate, number>();
+  for (const r of rows) {
+    const day = toISODate(new Date(r.started_at));
+    byDay.set(day, Math.max(byDay.get(day) ?? -Infinity, r.best));
+  }
+  return [...byDay].sort((a, b) => a[0].localeCompare(b[0])).map(([, best]) => best);
+}
+
 export function dunkLine(rimCm?: number | null, clearanceCm?: number | null): number {
   return (rimCm ?? RIM_CM) + (clearanceCm ?? CLEARANCE_CM);
 }

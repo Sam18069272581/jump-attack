@@ -87,9 +87,19 @@ export default function Attempts() {
     }
   }
 
-  async function remove(id: number) {
-    await deleteDunkAttempt(db, id);
-    await load();
+  // Asks first, as the attempt's own page does: a filmed attempt takes its video and analysis with it.
+  function remove(a: DunkAttempt) {
+    Alert.alert(tr('删除这次尝试？'), filmed(a) ? tr('录像和起跳分析也会一起删掉。') : undefined, [
+      { text: tr('取消'), style: 'cancel' },
+      {
+        text: tr('删除'),
+        style: 'destructive',
+        onPress: async () => {
+          await deleteDunkAttempt(db, a.id);
+          await load();
+        },
+      },
+    ]);
   }
 
   const setupParams = () => ({ session: newSessionId(), rim: String(rimCm), ball: ballNow });
@@ -141,7 +151,7 @@ export default function Attempts() {
           <View style={styles.rowMain}>{body}</View>
         )}
         {opts.deletable && (
-          <Pressable accessibilityRole="button" accessibilityLabel={tr('删除这次')} hitSlop={8} onPress={() => remove(a.id)}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr('删除这次')} hitSlop={8} onPress={() => remove(a)}>
             <Text style={styles.delete}>{tr('删除')}</Text>
           </Pressable>
         )}

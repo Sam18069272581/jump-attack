@@ -1,6 +1,6 @@
 // Drives the training screens against a real (in-memory) database: plan → CMJ readiness → reduced session → logged sets → report.
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
-import { Alert, Text } from 'react-native';
+import { Alert, Text, TextInput } from 'react-native';
 
 import { addDropJump } from '@/db/jumps';
 import { migrate } from '@/db/migrations';
@@ -98,6 +98,31 @@ it('cuts the session when today’s CMJ is more than 5% down, and freezes that w
   expect(mockRouter.push).toHaveBeenCalledWith({ pathname: '/workout/[date]', params: { date: today } });
   const plan = await mockDb.getFirstAsync<{ id: number }>('SELECT id FROM plan');
   expect(await getWorkout(mockDb, plan!.id, today)).toMatchObject({ readiness: 'fatigued', sessionCode: 'A' });
+});
+
+it('does not log a set with a weight or RPE no one lifts at', async () => {
+  mockParams = { date: today };
+  const r = await render(<WorkoutScreen />);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+  const checks = r.root.findAll((n) => n.props.accessibilityRole === 'checkbox' && typeof n.props.onPress === 'function');
+  const kg = r.root.findAll((n) => n.type === TextInput && n.props.accessibilityLabel === 'kg');
+  const rpe = r.root.findAll((n) => n.type === TextInput && n.props.accessibilityLabel === 'RPE');
+  // Back squat, set 1 (after the two squat-jump sets): −20 kg was saved and counted as training volume.
+  await act(async () => kg[0].props.onChangeText('-20'));
+  await act(async () => checks[2].props.onPress());
+  expect(alert).toHaveBeenLastCalledWith('请检查数字', '重量一般在 0–500 kg，检查一下输入');
+  await act(async () => kg[0].props.onChangeText('1e3'));
+  await act(async () => checks[2].props.onPress());
+  expect(alert).toHaveBeenLastCalledWith('请检查数字', '重量一般在 0–500 kg，检查一下输入');
+  await act(async () => kg[0].props.onChangeText('100'));
+  await act(async () => rpe[0].props.onChangeText('15'));
+  await act(async () => checks[2].props.onPress());
+  expect(alert).toHaveBeenLastCalledWith('请检查数字', 'RPE一般在 1–10，检查一下输入');
+
+  const plan = await mockDb.getFirstAsync<{ id: number }>('SELECT id FROM plan');
+  const workout = (await getWorkout(mockDb, plan!.id, today))!;
+  expect(await listSets(mockDb, workout.id)).toEqual([]);
+  alert.mockRestore();
 });
 
 it('logs sets with the prescribed reps and finishes with a report', async () => {

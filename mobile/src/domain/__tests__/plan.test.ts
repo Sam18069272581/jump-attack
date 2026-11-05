@@ -14,6 +14,7 @@ import {
   planPosition,
   planWeekOf,
   scaleSession,
+  setProblem,
   summarizeWorkout,
   type PlanSettings,
   type SessionTemplate,
@@ -289,5 +290,28 @@ describe('missedThisWeek', () => {
     expect(missedThisWeek(t, s, [], '2026-10-27').map((p) => p.date)).toEqual(['2026-10-26']);
     expect(missedThisWeek(t, { ...s, startDate: '2026-10-21' }, [], '2026-10-22').map((p) => p.date)).toEqual(['2026-10-21']);
     expect(missedThisWeek(t, s, [], '2026-10-19')).toEqual([]);
+  });
+});
+
+describe('checking a set before it is logged', () => {
+  const ok = { reps: 5, loadKg: 100, rpe: 8, velocity: null };
+  it('takes a plausible set, bodyweight and blank RPE included', () => {
+    expect(setProblem(ok)).toBeNull();
+    expect(setProblem({ ...ok, loadKg: 0 })).toBeNull();
+    expect(setProblem({ ...ok, loadKg: null, rpe: null })).toBeNull();
+    expect(setProblem({ ...ok, loadKg: 500, rpe: 1 })).toBeNull();
+  });
+
+  it('turns away a weight outside 0–500 kg and an RPE outside 1–10', () => {
+    expect(setProblem({ ...ok, loadKg: -20 })).toBe('重量一般在 0–500 kg，检查一下输入');
+    expect(setProblem({ ...ok, loadKg: 1000 })).toBe('重量一般在 0–500 kg，检查一下输入');
+    expect(setProblem({ ...ok, rpe: 15 })).toBe('RPE一般在 1–10，检查一下输入');
+    expect(setProblem({ ...ok, rpe: -3 })).toBe('RPE一般在 1–10，检查一下输入');
+  });
+
+  it('still asks for numbers where text or nothing usable was typed', () => {
+    expect(setProblem({ ...ok, reps: Number.NaN })).toBe('次数、重量和速度要填数字');
+    expect(setProblem({ ...ok, rpe: Number.NaN })).toBe('次数、重量和速度要填数字');
+    expect(setProblem({ ...ok, velocity: 3.5 })).toBe('次数、重量和速度要填数字');
   });
 });

@@ -1,4 +1,4 @@
-import { FATIGUE_DROP, readinessOn, type Readiness } from './assess';
+import { FATIGUE_DROP, readinessOn, type CmjSessionResult, type Readiness } from './assess';
 import { addDays, type ISODate } from './dates';
 import { readRecovery, type RecoveryDay, type RecoveryRead } from './recovery';
 
@@ -15,7 +15,7 @@ export type DayReadiness = {
   signals: string[];
 };
 
-type CmjResult = { started_at: string; best: number };
+type CmjResult = CmjSessionResult;
 
 export function dayReadiness(cmj: CmjResult[], recovery: RecoveryDay[], date: ISODate): DayReadiness {
   const c = readinessOn(cmj, date);

@@ -1,4 +1,4 @@
-import { dayState, diagnose, dunkLine, reachRuler, tolerance, warmupState, worstState, type DunkInput } from '../dunk';
+import { bestEachDay, dayState, diagnose, dunkLine, reachRuler, tolerance, warmupState, worstState, type DunkInput } from '../dunk';
 import type { DayReadiness } from '../readiness';
 
 const base: DunkInput = { bodyMassKg: 75, standingReachCm: 240, cmj: [], sj: [], approachTouch: [], squat1rm: [], dropJumps: [], fvPct: [] };
@@ -269,5 +269,18 @@ describe('reach ruler', () => {
     expect(reachRuler(null, 240, 320)).toBeNull();
     expect(reachRuler(292, null, 320)).toBeNull();
     expect(reachRuler(325, 320, 320)).toBeNull();
+  });
+});
+
+describe('one CMJ per day', () => {
+  it('keeps the best test of each day, in date order', () => {
+    // Morning 50, after training 45 the same day: the day reads 50. The next day's single test reads as it is.
+    const rows = [
+      { started_at: '2026-11-03T08:00:00.000Z', best: 50 },
+      { started_at: '2026-11-03T15:00:00.000Z', best: 45 },
+      { started_at: '2026-11-04T08:00:00.000Z', best: 47 },
+    ];
+    expect(bestEachDay(rows)).toEqual([50, 47]);
+    expect(bestEachDay([])).toEqual([]);
   });
 });

@@ -1524,6 +1524,7 @@ export const de: Record<string, string> = {
   '暂停跳跃训练，找康复师或医生看一下；App 不做医疗判断': 'Sprungtraining pausieren und zu Physio oder Arzt gehen; die App trifft keine medizinischen Urteile',
   '训练中膝盖 {score} 分，超过 {PAIN_LIMIT} 分：{RED_ACTION}': 'Knie im Training bei {score}, über {PAIN_LIMIT}: {RED_ACTION}',
   '今早膝盖 {score} 分，比练前（{score2} 分）高：{RED_ACTION}': 'Knie heute Morgen bei {score}, höher als vor dem Training ({score2}): {RED_ACTION}',
+  '今早膝盖 {score} 分，超过 {PAIN_LIMIT} 分：{RED_ACTION}': 'Knie heute Morgen bei {score}, über {PAIN_LIMIT}: {RED_ACTION}',
   '训练中膝盖 {score} 分：照常练，跳跃量先别加': 'Knie im Training bei {score}: normal trainieren, aber vorerst nicht mehr Sprünge',
   '训练中膝盖 {score} 分': 'Knie im Training bei {score}',
   '今早膝盖 {score} 分': 'Knie heute Morgen bei {score}',
@@ -1895,4 +1896,10 @@ export const de: Record<string, string> = {
 
   // web/dialogs.ts
   '{p}（确定 = {text}）': '{p}(OK = {text})',
+
+  // domain/profile.ts
+  '腿长': 'Beinlänge',
+  '下蹲高度': 'Hockhöhe',
+  '过筐余量': 'Abstand über dem Korb',
+  '{name}要填一个数': '{name} muss eine Zahl sein',
 };

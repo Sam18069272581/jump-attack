@@ -17,7 +17,7 @@ import { demoFor } from '@/domain/demos';
 import { parseNumber } from '@/domain/entry';
 import { sessionLoad, workoutMinutes } from '@/domain/load';
 import { jumpVolumeNote, kneeStatus, PAIN_HINT, PAIN_LIMIT } from '@/domain/pain';
-import { formatPrescription, formatRpe, isLoaded, personalNote, planDay, summarizeWorkout, type LoggedSet, type PersonalNumbers, type Prescription } from '@/domain/plan';
+import { formatPrescription, formatRpe, isLoaded, personalNote, planDay, setProblem, summarizeWorkout, type LoggedSet, type PersonalNumbers, type Prescription } from '@/domain/plan';
 import { allowanceText, checkSet, setTarget, STATE_LABEL, usualWarmupLoad, type DayReading } from '@/domain/target';
 import { LOAD_FROM_VBT } from '@/domain/vbt';
 import { decimal, tr } from '@/i18n';
@@ -321,11 +321,13 @@ function SetRow({
     const r = num(reps) ?? p.reps;
     const load = loaded ? (num(kg) ?? suggestedKg) : null;
     const velocity = tracksVelocity ? num(v) : null;
-    if (!Number.isFinite(r) || r <= 0 || (load != null && !Number.isFinite(load)) || (velocity != null && !(velocity > 0 && velocity < 3))) {
-      Alert.alert(tr('请检查数字'), tr('次数、重量和速度要填数字'));
+    const rpeLogged = num(rpe) ?? p.rpe ?? null;
+    const problem = setProblem({ reps: r, loadKg: load, rpe: rpeLogged, velocity });
+    if (problem) {
+      Alert.alert(tr('请检查数字'), problem);
       return;
     }
-    onToggle({ exercise_code: p.code, set_no: setNo, reps: Math.round(r), load_kg: load, rpe: num(rpe) ?? p.rpe ?? null, mean_velocity: velocity });
+    onToggle({ exercise_code: p.code, set_no: setNo, reps: Math.round(r), load_kg: load, rpe: rpeLogged, mean_velocity: velocity });
   }
 
   return (
@@ -411,7 +413,8 @@ function SessionLoad({ workout, onSave }: { workout: Workout; onSave: (v: { rpe:
         <TextInput
           value={minutes}
           onChangeText={setMinutes}
-          onEndEditing={() => onSave({ rpe, minutes: typed })}
+          // onBlur, not onEndEditing: react-native-web never calls onEndEditing, so the web app never saved the minutes.
+          onBlur={() => onSave({ rpe, minutes: typed })}
           keyboardType="number-pad"
           accessibilityLabel={tr('训练时长（分钟）')}
           style={styles.minutesInput}
