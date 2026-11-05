@@ -1,4 +1,5 @@
 import { localizeHtml } from '@/i18n';
+import { scriptJson } from './scriptJson';
 
 /**
  * The replay and export page, run in a WebView like the frame reader (media/frameGrabberHtml.ts): Expo Go has no
@@ -66,8 +67,7 @@ export type ReplayConfig = {
 };
 
 export function replayHtml(c: ReplayConfig): string {
-  // `<` can't close the script it sits in once escaped.
-  const config = JSON.stringify(c).replace(/</g, '\\u003c');
+  const config = scriptJson(c);
   return localizeHtml(`<!doctype html>
 <html><head>
 <meta charset="utf-8">

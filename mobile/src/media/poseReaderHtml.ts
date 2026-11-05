@@ -2,6 +2,7 @@ import { LIB_FROM_PAGE, POSE_CDN } from './poseLib';
 import { POSE_SHARED_JS } from './poseShared';
 
 import { localizeHtml } from '@/i18n';
+import { scriptJson } from './scriptJson';
 
 /**
  * The page that reads people's poses out of a clip, run in a WebView (components/PoseReader.tsx). It seeks to each
@@ -34,7 +35,7 @@ export type PoseReaderOptions = {
 };
 
 export function poseReaderHtml(o: PoseReaderOptions): string {
-  const config = JSON.stringify({ video: o.video, bg: o.bg, accent: o.accent, lib: o.lib ?? LIB_FROM_PAGE, cdn: POSE_CDN, numPoses: 2 });
+  const config = scriptJson({ video: o.video, bg: o.bg, accent: o.accent, lib: o.lib ?? LIB_FROM_PAGE, cdn: POSE_CDN, numPoses: 2 });
   return localizeHtml(`<!doctype html>
 <html><head>
 <meta charset="utf-8">
