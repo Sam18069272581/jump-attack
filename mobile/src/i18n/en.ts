@@ -1524,6 +1524,7 @@ export const en: Record<string, string> = {
   '暂停跳跃训练，找康复师或医生看一下；App 不做医疗判断': 'Pause jump training and see a physio or doctor; the app doesn’t make medical judgments',
   '训练中膝盖 {score} 分，超过 {PAIN_LIMIT} 分：{RED_ACTION}': 'Knee {score} during training, over {PAIN_LIMIT}: {RED_ACTION}',
   '今早膝盖 {score} 分，比练前（{score2} 分）高：{RED_ACTION}': 'Knee {score} this morning, higher than before training ({score2}): {RED_ACTION}',
+  '今早膝盖 {score} 分，超过 {PAIN_LIMIT} 分：{RED_ACTION}': 'Knee {score} this morning, above {PAIN_LIMIT}: {RED_ACTION}',
   '训练中膝盖 {score} 分：照常练，跳跃量先别加': 'Knee {score} during training: train as usual, but don’t add jumps yet',
   '训练中膝盖 {score} 分': 'Knee {score} during training',
   '今早膝盖 {score} 分': 'Knee {score} this morning',

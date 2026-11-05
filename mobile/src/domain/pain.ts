@@ -21,6 +21,8 @@ export const PAIN_OK = 2;
 export const PAIN_LIMIT = 5;
 /** This much at any time: stop jumping and have it looked at. */
 export const PAIN_STOP = 7;
+/** How far back the light reads, days: a training week. Older scores no longer say anything about today's knee. */
+export const PAIN_WINDOW_DAYS = 7;
 
 const RED_ACTION = '这次跳跃减半，不做跳深';
 const STOP_ACTION = '暂停跳跃训练，找康复师或医生看一下；App 不做医疗判断';
@@ -30,25 +32,30 @@ type Read = { light: Exclude<KneeLight, 'stop'>; reason: string | null };
 /** One session: its own pain, and the next morning's against the last morning before it. */
 function readSession(session: PainEntry, mornings: PainEntry[]): Read {
   if (session.score > PAIN_LIMIT) return { light: 'red', reason: tr('训练中膝盖 {score} 分，超过 {PAIN_LIMIT} 分：{RED_ACTION}', { score: session.score, PAIN_LIMIT, RED_ACTION: tr(RED_ACTION) }) };
-  const before = mornings.filter((m) => m.date <= session.date).at(-1);
+  // The morning before training is a baseline only from the same week.
+  const before = mornings.filter((m) => m.date <= session.date && m.date >= addDays(session.date, -PAIN_WINDOW_DAYS)).at(-1);
   const after = mornings.find((m) => m.date === addDays(session.date, 1));
   if (before && after && after.score > before.score) return { light: 'red', reason: tr('今早膝盖 {score} 分，比练前（{score2} 分）高：{RED_ACTION}', { score: after.score, score2: before.score, RED_ACTION: tr(RED_ACTION) }) };
+  // With nothing to compare with, the next morning still has to be within what the model accepts.
+  if (!before && after && after.score > PAIN_LIMIT) return { light: 'red', reason: tr('今早膝盖 {score} 分，超过 {PAIN_LIMIT} 分：{RED_ACTION}', { score: after.score, PAIN_LIMIT, RED_ACTION: tr(RED_ACTION) }) };
   if (session.score > PAIN_OK) return { light: 'yellow', reason: tr('训练中膝盖 {score} 分：照常练，跳跃量先别加', { score: session.score }) };
   return { light: 'green', reason: null };
 }
 
 /**
- * The knee's light for training on `date`: from sessions before that day and mornings up to it, so logging today's
- * session pain doesn't change today's plan. Null with nothing recorded.
+ * The knee's light for training on `date`: from sessions in the {@link PAIN_WINDOW_DAYS} before that day and mornings
+ * up to it, so logging today's session pain doesn't change today's plan. Null with nothing recorded that recently.
  */
 export function kneeStatus(entries: PainEntry[], date: ISODate): { light: KneeLight; reasons: string[] } | null {
   const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date));
-  const sessions = sorted.filter((e) => e.kind === 'session' && e.date < date);
-  const mornings = sorted.filter((e) => e.kind === 'morning' && e.date <= date);
-  if (!sessions.length && !mornings.length) return null;
+  const from = addDays(date, -PAIN_WINDOW_DAYS);
+  const sessions = sorted.filter((e) => e.kind === 'session' && e.date < date && e.date >= from);
+  // Mornings reach a week further back, as baselines for the sessions early in the window.
+  const mornings = sorted.filter((e) => e.kind === 'morning' && e.date <= date && e.date >= addDays(from, -PAIN_WINDOW_DAYS));
+  const lastMorning = mornings.filter((e) => e.date >= from).at(-1);
+  if (!sessions.length && !lastMorning) return null;
 
   const lastSession = sessions.at(-1);
-  const lastMorning = mornings.at(-1);
   if (lastSession && lastSession.score >= PAIN_STOP) return { light: 'stop', reasons: [tr('训练中膝盖 {score} 分', { score: lastSession.score }), tr(STOP_ACTION)] };
   if (lastMorning && lastMorning.score >= PAIN_STOP) return { light: 'stop', reasons: [tr('今早膝盖 {score} 分', { score: lastMorning.score }), tr(STOP_ACTION)] };
   if (!lastSession) return { light: 'green', reasons: [] };

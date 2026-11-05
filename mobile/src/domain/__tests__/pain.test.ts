@@ -38,6 +38,23 @@ describe('kneeStatus (pain-monitoring model, Silbernagel 2007)', () => {
     expect(kneeStatus([s('2026-10-30', 6), s('2026-11-02', 1)], '2026-11-03')?.light).toBe('green');
   });
 
+  it('is red when the next morning is above 5 even with no morning before training to compare with', () => {
+    // The first session with pain has no morning before it: 3 then 6 the next morning read yellow, 1 then 6 green.
+    expect(kneeStatus([s('2026-11-02', 3), m('2026-11-03', 6)], '2026-11-03')).toEqual({ light: 'red', reasons: ['今早膝盖 6 分，超过 5 分：这次跳跃减半，不做跳深'] });
+    expect(kneeStatus([s('2026-11-02', 1), m('2026-11-03', 6)], '2026-11-03')?.light).toBe('red');
+    // Up to 5 the next morning is still within what the model accepts.
+    expect(kneeStatus([s('2026-11-02', 1), m('2026-11-03', 5)], '2026-11-03')?.light).toBe('green');
+  });
+
+  it('reads only the last 7 days, so an old score stops hanging over training', () => {
+    // 4 in training on 11/4 is yellow for the week after, then nothing is recorded any more.
+    expect(kneeStatus([s('2026-11-04', 4)], '2026-11-11')?.light).toBe('yellow');
+    expect(kneeStatus([s('2026-11-04', 4)], '2026-11-12')).toBeNull();
+    expect(kneeStatus([s('2026-11-04', 4)], '2026-11-23')).toBeNull();
+    // A morning weeks before a session is no baseline for it: 1 on 10/1, 3 on 11/3 after training at 2 on 11/2.
+    expect(kneeStatus([m('2026-10-01', 1), s('2026-11-02', 2), m('2026-11-03', 3)], '2026-11-03')?.light).toBe('green');
+  });
+
   it('is null with nothing recorded', () => {
     expect(kneeStatus([], '2026-11-03')).toBeNull();
   });
