@@ -1,6 +1,6 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { columnTypes, exportBackup } from '@/db/backup';
+import { columnTypes, dataTables, exportBackup } from '@/db/backup';
 import { ATHLETE_FORMAT, fitsColumn, isPristine, retargetId, type AthleteFile, type BackupRow } from '@/domain/backup';
 import { tr } from '@/i18n';
 
@@ -11,9 +11,8 @@ type Table = { name: string; links: Link[]; key: string | null; integerKey: bool
 
 /** Every table with the tables it points at and its primary key, read from this database's own schema. */
 async function schema(db: SQLiteDatabase): Promise<Table[]> {
-  const names = await db.getAllAsync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
   return Promise.all(
-    names.map(async ({ name }) => {
+    (await dataTables(db)).map(async (name) => {
       const links = await db.getAllAsync<Link>(`SELECT "table", "from", "to" FROM pragma_foreign_key_list('${name}')`);
       const keys = (await db.getAllAsync<{ name: string; type: string; pk: number }>(`PRAGMA table_info("${name}")`)).filter((c) => c.pk > 0);
       const key = keys.length === 1 ? keys[0] : null;

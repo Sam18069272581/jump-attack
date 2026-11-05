@@ -144,6 +144,15 @@ const MIGRATIONS: string[] = [
   ALTER TABLE dunk_attempt ADD COLUMN trial_id INTEGER REFERENCES trial(id) ON DELETE SET NULL;
   ALTER TABLE dunk_attempt ADD COLUMN video_uri TEXT;
   `,
+  `
+  -- What the phone held before the last restore replaced it (a backup in JSON, db/backup.ts), so the restore can be
+  -- taken back. One row at most. It stays on this phone: backups, restores and athlete files all leave it out.
+  CREATE TABLE restore_undo (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    at TEXT NOT NULL,
+    data TEXT NOT NULL
+  );
+  `,
 ];
 
 /**

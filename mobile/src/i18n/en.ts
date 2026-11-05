@@ -1155,6 +1155,7 @@ export const en: Record<string, string> = {
 
   // db/backup.ts
   '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。': 'The backup has a problem and was not restored. The data on the phone is unchanged.',
+  '没有可以换回的数据。': 'There is no replaced data to switch back to.',
 
   // domain/athletes.ts
   '我自己': 'Me',

@@ -1,4 +1,4 @@
-import { exportBackup, restoreBackup } from '../backup';
+import { exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '../backup';
 import { LATEST_VERSION, migrate } from '../migrations';
 import { addTrial, createAthlete, ensureSession, listAthletes, listSessionResults, updateAthlete } from '../repo';
 import { saveRecoveryDay } from '../recovery';
@@ -123,5 +123,61 @@ describe('restoreBackup', () => {
       expect(await restoreBackup(db, b)).toEqual({ ok: false, problem: '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。' });
     }
     expect(await dump(db)).toEqual(before);
+  });
+});
+
+describe('undoRestore', () => {
+  /** Another phone's data, different from used(). */
+  async function theirs() {
+    const other = await setup();
+    await createAthlete(other, '别人');
+    await ensureSession(other, 'x', 1, 'sj');
+    await addTrial(other, { session_id: 'x', value: 30 });
+    return exportBackup(other);
+  }
+
+  // A sync that downloads the wrong backup by itself (a device with a wrong clock, an older app), or a file picked by
+  // mistake, would otherwise take the phone's own records with it.
+  it('keeps what the phone held before a restore, and swaps it back', async () => {
+    const db = await used();
+    const mine = await dump(db);
+    const other = await theirs();
+    expect(await restoreBackup(db, other)).toEqual({ ok: true });
+    expect(await keptBeforeRestore(db)).toEqual({ at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), backup: expect.objectContaining({ tables: mine }) });
+
+    expect(await undoRestore(db)).toEqual({ ok: true });
+    expect(await dump(db)).toEqual(mine);
+    // What the undo replaced is kept the same way, so pressing it again goes back.
+    expect(await undoRestore(db)).toEqual({ ok: true });
+    expect(await dump(db)).toEqual(other.tables);
+  });
+
+  it('keeps nothing from a new phone, which has nothing to lose', async () => {
+    const fresh = await setup();
+    await restoreBackup(fresh, await exportBackup(await used()));
+    expect(await keptBeforeRestore(fresh)).toBeNull();
+    expect(await undoRestore(fresh)).toEqual({ ok: false, problem: '没有可以换回的数据。' });
+  });
+
+  it('keeps the copy out of backups, and never takes one from a file', async () => {
+    const db = await used();
+    await restoreBackup(db, await theirs());
+    const b = await exportBackup(db);
+    expect(Object.keys(b.tables)).not.toContain('restore_undo');
+
+    b.tables.restore_undo = [{ id: 1, at: '2026-11-01T10:00:00.000Z', data: JSON.stringify(await theirs()) }];
+    const fresh = await setup();
+    expect(await restoreBackup(fresh, b)).toEqual({ ok: true });
+    expect(await keptBeforeRestore(fresh)).toBeNull();
+  });
+
+  it('keeps the earlier copy when a restore fails', async () => {
+    const db = await used();
+    await restoreBackup(db, await theirs());
+    const kept = await keptBeforeRestore(db);
+    const broken = await exportBackup(db);
+    broken.tables.trial = [{ id: 9, session_id: 'missing', value: 1 }];
+    expect((await restoreBackup(db, broken)).ok).toBe(false);
+    expect(await keptBeforeRestore(db)).toEqual(kept);
   });
 });

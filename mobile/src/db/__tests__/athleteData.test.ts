@@ -1,5 +1,5 @@
 import { exportAthlete, findSameAthlete, importAthlete } from '../athleteData';
-import { exportBackup } from '../backup';
+import { exportBackup, keptBeforeRestore } from '../backup';
 import { listBodyMass, recordBodyMass } from '../bodyMass';
 import { addDunkAttempt, listDunkAttempts } from '../dunkAttempts';
 import { migrate } from '../migrations';
@@ -194,6 +194,15 @@ describe('importAthlete', () => {
     // A dunk attempt claiming a take-off analysis that is on the phone, not in the file.
     expect(await planted((f) => (f.tables.dunk_attempt[0] = { ...f.tables.dunk_attempt[0], trial_id: 1 }))).toEqual(refused);
     expect((await exportBackup(db)).tables).toEqual(before);
+  });
+
+  it('never takes the copy a phone keeps for undoing a restore from a file', async () => {
+    const { db, mate } = await coachPhone();
+    const file = await exportAthlete(db, mate);
+    file.tables.restore_undo = [{ id: 1, at: '2026-11-01T10:00:00.000Z', data: JSON.stringify(await exportBackup(db)) }];
+    const phone = await setup();
+    expect((await importAthlete(phone, file)).ok).toBe(true);
+    expect(await keptBeforeRestore(phone)).toBeNull();
   });
 
   it('refuses text where the phone keeps numbers', async () => {

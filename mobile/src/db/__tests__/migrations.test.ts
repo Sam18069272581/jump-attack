@@ -64,10 +64,11 @@ describe('migrate on the web, where every handle to the file shares one connecti
   it('keeps the data of an older database that two overlapping starts upgrade', async () => {
     const connection = openMemoryDb();
     await migrate(connection);
-    // Back to version 7 (before the dunk attempts): drop what migrations 8–11 added, keep the rows from before.
+    // Back to version 7 (before the dunk attempts): drop what migrations 8–13 added, keep the rows from before.
     await connection.execAsync(`
       DROP TABLE dunk_attempt;
       DROP TABLE knee_pain;
+      DROP TABLE restore_undo;
       ALTER TABLE athlete DROP COLUMN goal_date;
       ALTER TABLE workout DROP COLUMN session_rpe;
       ALTER TABLE workout DROP COLUMN duration_min;

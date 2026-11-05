@@ -1155,6 +1155,7 @@ export const de: Record<string, string> = {
 
   // db/backup.ts
   '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。': 'Die Sicherung ist fehlerhaft und wurde nicht wiederhergestellt. Die Daten auf dem Handy bleiben unverändert.',
+  '没有可以换回的数据。': 'Es gibt keine ersetzten Daten zum Zurückholen.',
 
   // domain/athletes.ts
   '我自己': 'Ich',
