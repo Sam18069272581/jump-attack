@@ -1903,6 +1903,7 @@ export const de: Record<string, string> = {
   // sync/sync.ts
   '连不上云端，数据还在手机上，下次打开 App 会再试。': 'Cloud nicht erreichbar. Deine Daten sind noch auf dem Handy, die App versucht es beim nächsten Öffnen erneut.',
   '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。': 'Die neueste Sicherung in der Cloud ist nicht die gerade hochgeladene. Datum oder Uhrzeit eines Geräts stimmen vielleicht nicht, bitte prüfen. Deine Daten sind noch auf dem Handy.',
+  '云端有更新版本 App 传的备份，这个版本不能覆盖它。先更新 App 再同步，数据还在手机上。': 'In der Cloud liegt eine Sicherung aus einer neueren App-Version, die diese Version nicht überschreiben kann. Aktualisiere die App und synchronisiere dann erneut. Deine Daten sind noch auf dem Handy.',
   '无法读取': 'Nicht lesbar',
 
   // web/dialogs.ts

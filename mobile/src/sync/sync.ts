@@ -24,6 +24,7 @@ export type SyncChoice = 'phone' | 'cloud';
 const lastKey = (userId: string) => `sync-last-hash:${userId}`;
 const OFFLINE = '连不上云端，数据还在手机上，下次打开 App 会再试。';
 const NOT_NEWEST = '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。';
+const NEWER = '云端有更新版本 App 传的备份，这个版本不能覆盖它。先更新 App 再同步，数据还在手机上。';
 
 /** One round of sync for the signed-in account. Never throws: failures come back as an outcome. */
 export async function syncWithCloud(
@@ -48,6 +49,12 @@ export async function syncWithCloud(
     if (action === 'nothing') {
       if (meta && meta.hash === localHash && lastHash !== localHash) await memory.setItem(lastKey(userId), localHash);
       return { kind: 'nothing' };
+    }
+    if (action === 'upload' || action === 'conflict') {
+      // This app can't read a newer app's backup, and its own would lack the tables and columns that app added, which
+      // every device that downloads it then loses. So it neither asks which to keep nor uploads until it is updated.
+      const version = await cloud.newestSchemaVersion();
+      if (version != null && version > LATEST_VERSION) return { kind: 'failed', problem: tr(NEWER) };
     }
     if (action === 'upload') {
       await cloud.upload({ backup: local, hash: localHash, device, date: toISODate(new Date()) });

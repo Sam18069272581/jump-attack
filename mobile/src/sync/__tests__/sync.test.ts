@@ -30,6 +30,10 @@ function fakeCloud() {
       // Through JSON like the network, so nothing is shared with the uploader's objects.
       return r && { data: JSON.parse(JSON.stringify(r.data)), hash: r.hash };
     },
+    async newestSchemaVersion() {
+      fail();
+      return rows.reduce<number | null>((v, r) => Math.max(v ?? 0, (r.data as Backup).schema_version), null);
+    },
     async upload({ backup, hash, device, date }) {
       fail();
       const updatedAt = `2026-10-28T08:00:${String(++tick).padStart(2, '0')}Z`;
@@ -176,6 +180,23 @@ describe('syncWithCloud', () => {
     // Opening the app again used to download the laptop's backup over the 47 cm.
     expect(await syncWithCloud(phone.db, cloud, phone.mem, 'u1', 'iPhone')).toEqual({ kind: 'failed', problem });
     expect(await data(phone.db)).toEqual(recorded);
+  });
+
+  // An older app (a cached web app, Expo Go before it fetched the update) can't read what a newer one backed up. Asked
+  // to keep its own side, it used to replace the cloud's day with data missing the newer tables and columns, and the
+  // newer phones then downloaded that over their own.
+  it('neither asks nor uploads over a backup from a newer app, which would lose what that app added', async () => {
+    const { cloud, rows } = fakeCloud();
+    const a = await device();
+    await recordCmj(a.db, 's1', 45.2);
+    const newer = { ...(await exportBackup(a.db)), schema_version: LATEST_VERSION + 1 };
+    await cloud.upload({ backup: newer, hash: backupHash(newer), device: 'iPhone', date: '2026-10-28' });
+    const b = await device();
+    await recordCmj(b.db, 'x1', 40.0);
+    const problem = '云端有更新版本 App 传的备份，这个版本不能覆盖它。先更新 App 再同步，数据还在手机上。';
+    expect(await syncWithCloud(b.db, cloud, b.mem, 'u1', 'iPhone')).toEqual({ kind: 'failed', problem });
+    expect(await syncWithCloud(b.db, cloud, b.mem, 'u1', 'iPhone', 'phone')).toEqual({ kind: 'failed', problem });
+    expect(rows.map((r) => r.hash)).toEqual([backupHash(newer)]);
   });
 
   it('settles after restoring an older-schema backup instead of downloading it again every time', async () => {

@@ -29,6 +29,16 @@ it('asks only for the newest backup’s hash when checking, not its data', async
   expect(url.searchParams.get('limit')).toBe('1');
 });
 
+it('asks for the highest schema version among the account’s backups, which an older app must not write over', async () => {
+  const { cloud, calls } = client({ schema_version: 14 });
+  expect(await cloud.newestSchemaVersion()).toBe(14);
+  const { url } = calls[0];
+  expect(url.searchParams.get('select')).toBe('schema_version');
+  expect(url.searchParams.get('order')).toBe('schema_version.desc');
+  expect(url.searchParams.get('limit')).toBe('1');
+  expect(await client(null).cloud.newestSchemaVersion()).toBeNull();
+});
+
 it('reads no backup as null', async () => {
   const { cloud } = client(null);
   expect(await cloud.latest()).toBeNull();

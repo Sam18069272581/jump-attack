@@ -27,6 +27,7 @@ jest.mock('@/sync/cloud', () => ({
   supabaseBackups: (): CloudBackups => ({
     latest: async () => mockCloudBackup && { hash: mockHash(mockCloudBackup), updatedAt: '2026-10-27T20:00:00Z', device: 'iPhone' },
     download: async () => mockCloudBackup && { data: JSON.parse(JSON.stringify(mockCloudBackup)), hash: mockHash(mockCloudBackup) },
+    newestSchemaVersion: async () => mockCloudBackup?.schema_version ?? null,
     upload: async (b) => void mockUpload(b),
   }),
 }));
