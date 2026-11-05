@@ -16,12 +16,16 @@ export type SyncOutcome =
   | { kind: 'nothing' | 'uploaded' | 'downloaded' }
   /** Both sides changed; `phone` and `cloud` say what each holds, for the person to pick one. */
   | { kind: 'conflict'; phone: string; cloud: string; cloudAt: string }
+  /** The phone was last synced with another account and this one has nothing in the cloud: upload only if told to. */
+  | { kind: 'confirm'; phone: string }
   | { kind: 'failed'; problem: string };
 
 /** Which side to keep after a conflict. */
 export type SyncChoice = 'phone' | 'cloud';
 
 const lastKey = (userId: string) => `sync-last-hash:${userId}`;
+/** The account this device last synced with, whichever it was: the data on the phone is that account's. */
+const ACCOUNT_KEY = 'sync-account';
 const OFFLINE = '连不上云端，数据还在手机上，下次打开 App 会再试。';
 const NOT_NEWEST = '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。';
 const NEWER = '云端有更新版本 App 传的备份，这个版本不能覆盖它。先更新 App 再同步，数据还在手机上。';
@@ -39,17 +43,30 @@ export async function syncWithCloud(
     const local = await exportBackup(db);
     const localHash = backupHash(local);
     const lastHash = await memory.getItem(lastKey(userId));
+    const account = await memory.getItem(ACCOUNT_KEY);
     const meta = await cloud.latest();
     const action = choice
       ? choice === 'phone'
         ? 'upload'
         : 'download'
-      : decideSync({ localHash, localPristine: isPristine(local), lastHash, cloud: meta && { hash: meta.hash, updatedAt: meta.updatedAt } });
+      : decideSync({
+          localHash,
+          localPristine: isPristine(local),
+          lastHash,
+          // A device that synced before the account was remembered has none, and goes on as it did.
+          otherAccount: account != null && account !== userId,
+          cloud: meta && { hash: meta.hash, updatedAt: meta.updatedAt },
+        });
+    const synced = async (hash: string) => {
+      await memory.setItem(lastKey(userId), hash);
+      await memory.setItem(ACCOUNT_KEY, userId);
+    };
 
     if (action === 'nothing') {
-      if (meta && meta.hash === localHash && lastHash !== localHash) await memory.setItem(lastKey(userId), localHash);
+      if (meta && meta.hash === localHash && (lastHash !== localHash || account !== userId)) await synced(localHash);
       return { kind: 'nothing' };
     }
+    if (action === 'confirm') return { kind: 'confirm', phone: describeBackup(local) };
     if (action === 'upload' || action === 'conflict') {
       // This app can't read a newer app's backup, and its own would lack the tables and columns that app added, which
       // every device that downloads it then loses. So it neither asks which to keep nor uploads until it is updated.
@@ -62,7 +79,7 @@ export async function syncWithCloud(
       // is wrong), this upload doesn't count: remembering it would make the next sync download that one over the phone.
       const newest = await cloud.latest();
       if (newest && newest.hash !== localHash) return { kind: 'failed', problem: tr(NOT_NEWEST) };
-      await memory.setItem(lastKey(userId), localHash);
+      await synced(localHash);
       return { kind: 'uploaded' };
     }
 
@@ -77,7 +94,7 @@ export async function syncWithCloud(
     if (!restored.ok) return { kind: 'failed', problem: restored.problem };
     // Remember the cloud's hash, not the restored data's: an older backup gains default columns here,
     // which then reads as a local change and is uploaded once, instead of being downloaded on every sync.
-    await memory.setItem(lastKey(userId), remote.hash);
+    await synced(remote.hash);
     return { kind: 'downloaded' };
   } catch {
     return { kind: 'failed', problem: tr(OFFLINE) };

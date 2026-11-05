@@ -211,6 +211,7 @@ export const en: Record<string, string> = {
   '手机上：{phone}\n云端：{cloud}\n另一份会被替换。云端以前每天的备份都还在。': 'On the phone: {phone}\nIn the cloud: {cloud}\nThe other will be replaced. The cloud’s earlier daily backups are all kept.',
   '用云端的': 'Use the cloud’s',
   '用手机上的': 'Use the phone’s',
+  '手机上：{phone}\n这个账号在云端还没有备份，确认后才会把这些数据备份过去。': 'On the phone: {phone}\nThis account has no backup in the cloud yet. This data is backed up to it only once you confirm.',
   '立即同步': 'Sync now',
   '退出登录': 'Sign out',
   '退出登录不会删除手机上的数据，也不会删除云端的备份。': 'Signing out deletes neither the data on this phone nor the backups in the cloud.',
@@ -1882,6 +1883,10 @@ export const en: Record<string, string> = {
   '手机上：{phone}\n云端（{p}）：{cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。': 'On the phone: {phone}\nIn the cloud ({p}): {cloud}\n\nPick one to keep; the other will be replaced by it. Earlier daily backups in the cloud are all kept.',
   '较早': 'earlier',
   '以后再说': 'Later',
+  '手机上的数据之前同步到另一个账号，确认后才会备份到这个账号': 'The data on this phone was last synced with another account; it’s backed up to this one only once you confirm',
+  '这台手机上的数据之前同步到另一个账号': 'The data on this phone was last synced with another account',
+  '手机上：{phone}\n\n现在登录的账号在云端还没有备份。要把这些数据备份到这个账号吗？这不是你的手机的话，选「以后再说」，再退出登录。': 'On the phone: {phone}\n\nThe account you’re signed in with has no backup in the cloud yet. Back this data up to it? If this isn’t your phone, choose “Later” and sign out.',
+  '备份到这个账号': 'Back up to this account',
 
   // state/training.ts
   '今天状态差（恢复、CMJ 或热身速度偏低），这次成绩不计入进步趋势，也不拉低基线。': 'Rough day (recovery, CMJ or warm-up velocity low): this result doesn’t count toward your progress trend or lower your baseline.',

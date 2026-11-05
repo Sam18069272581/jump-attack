@@ -11,6 +11,7 @@ import { supabaseBackups } from '@/sync/cloud';
 import { syncWithCloud, type SyncChoice, type SyncOutcome } from '@/sync/sync';
 
 type Conflict = Extract<SyncOutcome, { kind: 'conflict' }>;
+type Confirm = Extract<SyncOutcome, { kind: 'confirm' }>;
 
 type SyncContextValue = {
   /** Whether a Supabase project is set up in sync/config.ts. */
@@ -20,6 +21,8 @@ type SyncContextValue = {
   /** What the last sync did, in words. */
   status: string | null;
   conflict: Conflict | null;
+  /** The phone was last synced with another account and this one has nothing in the cloud: back it up here? */
+  confirm: Confirm | null;
   /** Each resolves to a problem to show, or null. */
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (email: string, password: string) => Promise<string | null>;
@@ -48,7 +51,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [conflict, setConflict] = useState<Conflict | null>(null);
+  // What the person has to answer before the next sync can go on: which side to keep, or whether to back up here.
+  const [question, setQuestion] = useState<Conflict | Confirm | null>(null);
   const [epoch, setEpoch] = useState(0);
   const running = useRef(false);
   const asked = useRef(false);
@@ -68,12 +72,12 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       running.current = false;
       setBusy(false);
       const now = dateTime(new Date().toISOString());
-      if (outcome.kind === 'conflict') {
-        setStatus(tr('手机和云端的数据不一样，选一份保留'));
-        setConflict(outcome);
+      if (outcome.kind === 'conflict' || outcome.kind === 'confirm') {
+        setStatus(outcome.kind === 'conflict' ? tr('手机和云端的数据不一样，选一份保留') : tr('手机上的数据之前同步到另一个账号，确认后才会备份到这个账号'));
+        setQuestion(outcome);
         return;
       }
-      setConflict(null);
+      setQuestion(null);
       setStatus(outcome.kind === 'failed' ? outcome.problem : `${tr(STATUS[outcome.kind])} · ${now}`);
       if (outcome.kind === 'downloaded') await dataReplaced();
     },
@@ -87,14 +91,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     [userId, run],
   );
 
-  // Ask once per conflict, not again on every app switch while it stays open.
+  // Ask once per question, not again on every app switch while it stays open.
   useEffect(() => {
-    if (!conflict) asked.current = false;
+    if (!question) asked.current = false;
     else if (!asked.current) {
       asked.current = true;
-      askWhichToKeep(conflict, (c) => void syncNow(c));
+      const choose = (c: SyncChoice) => void syncNow(c);
+      if (question.kind === 'conflict') askWhichToKeep(question, choose);
+      else askToBackUpHere(question, choose);
     }
-  }, [conflict, syncNow]);
+  }, [question, syncNow]);
 
   // Fires with the stored session when the app opens, and on every sign-in: both start a sync.
   useEffect(() => {
@@ -138,19 +144,20 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       email: session?.user.email ?? null,
       busy,
       status,
-      conflict,
+      conflict: question?.kind === 'conflict' ? question : null,
+      confirm: question?.kind === 'confirm' ? question : null,
       signIn: (email, password) => auth('signInWithPassword', email, password),
       signUp: (email, password) => auth('signUp', email, password),
       signOut: async () => {
         await supabase?.auth.signOut();
         setStatus(null);
-        setConflict(null);
+        setQuestion(null);
       },
       syncNow,
       dataReplaced,
       epoch,
     };
-  }, [supabase, session, busy, status, conflict, syncNow, dataReplaced, epoch]);
+  }, [supabase, session, busy, status, question, syncNow, dataReplaced, epoch]);
 
   return (
     <SyncContext.Provider value={value}>
@@ -167,6 +174,18 @@ export function askWhichToKeep(c: Conflict, choose: (choice: SyncChoice) => void
       { text: tr('以后再说'), style: 'cancel' },
       { text: tr('用手机上的'), onPress: () => choose('phone') },
       { text: tr('用云端的'), onPress: () => choose('cloud') },
+    ],
+  );
+}
+
+/** On a shared phone: whoever signs in gets the data on it backed up into their account only if they say so. */
+export function askToBackUpHere(c: Confirm, choose: (choice: SyncChoice) => void) {
+  Alert.alert(
+    tr('这台手机上的数据之前同步到另一个账号'),
+    tr('手机上：{phone}\n\n现在登录的账号在云端还没有备份。要把这些数据备份到这个账号吗？这不是你的手机的话，选「以后再说」，再退出登录。', { phone: c.phone }),
+    [
+      { text: tr('以后再说'), style: 'cancel' },
+      { text: tr('备份到这个账号'), onPress: () => choose('phone') },
     ],
   );
 }

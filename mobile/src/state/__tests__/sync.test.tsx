@@ -128,3 +128,20 @@ it('asks once which side to keep when the phone already has other data, and does
   expect((await listAthletes(mockDb)).map((a) => a.name)).toEqual(['我自己', '队友']);
   expect(probe.seen?.conflict).toBeNull();
 });
+
+it('asks before backing up a phone last synced with another account into this one, and backs up when told to', async () => {
+  mockCloudBackup = null;
+  mockDb = await phoneWithData();
+  mockKv.set('sync-account', 'someone-else');
+  await open();
+  expect(alerts.map((a) => a.title)).toEqual(['这台手机上的数据之前同步到另一个账号']);
+  expect(probe.seen?.confirm).toMatchObject({ phone: '2 个测试对象、1 次测试、0 次训练' });
+  expect(mockUpload).not.toHaveBeenCalled();
+
+  await act(async () => {
+    alerts[0].buttons?.find((b) => b.text === '备份到这个账号')?.onPress?.();
+    await new Promise((r) => setTimeout(r, 20));
+  });
+  expect(mockUpload).toHaveBeenCalledTimes(1);
+  expect(probe.seen?.confirm).toBeNull();
+});

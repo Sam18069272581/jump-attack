@@ -157,6 +157,13 @@ function CloudCard() {
             </View>
           </View>
         )}
+        {sync.confirm && (
+          <View style={styles.conflict}>
+            <Text style={text.section}>{tr('这台手机上的数据之前同步到另一个账号')}</Text>
+            <Text style={text.caption}>{tr('手机上：{phone}\n这个账号在云端还没有备份，确认后才会把这些数据备份过去。', { phone: sync.confirm.phone })}</Text>
+            <Button label={tr('备份到这个账号')} onPress={() => sync.syncNow('phone')} busy={sync.busy} />
+          </View>
+        )}
         <Button label={tr('立即同步')} variant="secondary" onPress={() => sync.syncNow()} busy={sync.busy} />
         <Button label={tr('退出登录')} variant="ghost" onPress={sync.signOut} />
         <Text style={text.caption}>{tr('退出登录不会删除手机上的数据，也不会删除云端的备份。')}</Text>

@@ -45,6 +45,7 @@ const mockSync = {
   busy: false,
   status: null as string | null,
   conflict: null as object | null,
+  confirm: null as object | null,
   signIn: jest.fn(async (_e: string, _p: string): Promise<string | null> => null),
   signUp: jest.fn(async (_e: string, _p: string): Promise<string | null> => null),
   signOut: jest.fn(async () => {}),
@@ -91,7 +92,7 @@ beforeEach(async () => {
   mockFiles.clear();
   mockPicked = null;
   mockShare.mockClear();
-  Object.assign(mockSync, { configured: false, email: null, status: null, conflict: null });
+  Object.assign(mockSync, { configured: false, email: null, status: null, conflict: null, confirm: null });
   jest.clearAllMocks();
   mockDb = openMemoryDb();
   await migrate(mockDb);
@@ -224,5 +225,15 @@ it('lets the person pick a side of a conflict with plain buttons, which also wor
   await press(r.root, '用云端的');
   expect(mockSync.syncNow).toHaveBeenLastCalledWith('cloud');
   await press(r.root, '用手机上的');
+  expect(mockSync.syncNow).toHaveBeenLastCalledWith('phone');
+});
+
+it('backs up a phone last synced with another account into this one only when the person says so', async () => {
+  Object.assign(mockSync, { configured: true, email: 'player@example.com', confirm: { kind: 'confirm', phone: '3 个测试对象、12 次测试、4 次训练' } });
+  const r = await render();
+  expect(texts(r.root)).toContain('这台手机上的数据之前同步到另一个账号');
+  expect(texts(r.root)).toContain('手机上：3 个测试对象、12 次测试、4 次训练');
+  expect(mockSync.syncNow).not.toHaveBeenCalled();
+  await press(r.root, '备份到这个账号');
   expect(mockSync.syncNow).toHaveBeenLastCalledWith('phone');
 });

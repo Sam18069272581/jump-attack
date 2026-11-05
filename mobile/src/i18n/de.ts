@@ -211,6 +211,7 @@ export const de: Record<string, string> = {
   '手机上：{phone}\n云端：{cloud}\n另一份会被替换。云端以前每天的备份都还在。': 'Auf dem Handy: {phone}\nIn der Cloud: {cloud}\nDie andere Version wird ersetzt. Die früheren täglichen Sicherungen in der Cloud bleiben alle erhalten.',
   '用云端的': 'Cloud-Daten verwenden',
   '用手机上的': 'Handy-Daten verwenden',
+  '手机上：{phone}\n这个账号在云端还没有备份，确认后才会把这些数据备份过去。': 'Auf dem Handy: {phone}\nDieses Konto hat noch keine Sicherung in der Cloud. Die Daten werden erst nach deiner Bestätigung dort gesichert.',
   '立即同步': 'Jetzt synchronisieren',
   '退出登录': 'Abmelden',
   '退出登录不会删除手机上的数据，也不会删除云端的备份。': 'Beim Abmelden werden weder die Daten auf diesem Handy noch die Sicherungen in der Cloud gelöscht.',
@@ -1882,6 +1883,10 @@ export const de: Record<string, string> = {
   '手机上：{phone}\n云端（{p}）：{cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。': 'Auf dem Handy: {phone}\nIn der Cloud ({p}): {cloud}\n\nWähle eine Version, die andere wird durch sie ersetzt. Frühere tägliche Sicherungen in der Cloud bleiben erhalten.',
   '较早': 'früher',
   '以后再说': 'Später',
+  '手机上的数据之前同步到另一个账号，确认后才会备份到这个账号': 'Die Daten auf diesem Handy wurden zuletzt mit einem anderen Konto synchronisiert; sie werden erst nach deiner Bestätigung in diesem Konto gesichert',
+  '这台手机上的数据之前同步到另一个账号': 'Die Daten auf diesem Handy wurden zuletzt mit einem anderen Konto synchronisiert',
+  '手机上：{phone}\n\n现在登录的账号在云端还没有备份。要把这些数据备份到这个账号吗？这不是你的手机的话，选「以后再说」，再退出登录。': 'Auf dem Handy: {phone}\n\nDas angemeldete Konto hat noch keine Sicherung in der Cloud. Diese Daten in diesem Konto sichern? Wenn das nicht dein Handy ist, wähle „Später“ und melde dich ab.',
+  '备份到这个账号': 'In diesem Konto sichern',
 
   // state/training.ts
   '今天状态差（恢复、CMJ 或热身速度偏低），这次成绩不计入进步趋势，也不拉低基线。': 'Schlechter Tag (Erholung, CMJ oder Aufwärmtempo niedrig): Dieses Ergebnis zählt nicht zum Fortschrittstrend und senkt deinen Normalwert nicht.',

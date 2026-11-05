@@ -141,6 +141,39 @@ describe('syncWithCloud', () => {
     expect((await syncWithCloud(a.db, other.cloud, a.mem, 'u2', 'iPhone')).kind).toBe('conflict');
   });
 
+  // A teammate signs in with their own new account on the coach's phone.
+  it('asks before backing up a shared phone into the account of whoever signs in on it next', async () => {
+    const coach = fakeCloud();
+    const player = fakeCloud();
+    const phone = await device();
+    await recordCmj(phone.db, 's1', 45.2);
+    await createAthlete(phone.db, '队友');
+    expect(await syncWithCloud(phone.db, coach.cloud, phone.mem, 'coach', 'iPhone')).toEqual({ kind: 'uploaded' });
+
+    expect(await syncWithCloud(phone.db, player.cloud, phone.mem, 'player', 'iPhone')).toEqual({ kind: 'confirm', phone: '2 个测试对象、1 次测试、0 次训练' });
+    expect(player.rows).toHaveLength(0);
+    expect(await syncWithCloud(phone.db, player.cloud, phone.mem, 'player', 'iPhone', 'phone')).toEqual({ kind: 'uploaded' });
+    expect(player.rows).toHaveLength(1);
+  });
+
+  it('asks the coach which to keep after a teammate switched the phone to their own data', async () => {
+    const coach = fakeCloud();
+    const player = fakeCloud();
+    const phone = await device();
+    await recordCmj(phone.db, 's1', 45.2);
+    await syncWithCloud(phone.db, coach.cloud, phone.mem, 'coach', 'iPhone');
+    const theirs = await device();
+    await recordCmj(theirs.db, 'p1', 38.0);
+    await syncWithCloud(theirs.db, player.cloud, theirs.mem, 'player', 'iPhone');
+
+    expect((await syncWithCloud(phone.db, player.cloud, phone.mem, 'player', 'iPhone')).kind).toBe('conflict');
+    expect(await syncWithCloud(phone.db, player.cloud, phone.mem, 'player', 'iPhone', 'cloud')).toEqual({ kind: 'downloaded' });
+    const coachBackup = coach.rows[0].hash;
+    // Back with the coach's account: only the phone changed since the coach's last sync, which used to mean upload.
+    expect((await syncWithCloud(phone.db, coach.cloud, phone.mem, 'coach', 'iPhone')).kind).toBe('conflict');
+    expect(coach.rows.map((r) => r.hash)).toEqual([coachBackup]);
+  });
+
   it('reports a failure without touching anything when offline', async () => {
     const { cloud, setOffline } = fakeCloud();
     const a = await device();

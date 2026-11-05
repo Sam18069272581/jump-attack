@@ -9,13 +9,19 @@ export type SyncState = {
   localPristine: boolean;
   /** Hash this device last synced for this account; null if it never has. */
   lastHash: string | null;
+  /** The device last synced with a different account, so the data on it is that account's. */
+  otherAccount?: boolean;
   /** The newest cloud backup, or null if the account has none. */
   cloud: { hash: string; updatedAt: string } | null;
 };
 
-export type SyncAction = 'nothing' | 'upload' | 'download' | 'conflict';
+/** `confirm`: back the phone up into an account that has nothing in the cloud, once the person says so. */
+export type SyncAction = 'nothing' | 'upload' | 'download' | 'conflict' | 'confirm';
 
-export function decideSync({ localHash, localPristine, lastHash, cloud }: SyncState): SyncAction {
+export function decideSync({ localHash, localPristine, lastHash, otherAccount = false, cloud }: SyncState): SyncAction {
+  // On a shared phone, whoever signs in next would otherwise get the data of the account it was synced with uploaded
+  // into their own, or over it. Nothing happens to it on its own; the person decides.
+  if (otherAccount && !localPristine && cloud?.hash !== localHash) return cloud ? 'conflict' : 'confirm';
   if (!cloud) return localPristine ? 'nothing' : 'upload';
   if (cloud.hash === localHash) return 'nothing';
   if (lastHash == null) return localPristine ? 'download' : 'conflict';
