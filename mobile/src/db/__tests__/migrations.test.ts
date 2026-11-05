@@ -151,3 +151,46 @@ describe('migrate after an earlier overlapping start lost a migration', () => {
     expect(await listTrials(connection, 's')).toEqual([expect.objectContaining({ value: 52.5 })]);
   });
 });
+
+// A migration that only partly ran (its statements committed one by one after an overlapping start ended its
+// transaction, then the page closed) can leave e.g. the athlete table without the trial table. Re-running the whole
+// migration fails on what is there; the missing statements have to run on their own.
+describe('migrate after an earlier start left a migration half done', () => {
+  async function without(drop: string): Promise<SQLiteDatabase> {
+    const connection = openMemoryDb();
+    await migrate(connection);
+    await connection.runAsync("UPDATE athlete SET name = 'Sam' WHERE id = 1");
+    await connection.execAsync(`PRAGMA foreign_keys = OFF; ${drop}; PRAGMA foreign_keys = ON;`);
+    return connection;
+  }
+
+  it('creates the missing trial table instead of failing with "no such table: trial", keeping the athletes', async () => {
+    const reference = openMemoryDb();
+    await migrate(reference);
+    const connection = await without('DROP TABLE trial');
+
+    await migrate(connection);
+
+    expect(await schema(connection)).toEqual(await schema(reference));
+    expect(await listAthletes(connection)).toEqual([expect.objectContaining({ id: 1, name: 'Sam' })]);
+  });
+
+  it('puts back any one table or index that is missing, without adding a second default athlete', async () => {
+    const reference = openMemoryDb();
+    await migrate(reference);
+    const expected = await schema(reference);
+    const objects = await reference.getAllAsync<{ type: string; name: string }>(
+      "SELECT type, name FROM sqlite_master WHERE type IN ('table', 'index') AND name NOT LIKE 'sqlite_%'",
+    );
+
+    for (const o of objects) {
+      const connection = await without(`DROP ${o.type.toUpperCase()} "${o.name}"`);
+      await migrate(connection);
+      expect({ dropped: o.name, schema: await schema(connection) }).toEqual({ dropped: o.name, schema: expected });
+      expect({ dropped: o.name, athletes: (await listAthletes(connection)).map((a) => a.name) }).toEqual({
+        dropped: o.name,
+        athletes: o.name === 'athlete' ? ['我自己'] : ['Sam'],
+      });
+    }
+  });
+});
