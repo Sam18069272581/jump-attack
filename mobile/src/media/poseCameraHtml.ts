@@ -1,4 +1,4 @@
-import { LIB_FROM_PAGE, POSE_CDN } from './poseLib';
+import { LIB_FROM_PAGE, POSE_CDN, POSE_SRI } from './poseLib';
 import { POSE_SHARED_JS } from './poseShared';
 
 import { localizeHtml } from '@/i18n';
@@ -68,6 +68,7 @@ export function poseCameraHtml(o: PoseCameraOptions): string {
     accent: o.accent,
     lib: o.lib ?? LIB_FROM_PAGE,
     cdn: POSE_CDN,
+    sri: POSE_SRI,
     pose: o.pose ?? true,
     numPoses: 2,
     bitrate: o.bitrate ?? CAMERA_BITRATE,

@@ -1,6 +1,7 @@
 import { decodePose, LANDMARK_COUNT, LANDMARK_FIELDS, LM, type Pose } from '@/domain/pose';
 import { standing } from '@/domain/testing/standing';
 
+import { POSE_CDN, POSE_SRI } from '../poseLib';
 import { poseReaderHtml } from '../poseReaderHtml';
 import { FakeCanvas, runPage, type Page, type Picture } from '../testing/posePage';
 
@@ -67,9 +68,9 @@ class FakeVideo {
 
 type Opened = Page & { video: FakeVideo };
 
-async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback?: boolean; locked?: boolean; size?: { w: number; h: number } } = {}): Promise<Opened> {
+async function openPage(people: Person[], o: { gpuFails?: boolean; frameCallback?: boolean; locked?: boolean; size?: { w: number; h: number }; libOnPhone?: boolean } = {}): Promise<Opened> {
   const video = new FakeVideo(people, o.frameCallback ?? false, o.locked ?? false, o.size);
-  const page = runPage(poseReaderHtml({ video: 'clip.mov', bg: '#000', accent: '#f80' }), { elements: { video, view: new FakeCanvas() }, gpuFails: o.gpuFails });
+  const page = runPage(poseReaderHtml({ video: 'clip.mov', bg: '#000', accent: '#f80' }), { elements: { video, view: new FakeCanvas() }, gpuFails: o.gpuFails, libOnPhone: o.libOnPhone });
   await page.next('ready');
   return { ...page, video };
 }
@@ -106,6 +107,36 @@ describe('the clip page', () => {
     expect(await page.next('model')).toMatchObject({ delegate: 'CPU' });
     expect(page.created.map((c) => c.opts.baseOptions.delegate)).toEqual(['GPU', 'CPU']);
     expect(page.scripts.filter((s) => s.endsWith('vision_wasm_internal.js'))).toHaveLength(2);
+  });
+
+  it('without the library on the phone, runs only the release’s files from the CDN, each checked against its SHA-256', async () => {
+    const page = await openPage([runner], { libOnPhone: false });
+    expect(await page.next('model')).toMatchObject({ delegate: 'GPU', source: 'cdn' });
+    const sri: Record<string, string> = Object.fromEntries(Object.entries(POSE_CDN).map(([k, url]) => [url, POSE_SRI[k as keyof typeof POSE_SRI]]));
+    expect(page.fetched.map((f) => f.url).sort()).toEqual(Object.values(POSE_CDN).sort());
+    for (const f of page.fetched) expect(f.integrity).toBe(sri[f.url]);
+    // What runs is the copy that was checked, from a blob: URL of the page's own, never the CDN's file fetched again.
+    expect(page.ran).toEqual([POSE_CDN.bundle, POSE_CDN.loader]);
+    expect(page.imports.map((url) => page.blobs.get(url))).toEqual([POSE_CDN.bundle]);
+    expect(page.blobs.get(page.scripts[1])).toBe(POSE_CDN.loader);
+    expect(page.blobs.get(page.created[0].fileset.wasmBinaryPath)).toBe(POSE_CDN.wasm);
+  });
+
+  // The CPU retry loads the wasm loader again, from the checked copy too.
+  it('without the library on the phone, falls back to the CPU on the checked copies as well', async () => {
+    const page = await openPage([runner], { libOnPhone: false, gpuFails: true });
+    expect(await page.next('model')).toMatchObject({ delegate: 'CPU', source: 'cdn' });
+    expect(page.fetched).toHaveLength(4);
+    expect(page.scripts.slice(1).map((url) => page.blobs.get(url))).toEqual([POSE_CDN.loader, POSE_CDN.loader]);
+    expect(page.ran).toEqual([POSE_CDN.bundle, POSE_CDN.loader, POSE_CDN.loader]);
+    expect(page.blobs.get(page.created[1].fileset.wasmBinaryPath)).toBe(POSE_CDN.wasm);
+  });
+
+  // A script tag with a src would run its file unchecked, and the tests run only the page's own script.
+  it('loads everything through its one script', () => {
+    const html = poseReaderHtml({ video: 'clip.mov', bg: '#000', accent: '#f80' });
+    expect(html.match(/<script/g)).toEqual(['<script']);
+    expect(html).not.toMatch(/\ssrc=/);
   });
 
   it('can’t find an athlete a third of the picture tall in the whole picture, which is why it reads squares', async () => {

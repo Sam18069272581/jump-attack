@@ -1,4 +1,4 @@
-import { LIB_FROM_PAGE, POSE_CDN } from './poseLib';
+import { LIB_FROM_PAGE, POSE_CDN, POSE_SRI } from './poseLib';
 import { POSE_SHARED_JS } from './poseShared';
 
 import { localizeHtml } from '@/i18n';
@@ -35,7 +35,7 @@ export type PoseReaderOptions = {
 };
 
 export function poseReaderHtml(o: PoseReaderOptions): string {
-  const config = scriptJson({ video: o.video, bg: o.bg, accent: o.accent, lib: o.lib ?? LIB_FROM_PAGE, cdn: POSE_CDN, numPoses: 2 });
+  const config = scriptJson({ video: o.video, bg: o.bg, accent: o.accent, lib: o.lib ?? LIB_FROM_PAGE, cdn: POSE_CDN, sri: POSE_SRI, numPoses: 2 });
   return localizeHtml(`<!doctype html>
 <html><head>
 <meta charset="utf-8">
