@@ -69,6 +69,27 @@ export async function keptBeforeRestore(db: SQLiteDatabase): Promise<{ at: strin
 }
 
 /**
+ * The copy the last restore kept, as written, maybe by a newer app (keptBeforeRestore leaves that one for that app to
+ * put back). `at` tells copies apart; `tables` reads the copy itself, the whole database before the restore.
+ */
+export async function keptCopy(db: SQLiteDatabase): Promise<{ at: string; tables: () => Promise<Record<string, unknown>> } | null> {
+  const row = await db.getFirstAsync<{ at: string }>(`SELECT at FROM ${KEPT} WHERE id = 1`);
+  if (!row) return null;
+  const tables = async () => {
+    const kept = await db.getFirstAsync<{ data: string }>(`SELECT data FROM ${KEPT} WHERE id = 1`);
+    try {
+      const v: unknown = JSON.parse(kept?.data ?? '');
+      return isRecord(v) && isRecord(v.tables) ? v.tables : {};
+    } catch {
+      return {};
+    }
+  };
+  return { at: row.at, tables };
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+/**
  * Puts back what the last restore replaced; with `at`, only the copy kept then, the one the person was shown. What this
  * replaces is kept in turn, so it can be swapped back again.
  */
