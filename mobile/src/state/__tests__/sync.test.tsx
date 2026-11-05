@@ -232,6 +232,29 @@ describe('replacing the data', () => {
     expect(mockUpload).not.toHaveBeenCalled();
   });
 
+  it('drops a question about the data it replaced, and asks again about what is on the phone now', async () => {
+    mockCloudBackup = await exportBackup(await phoneWithData());
+    await ensureSession(mockDb, 'mine', 1, 'sj');
+    await addTrial(mockDb, { session_id: 'mine', value: 30 });
+    await open();
+    expect(alerts.map((a) => a.title)).toEqual(['手机和云端的数据不一样']);
+    await act(async () => {
+      const other = await theirs();
+      await probe.seen!.replaceData(() => restoreBackup(mockDb, other));
+    });
+    expect(probe.seen?.conflict).toBeNull();
+    expect(probe.seen?.status).toBeNull();
+
+    // The alert still on screen asked about the data replaced: its answer says nothing about the data now.
+    await act(async () => {
+      alerts[0].buttons?.find((b) => b.text === '用手机上的')?.onPress?.();
+      await settle();
+    });
+    expect(mockUpload).not.toHaveBeenCalled();
+    expect(alerts.map((a) => a.title)).toEqual(['手机和云端的数据不一样', '手机和云端的数据不一样']);
+    expect(probe.seen?.conflict).toMatchObject({ phone: '2 个测试对象、0 次测试、0 次训练' });
+  });
+
   it('changes nothing, and says why, when the phone can’t note that the data may be another account’s', async () => {
     await syncedPhone();
     mockKvFull = true;

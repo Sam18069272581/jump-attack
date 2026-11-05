@@ -210,6 +210,25 @@ describe('syncWithCloud', () => {
     expect(rows).toHaveLength(1);
   });
 
+  // The person picks a side of what the question showed. Replaced since (a restore, putting back what one replaced),
+  // the phone holds other data, which the pick says nothing about: the person is asked again, about that.
+  it('applies a pick only to the data it was asked about, and asks again once that was replaced', async () => {
+    const { cloud, rows } = fakeCloud();
+    const a = await device();
+    await recordCmj(a.db, 's1', 45.2);
+    await syncWithCloud(a.db, cloud, a.mem, 'u1', 'iPhone');
+    const b = await device();
+    await recordCmj(b.db, 'x1', 40.0);
+    expect((await syncWithCloud(b.db, cloud, b.mem, 'u1', 'iPhone')).kind).toBe('conflict');
+    const other = await device();
+    await createAthlete(other.db, '别人');
+    await restoreBackup(b.db, await exportBackup(other.db));
+
+    expect(await syncWithCloud(b.db, cloud, b.mem, 'u1', 'iPhone', 'phone')).toEqual({ kind: 'conflict', phone: '2 个测试对象、0 次测试、0 次训练', cloud: '1 个测试对象、1 次测试、0 次训练', cloudAt: '2026-10-28T08:00:01Z' });
+    expect(rows.map((r) => r.hash)).toEqual([backupHash(await exportBackup(a.db))]);
+    expect(await syncWithCloud(b.db, cloud, b.mem, 'u1', 'iPhone', 'phone')).toEqual({ kind: 'uploaded' });
+  });
+
   it('reports a failure without touching anything when offline', async () => {
     const { cloud, setOffline } = fakeCloud();
     const a = await device();

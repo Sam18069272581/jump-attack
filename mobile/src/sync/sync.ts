@@ -26,6 +26,8 @@ export type SyncChoice = 'phone' | 'cloud';
 const lastKey = (userId: string) => `sync-last-hash:${userId}`;
 /** The account this device last synced with, whichever it was: the data on the phone is that account's. */
 const ACCOUNT_KEY = 'sync-account';
+/** The data (hash) the phone held when the person was last asked which side to keep, or whether to back up here. */
+const ASKED_KEY = 'sync-asked';
 const OFFLINE = '连不上云端，数据还在手机上，下次打开 App 会再试。';
 const NOT_NEWEST = '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。';
 const NEWER = '云端有更新版本 App 传的备份，这个版本不能覆盖它。先更新 App 再同步，数据还在手机上。';
@@ -45,8 +47,12 @@ export async function syncWithCloud(
     const lastHash = await memory.getItem(lastKey(userId));
     const account = await memory.getItem(ACCOUNT_KEY);
     const meta = await cloud.latest();
-    const action = choice
-      ? choice === 'phone'
+    // A choice answers the last question, about what the phone held then. Replaced since (a restore, data put back),
+    // the phone holds data the person wasn't asked about, and is asked again.
+    const asked = choice ? await memory.getItem(ASKED_KEY) : null;
+    const answer = asked == null || asked === localHash ? choice : undefined;
+    const action = answer
+      ? answer === 'phone'
         ? 'upload'
         : 'download'
       : decideSync({
@@ -61,12 +67,16 @@ export async function syncWithCloud(
       await memory.setItem(lastKey(userId), hash);
       await memory.setItem(ACCOUNT_KEY, userId);
     };
+    const ask = async (question: Extract<SyncOutcome, { kind: 'conflict' | 'confirm' }>) => {
+      await memory.setItem(ASKED_KEY, localHash);
+      return question;
+    };
 
     if (action === 'nothing') {
       if (meta && meta.hash === localHash && (lastHash !== localHash || account !== userId)) await synced(localHash);
       return { kind: 'nothing' };
     }
-    if (action === 'confirm') return { kind: 'confirm', phone: describeBackup(local) };
+    if (action === 'confirm') return ask({ kind: 'confirm', phone: describeBackup(local) });
     if (action === 'upload' || action === 'conflict') {
       // This app can't read a newer app's backup, and its own would lack the tables and columns that app added, which
       // every device that downloads it then loses. So it neither asks which to keep nor uploads until it is updated.
@@ -87,7 +97,7 @@ export async function syncWithCloud(
     if (!remote) return { kind: 'nothing' };
     const parsed = parseBackup(JSON.stringify(remote.data), LATEST_VERSION);
     if (action === 'conflict') {
-      return { kind: 'conflict', phone: describeBackup(local), cloud: parsed.ok ? describeBackup(parsed.backup) : tr('无法读取'), cloudAt: meta?.updatedAt ?? '' };
+      return ask({ kind: 'conflict', phone: describeBackup(local), cloud: parsed.ok ? describeBackup(parsed.backup) : tr('无法读取'), cloudAt: meta?.updatedAt ?? '' });
     }
     if (!parsed.ok) return { kind: 'failed', problem: parsed.problem };
     const restored = await restoreBackup(db, parsed.backup);

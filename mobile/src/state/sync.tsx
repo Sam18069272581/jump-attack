@@ -85,6 +85,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const now = dateTime(new Date().toISOString());
       if (outcome.kind === 'conflict' || outcome.kind === 'confirm') {
         setStatus(outcome.kind === 'conflict' ? tr('手机和云端的数据不一样，选一份保留') : tr('手机上的数据之前同步到另一个账号，确认后才会备份到这个账号'));
+        // Answered, and asked again: the phone's data changed since the question (sync/sync.ts). It is a new one.
+        if (choice) asked.current = false;
         setQuestion(outcome);
         return;
       }
