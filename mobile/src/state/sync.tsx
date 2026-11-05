@@ -8,10 +8,12 @@ import { dateTime } from '@/domain/dates';
 import { tr } from '@/i18n';
 import { authProblem, getSupabase } from '@/sync/client';
 import { supabaseBackups } from '@/sync/cloud';
-import { syncWithCloud, type SyncChoice, type SyncOutcome } from '@/sync/sync';
+import { forgetAccount, syncWithCloud, type SyncChoice, type SyncOutcome } from '@/sync/sync';
 
 type Conflict = Extract<SyncOutcome, { kind: 'conflict' }>;
 type Confirm = Extract<SyncOutcome, { kind: 'confirm' }>;
+/** How a restore went (db/backup.ts). */
+type Replaced = { ok: true } | { ok: false; problem: string };
 
 type SyncContextValue = {
   /** Whether a Supabase project is set up in sync/config.ts. */
@@ -28,6 +30,12 @@ type SyncContextValue = {
   signUp: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   syncNow: (choice?: SyncChoice) => Promise<void>;
+  /**
+   * Runs a restore once the sync that is running is done, and no sync while it runs: one would read the data half
+   * replaced, or download over it. Call dataReplaced after it. `ownerUnknown`: what it puts back may be another
+   * account's (undoing a restore on a shared phone). `asks`: the next sync then asks before backing it up.
+   */
+  replaceData: (restore: () => Promise<Replaced>, ownerUnknown?: boolean) => Promise<Replaced & { asks: boolean }>;
   /** Call after the database was replaced (a restore), so every screen reads it again. */
   dataReplaced: () => Promise<void>;
   /** Counts restores; everything inside the provider is remounted when it changes. */
@@ -54,7 +62,8 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   // What the person has to answer before the next sync can go on: which side to keep, or whether to back up here.
   const [question, setQuestion] = useState<Conflict | Confirm | null>(null);
   const [epoch, setEpoch] = useState(0);
-  const running = useRef(false);
+  // A sync, or a restore from the backup page: one at a time.
+  const running = useRef<Promise<unknown> | null>(null);
   const asked = useRef(false);
   const userId = session?.user.id ?? null;
 
@@ -66,11 +75,13 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const run = useCallback(
     async (userId: string, choice?: SyncChoice) => {
       if (!supabase || running.current) return;
-      running.current = true;
+      const sync = syncWithCloud(db, supabaseBackups(supabase, userId), Storage, userId, device(), choice);
+      running.current = sync;
       setBusy(true);
-      const outcome = await syncWithCloud(db, supabaseBackups(supabase, userId), Storage, userId, device(), choice);
-      running.current = false;
-      setBusy(false);
+      const outcome = await sync.finally(() => {
+        running.current = null;
+        setBusy(false);
+      });
       const now = dateTime(new Date().toISOString());
       if (outcome.kind === 'conflict' || outcome.kind === 'confirm') {
         setStatus(outcome.kind === 'conflict' ? tr('手机和云端的数据不一样，选一份保留') : tr('手机上的数据之前同步到另一个账号，确认后才会备份到这个账号'));
@@ -83,6 +94,31 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     },
     [db, supabase, dataReplaced],
   );
+
+  const replaceData = useCallback(async (restore: () => Promise<Replaced>, ownerUnknown = false) => {
+    while (running.current) await running.current.catch(() => {});
+    const replacing = (async (): Promise<Replaced & { asks: boolean }> => {
+      try {
+        // Before anything changes: if the app is closed halfway, the next sync still asks.
+        const asks = ownerUnknown && (await forgetAccount(Storage));
+        return { ...(await restore()), asks };
+      } catch (e) {
+        return { ok: false, problem: e instanceof Error ? e.message : String(e), asks: false };
+      }
+    })();
+    running.current = replacing;
+    setBusy(true);
+    const replaced = await replacing.finally(() => {
+      running.current = null;
+      setBusy(false);
+    });
+    if (replaced.ok) {
+      // A question still open, and the last sync's word, were about the data replaced.
+      setQuestion(null);
+      setStatus(null);
+    }
+    return replaced;
+  }, []);
 
   const syncNow = useCallback(
     async (choice?: SyncChoice) => {
@@ -154,10 +190,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
         setQuestion(null);
       },
       syncNow,
+      replaceData,
       dataReplaced,
       epoch,
     };
-  }, [supabase, session, busy, status, question, syncNow, dataReplaced, epoch]);
+  }, [supabase, session, busy, status, question, syncNow, replaceData, dataReplaced, epoch]);
 
   return (
     <SyncContext.Provider value={value}>

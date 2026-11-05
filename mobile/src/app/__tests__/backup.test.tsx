@@ -2,7 +2,7 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { Alert, Text, TextInput, type AlertButton } from 'react-native';
 
-import { exportBackup } from '@/db/backup';
+import { exportBackup, restoreBackup } from '@/db/backup';
 import { migrate } from '@/db/migrations';
 import { addTrial, createAthlete, ensureSession, listAthletes } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
@@ -39,6 +39,8 @@ jest.mock('expo-document-picker', () => ({
   getDocumentAsync: async () => (mockPicked ? { canceled: false, assets: [{ uri: mockPicked, name: 'backup.json' }] } : { canceled: true, assets: null }),
 }));
 
+// Whether the next sync asks before backing up what is put back (state/sync.tsx): not on a phone that never synced.
+let mockAsks = true;
 const mockSync = {
   configured: false,
   email: null as string | null,
@@ -50,6 +52,7 @@ const mockSync = {
   signUp: jest.fn(async (_e: string, _p: string): Promise<string | null> => null),
   signOut: jest.fn(async () => {}),
   syncNow: jest.fn(async () => {}),
+  replaceData: jest.fn(async (restore: () => Promise<{ ok: true } | { ok: false; problem: string }>, ownerUnknown?: boolean) => ({ ...(await restore()), asks: ownerUnknown === true && mockAsks })),
   dataReplaced: jest.fn(async () => {}),
   epoch: 0,
 };
@@ -91,6 +94,7 @@ beforeEach(async () => {
   jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => void alerts.push({ title: title ?? '', message, buttons }));
   mockFiles.clear();
   mockPicked = null;
+  mockAsks = true;
   mockShare.mockClear();
   Object.assign(mockSync, { configured: false, email: null, status: null, conflict: null, confirm: null });
   jest.clearAllMocks();
@@ -161,6 +165,65 @@ it('keeps what the phone held when a file replaces it, and puts it back after co
   expect(mockSync.dataReplaced).toHaveBeenCalledTimes(2);
   expect(alerts[3].title).toBe('已换回');
   // The data it replaced is kept in turn.
+  expect(texts(r.root)).toContain('替换前的数据还留在手机上：2 个测试对象、0 次测试、0 次训练');
+});
+
+/** Restores another phone's file over this one's data, which the phone then keeps. */
+async function restoreOther(): Promise<ReactTestRenderer> {
+  const other = openMemoryDb();
+  await migrate(other);
+  await createAthlete(other, '别人');
+  mockFiles.set('file:///other.json', JSON.stringify(await exportBackup(other)));
+  mockPicked = 'file:///other.json';
+  const r = await render();
+  await press(r.root, '从备份文件恢复');
+  await act(async () => {
+    await alerts[0].buttons?.find((b) => b.text === '替换')?.onPress?.();
+  });
+  return r;
+}
+
+// What a restore replaced may be another account's: on a shared phone, the teammate's cloud backup replaced the coach's
+// data, and the coach puts it back while the teammate is still signed in. Neither runs during a sync.
+it('restores and puts back in turn with sync, and has the next sync ask before backing up what it put back', async () => {
+  mockSync.email = 'player@example.com';
+  await usedPhone();
+  const r = await restoreOther();
+  expect(mockSync.replaceData).toHaveBeenLastCalledWith(expect.any(Function));
+  await press(r.root, '换回替换前的数据');
+  await act(async () => {
+    await alerts[2].buttons?.find((b) => b.text === '换回')?.onPress?.();
+  });
+  expect(mockSync.replaceData).toHaveBeenLastCalledWith(expect.any(Function), true);
+  expect(alerts[3]).toMatchObject({ title: '已换回', message: '下次同步时会先问你，确认后才备份到云端。' });
+});
+
+it('says what it put back is backed up at the next sync on a phone that never synced', async () => {
+  mockSync.email = 'me@example.com';
+  mockAsks = false;
+  await usedPhone();
+  const r = await restoreOther();
+  await press(r.root, '换回替换前的数据');
+  await act(async () => {
+    await alerts[2].buttons?.find((b) => b.text === '换回')?.onPress?.();
+  });
+  expect(alerts[3]).toMatchObject({ title: '已换回', message: '下次同步时会把它备份到云端。' });
+});
+
+// A sync can download by itself while the question is open, and keeps what the download replaced instead.
+it('puts back only the data it asked about, and says so when what is kept changed meanwhile', async () => {
+  await usedPhone();
+  const r = await restoreOther();
+  await press(r.root, '换回替换前的数据');
+  const downloaded = openMemoryDb();
+  await migrate(downloaded);
+  await createAthlete(downloaded, '云端的');
+  await restoreBackup(mockDb, await exportBackup(downloaded));
+  await act(async () => {
+    await alerts[2].buttons?.find((b) => b.text === '换回')?.onPress?.();
+  });
+  expect(alerts[3]).toEqual({ title: '没有换回', message: '留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。', buttons: undefined });
+  expect((await listAthletes(mockDb)).map((a) => a.name)).toEqual(['我自己', '云端的']);
   expect(texts(r.root)).toContain('替换前的数据还留在手机上：2 个测试对象、0 次测试、0 次训练');
 });
 

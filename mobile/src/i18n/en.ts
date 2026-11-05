@@ -190,6 +190,7 @@ export const en: Record<string, string> = {
   '替换': 'Replace',
   '已恢复': 'Restored',
   '下次同步时会把它备份到云端。': 'It will be backed up to the cloud at the next sync.',
+  '下次同步时会先问你，确认后才备份到云端。': 'The next sync will ask you before backing it up to the cloud.',
   '换回替换前的数据？': 'Switch back to the replaced data?',
   '换回 {at} 替换前的数据：{kept}\n手机上现在的数据会留一份，可以再换回来。': 'Brings back the data that was replaced at {at}: {kept}\nA copy of the current data stays on the phone, so you can switch again.',
   '换回': 'Switch back',
@@ -1167,6 +1168,7 @@ export const en: Record<string, string> = {
   // db/backup.ts
   '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。': 'The backup has a problem and was not restored. The data on the phone is unchanged.',
   '没有可以换回的数据。': 'There is no replaced data to switch back to.',
+  '留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。': 'The data kept on the phone just changed, so nothing was switched back. Check which data is kept now before switching back.',
 
   // domain/athletes.ts
   '我自己': 'Me',

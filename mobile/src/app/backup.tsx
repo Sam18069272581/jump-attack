@@ -59,7 +59,7 @@ export default function BackupScreen() {
           style: 'destructive',
           onPress: async () => {
             setRestoring(true);
-            const r = await restoreBackup(db, parsed.backup);
+            const r = await sync.replaceData(() => restoreBackup(db, parsed.backup));
             setRestoring(false);
             await loadKept();
             if (!r.ok) {
@@ -83,7 +83,8 @@ export default function BackupScreen() {
         style: 'destructive',
         onPress: async () => {
           setUndoing(true);
-          const r = await undoRestore(db);
+          // What it puts back may be another account's (on a shared phone): the next sync asks before backing it up.
+          const r = await sync.replaceData(() => undoRestore(db, kept.at), true);
           setUndoing(false);
           await loadKept();
           if (!r.ok) {
@@ -91,7 +92,7 @@ export default function BackupScreen() {
             return;
           }
           await sync.dataReplaced();
-          Alert.alert(tr('已换回'), sync.email ? tr('下次同步时会把它备份到云端。') : undefined);
+          Alert.alert(tr('已换回'), sync.email ? (r.asks ? tr('下次同步时会先问你，确认后才备份到云端。') : tr('下次同步时会把它备份到云端。')) : undefined);
         },
       },
     ]);

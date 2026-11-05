@@ -101,6 +101,17 @@ export async function syncWithCloud(
   }
 }
 
+/**
+ * Before putting back data that may be another account's (undoing a restore on a shared phone): whoever syncs next is
+ * asked before it goes into their account, as on a phone last synced with another account ('' is no account's id).
+ * A phone that never synced holds no account's data, and has nothing to forget. Resolves to whether it had.
+ */
+export async function forgetAccount(memory: SyncMemory): Promise<boolean> {
+  if ((await memory.getItem(ACCOUNT_KEY)) == null) return false;
+  await memory.setItem(ACCOUNT_KEY, '');
+  return true;
+}
+
 /** Why a sync failed, for the person: the cloud refusing a backup is not the connection being down. */
 function cloudProblem(message: string): string {
   // supabase/backups-hardening.sql: only the days around today can be written, never by an app older than the backups.

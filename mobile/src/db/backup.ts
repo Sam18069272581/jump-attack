@@ -68,9 +68,13 @@ export async function keptBeforeRestore(db: SQLiteDatabase): Promise<{ at: strin
   return parsed.ok ? { at: row.at, backup: parsed.backup } : null;
 }
 
-/** Puts back what the last restore replaced. What this replaces is kept in turn, so it can be swapped back again. */
-export async function undoRestore(db: SQLiteDatabase): Promise<{ ok: true } | { ok: false; problem: string }> {
+/**
+ * Puts back what the last restore replaced; with `at`, only the copy kept then, the one the person was shown. What this
+ * replaces is kept in turn, so it can be swapped back again.
+ */
+export async function undoRestore(db: SQLiteDatabase, at?: string): Promise<{ ok: true } | { ok: false; problem: string }> {
   const kept = await keptBeforeRestore(db);
   if (!kept) return { ok: false, problem: tr('没有可以换回的数据。') };
+  if (at != null && kept.at !== at) return { ok: false, problem: tr('留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。') };
   return restoreBackup(db, kept.backup);
 }

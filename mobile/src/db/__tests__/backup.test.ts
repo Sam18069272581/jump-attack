@@ -171,6 +171,23 @@ describe('undoRestore', () => {
     expect(await keptBeforeRestore(fresh)).toBeNull();
   });
 
+  /** A restore whose kept copy the person was shown, then another one (a sync downloading by itself meanwhile). */
+  async function keptTwice() {
+    const db = await used();
+    await restoreBackup(db, await theirs());
+    const shown = (await keptBeforeRestore(db))!.at;
+    await new Promise((r) => setTimeout(r, 2));
+    await restoreBackup(db, await exportBackup(await used()));
+    return { db, shown };
+  }
+
+  it('puts back only the copy the person was shown', async () => {
+    const { db, shown } = await keptTwice();
+    const now = await dump(db);
+    expect(await undoRestore(db, shown)).toEqual({ ok: false, problem: '留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。' });
+    expect(await dump(db)).toEqual(now);
+  });
+
   it('keeps the earlier copy when a restore fails', async () => {
     const db = await used();
     await restoreBackup(db, await theirs());

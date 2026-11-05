@@ -1,12 +1,12 @@
 // Two devices and one cloud account, each device a real in-memory database.
-import { exportBackup } from '@/db/backup';
+import { exportBackup, restoreBackup, undoRestore } from '@/db/backup';
 import { LATEST_VERSION, migrate } from '@/db/migrations';
 import { addTrial, createAthlete, ensureSession, listAthletes } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
 import { backupHash, type Backup } from '@/domain/backup';
 
 import type { CloudBackups, CloudMeta } from '../cloud';
-import { syncWithCloud, type SyncMemory } from '../sync';
+import { forgetAccount, syncWithCloud, type SyncMemory } from '../sync';
 
 type Row = CloudMeta & { date: string; data: unknown };
 
@@ -172,6 +172,42 @@ describe('syncWithCloud', () => {
     // Back with the coach's account: only the phone changed since the coach's last sync, which used to mean upload.
     expect((await syncWithCloud(phone.db, coach.cloud, phone.mem, 'coach', 'iPhone')).kind).toBe('conflict');
     expect(coach.rows.map((r) => r.hash)).toEqual([coachBackup]);
+  });
+
+  // The phone kept the coach's data when the teammate took their own from the cloud, and the coach puts it back.
+  it('asks before backing up data put back after a restore, which may be another account’s', async () => {
+    const coach = fakeCloud();
+    const player = fakeCloud();
+    const phone = await device();
+    await recordCmj(phone.db, 's1', 45.2);
+    await syncWithCloud(phone.db, coach.cloud, phone.mem, 'coach', 'iPhone');
+    const theirs = await device();
+    await recordCmj(theirs.db, 'p1', 38.0);
+    await syncWithCloud(theirs.db, player.cloud, theirs.mem, 'player', 'iPhone');
+    await syncWithCloud(phone.db, player.cloud, phone.mem, 'player', 'iPhone', 'cloud');
+    const playerBackup = player.rows[0].hash;
+
+    expect(await undoRestore(phone.db)).toEqual({ ok: true });
+    expect(await forgetAccount(phone.mem)).toBe(true);
+    // Still signed in as the teammate: only the phone changed since their last sync, which used to mean upload.
+    expect((await syncWithCloud(phone.db, player.cloud, phone.mem, 'player', 'iPhone')).kind).toBe('conflict');
+    expect(player.rows.map((r) => r.hash)).toEqual([playerBackup]);
+    // The coach's account already holds that data: nothing to ask, and the phone is the coach's again.
+    expect(await syncWithCloud(phone.db, coach.cloud, phone.mem, 'coach', 'iPhone')).toEqual({ kind: 'nothing' });
+    await recordCmj(phone.db, 's2', 46.0);
+    expect(await syncWithCloud(phone.db, coach.cloud, phone.mem, 'coach', 'iPhone')).toEqual({ kind: 'uploaded' });
+  });
+
+  // A phone that never synced holds no account's data but its own, as one that just has data on it.
+  it('has nothing to forget on a phone that never synced, which then backs up as it would have', async () => {
+    const { cloud, rows } = fakeCloud();
+    const phone = await device();
+    await recordCmj(phone.db, 's1', 45.2);
+    await restoreBackup(phone.db, await exportBackup((await device()).db));
+    expect(await undoRestore(phone.db)).toEqual({ ok: true });
+    expect(await forgetAccount(phone.mem)).toBe(false);
+    expect(await syncWithCloud(phone.db, cloud, phone.mem, 'u1', 'iPhone')).toEqual({ kind: 'uploaded' });
+    expect(rows).toHaveLength(1);
   });
 
   it('reports a failure without touching anything when offline', async () => {
