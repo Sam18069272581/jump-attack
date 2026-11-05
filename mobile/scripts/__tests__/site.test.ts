@@ -45,3 +45,16 @@ it('only loads files that ship with the page', () => {
     expect(fs.existsSync(path.join(siteDir, url))).toBe(true);
   }
 });
+
+it('ships the promo film and its poster in both languages', () => {
+  // The <video> swaps src and poster with the language, so the Chinese files are in the page and the English ones in i18n.js.
+  const tag = html.match(/<video[^>]*>/)?.[0] ?? '';
+  expect(tag).toMatch(/data-i18n-attr="[^"]*src:film\.src/);
+  expect(tag).toMatch(/data-i18n-attr="[^"]*poster:film\.poster/);
+  const files = [/\ssrc="([^"]+)"/.exec(tag)?.[1], /\sposter="([^"]+)"/.exec(tag)?.[1], en['film.src'], en['film.poster']];
+  for (const url of files) {
+    expect(url).toBeTruthy();
+    expect(url).not.toMatch(/^(https?:)?\/\//);
+    expect(fs.existsSync(path.join(siteDir, url as string))).toBe(true);
+  }
+});
