@@ -105,8 +105,24 @@ it('logs each attempt with one tap and counts the recent ones at that rim and ba
 it('takes back an attempt logged by mistake', async () => {
   const before = (await listDunkAttempts(mockDb, 1)).length;
   const r = await render(<Attempts />);
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => buttons?.find((b) => b.style === 'destructive')?.onPress?.());
   await press(r.root, '删除这次');
+  await act(async () => {});
+  expect(alert).toHaveBeenCalledWith('删除这次尝试？', undefined, expect.any(Array));
   expect(await listDunkAttempts(mockDb, 1)).toHaveLength(before - 1);
+  alert.mockRestore();
+});
+
+it('keeps an attempt when the delete is cancelled', async () => {
+  const before = (await listDunkAttempts(mockDb, 1)).length;
+  const r = await render(<Attempts />);
+  // A slip of the thumb on the list: the confirm comes up and Cancel leaves everything as it was.
+  const alert = jest.spyOn(Alert, 'alert').mockImplementation((_t, _m, buttons) => buttons?.find((b) => b.style === 'cancel')?.onPress?.());
+  await press(r.root, '删除这次');
+  await act(async () => {});
+  expect(alert).toHaveBeenCalled();
+  expect(await listDunkAttempts(mockDb, 1)).toHaveLength(before);
+  alert.mockRestore();
 });
 
 it('does not save a rim height no hoop is set to', async () => {
