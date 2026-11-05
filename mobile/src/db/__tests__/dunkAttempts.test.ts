@@ -1,4 +1,4 @@
-import { exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '../backup';
+import { discardKept, exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '../backup';
 import { addDunkAttempt, deleteDunkAttempt, listDunkAttempts } from '../dunkAttempts';
 import { LATEST_VERSION, migrate } from '../migrations';
 import { addTrial, createAthlete, ensureSession, listTrials } from '../repo';
@@ -145,4 +145,11 @@ it('reads the kept copy once, and again only once a later restore keeps another'
   await restoreBackup(db, await exportBackup(await setup()));
   expect(await techniqueVideoUris(db)).toEqual([]);
   expect(copyReads()).toBe(2);
+});
+
+it('lets the videos of the kept copy go once it is deleted', async () => {
+  const db = await filmedThenReplaced();
+  expect(await techniqueVideoUris(db)).toEqual(['file:///app/Documents/technique/take-8.mov']);
+  await discardKept(db, (await keptBeforeRestore(db))!.at);
+  expect(await techniqueVideoUris(db)).toEqual([]);
 });

@@ -1,4 +1,4 @@
-import { exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '../backup';
+import { discardKept, exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '../backup';
 import { LATEST_VERSION, migrate } from '../migrations';
 import { addTrial, createAthlete, ensureSession, listAthletes, listSessionResults, updateAthlete } from '../repo';
 import { saveRecoveryDay } from '../recovery';
@@ -186,6 +186,15 @@ describe('undoRestore', () => {
     const now = await dump(db);
     expect(await undoRestore(db, shown)).toEqual({ ok: false, problem: '留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。' });
     expect(await dump(db)).toEqual(now);
+  });
+
+  it('deletes the kept copy when asked to, only the one the person was shown', async () => {
+    const { db, shown } = await keptTwice();
+    await discardKept(db, shown);
+    expect(await keptBeforeRestore(db)).not.toBeNull();
+    await discardKept(db, (await keptBeforeRestore(db))!.at);
+    expect(await keptBeforeRestore(db)).toBeNull();
+    expect(await undoRestore(db)).toEqual({ ok: false, problem: '没有可以换回的数据。' });
   });
 
   it('keeps the earlier copy when a restore fails', async () => {

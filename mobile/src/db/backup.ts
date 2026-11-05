@@ -99,3 +99,8 @@ export async function undoRestore(db: SQLiteDatabase, at?: string): Promise<{ ok
   if (at != null && kept.at !== at) return { ok: false, problem: tr('留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。') };
   return restoreBackup(db, kept.backup);
 }
+
+/** Deletes the copy kept at `at`, when it isn't needed: then the videos only it used go too (media/takes.ts). */
+export async function discardKept(db: SQLiteDatabase, at: string): Promise<void> {
+  await db.runAsync(`DELETE FROM ${KEPT} WHERE id = 1 AND at = ?`, at);
+}

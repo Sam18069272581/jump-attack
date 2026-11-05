@@ -2,7 +2,7 @@
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer';
 import { Alert, Text, TextInput, type AlertButton } from 'react-native';
 
-import { exportBackup, restoreBackup } from '@/db/backup';
+import { exportBackup, keptBeforeRestore, restoreBackup } from '@/db/backup';
 import { migrate } from '@/db/migrations';
 import { addTrial, createAthlete, ensureSession, listAthletes } from '@/db/repo';
 import { openMemoryDb } from '@/db/testing/memoryDb';
@@ -225,6 +225,23 @@ it('puts back only the data it asked about, and says so when what is kept change
   expect(alerts[3]).toEqual({ title: '没有换回', message: '留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。', buttons: undefined });
   expect((await listAthletes(mockDb)).map((a) => a.name)).toEqual(['我自己', '云端的']);
   expect(texts(r.root)).toContain('替换前的数据还留在手机上：2 个测试对象、0 次测试、0 次训练');
+});
+
+// The kept data holds the videos filmed in the app for it, and it stays until a later restore replaces it.
+it('deletes the kept data after confirming, when it isn’t needed', async () => {
+  await usedPhone();
+  const r = await restoreOther();
+  expect(texts(r.root)).toContain('在 App 里拍的录像也一起留着，换回时还在。不用换回的话，可以删掉这份。');
+  await press(r.root, '删掉这份');
+  expect(alerts[2].title).toBe('删掉留着的数据？');
+  expect(alerts[2].message).toMatch(/替换前的数据：2 个测试对象、1 次测试、0 次训练\n删掉后就不能换回了，只有它用到的录像也会删掉。$/);
+  expect(await keptBeforeRestore(mockDb)).not.toBeNull(); // nothing changes before confirming
+  await act(async () => {
+    await alerts[2].buttons?.find((b) => b.text === '删除')?.onPress?.();
+  });
+  expect(await keptBeforeRestore(mockDb)).toBeNull();
+  expect(texts(r.root)).not.toContain('替换前的数据');
+  expect((await listAthletes(mockDb)).map((a) => a.name)).toEqual(['我自己', '别人']);
 });
 
 it('says what is wrong with a file that is not a backup, and leaves the data alone', async () => {

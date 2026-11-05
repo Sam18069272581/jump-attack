@@ -4,7 +4,7 @@ import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, Te
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card } from '@/components/ui';
-import { exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '@/db/backup';
+import { discardKept, exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '@/db/backup';
 import { LATEST_VERSION } from '@/db/migrations';
 import { describeBackup, isPristine, parseBackup, type Backup } from '@/domain/backup';
 import { dateTime } from '@/domain/dates';
@@ -98,6 +98,21 @@ export default function BackupScreen() {
     ]);
   }
 
+  function discard() {
+    if (!kept) return;
+    Alert.alert(tr('删掉留着的数据？'), tr('{at} 替换前的数据：{kept}\n删掉后就不能换回了，只有它用到的录像也会删掉。', { at: dateTime(kept.at), kept: describeBackup(kept.backup) }), [
+      { text: tr('取消'), style: 'cancel' },
+      {
+        text: tr('删除'),
+        style: 'destructive',
+        onPress: async () => {
+          await discardKept(db, kept.at);
+          await loadKept();
+        },
+      },
+    ]);
+  }
+
   return (
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
@@ -118,7 +133,9 @@ export default function BackupScreen() {
               <Text style={[text.section, { paddingTop: 8 }]}>{tr('撤回恢复')}</Text>
               <Card style={{ gap: 10 }}>
                 <Text style={text.body}>{tr('{at} 替换前的数据还留在手机上：{kept}', { at: dateTime(kept.at), kept: describeBackup(kept.backup) })}</Text>
+                <Text style={text.caption}>{tr('在 App 里拍的录像也一起留着，换回时还在。不用换回的话，可以删掉这份。')}</Text>
                 <Button label={tr('换回替换前的数据')} variant="secondary" onPress={undo} busy={undoing} />
+                <Button label={tr('删掉这份')} variant="ghost" onPress={discard} disabled={undoing} />
               </Card>
             </>
           )}
