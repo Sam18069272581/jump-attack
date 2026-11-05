@@ -95,10 +95,16 @@ it('asks for the session RPE and minutes after training and keeps the load', asy
 
   const minutes = r.root.find((n) => n.type === TextInput && n.props.accessibilityLabel === '训练时长（分钟）');
   await act(async () => minutes.props.onChangeText('60'));
-  await act(async () => minutes.props.onEndEditing());
+  await act(async () => minutes.props.onBlur());
   await act(async () => pressable(r.root, '整节课多累（RPE） 7 分').props.onPress());
   await act(async () => {});
   const plan = await mockDb.getFirstAsync<{ id: number }>('SELECT id FROM plan');
   expect(await getWorkout(mockDb, plan!.id, '2026-11-02')).toMatchObject({ sessionRpe: 7, durationMin: 60 });
   expect(texts(r.root)).toContain('这节负荷 420（RPE × 分钟）');
+
+  // Changing the minutes later keeps on leaving the box, as the browser only reports blur (react-native-web has no onEndEditing).
+  await act(async () => minutes.props.onChangeText('45'));
+  await act(async () => minutes.props.onBlur());
+  await act(async () => {});
+  expect(await getWorkout(mockDb, plan!.id, '2026-11-02')).toMatchObject({ sessionRpe: 7, durationMin: 45 });
 });

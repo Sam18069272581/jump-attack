@@ -411,7 +411,8 @@ function SessionLoad({ workout, onSave }: { workout: Workout; onSave: (v: { rpe:
         <TextInput
           value={minutes}
           onChangeText={setMinutes}
-          onEndEditing={() => onSave({ rpe, minutes: typed })}
+          // onBlur, not onEndEditing: react-native-web never calls onEndEditing, so the web app never saved the minutes.
+          onBlur={() => onSave({ rpe, minutes: typed })}
           keyboardType="number-pad"
           accessibilityLabel={tr('训练时长（分钟）')}
           style={styles.minutesInput}
