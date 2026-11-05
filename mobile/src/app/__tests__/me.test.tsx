@@ -100,3 +100,19 @@ it('adds one athlete when Add is pressed and Return hit at the same time', async
   expect(after.length).toBe(before + 1);
   expect(after.filter((a) => a.name === '小明')).toHaveLength(1);
 });
+
+it('does not save a profile number no one has, and says which one', async () => {
+  const r = await render();
+  const saved = await getAthlete(mockDb, 1);
+  await type(r.root, '体重（kg）', 'Infinity');
+  expect(texts(r.root)).toContain('体重要填一个数');
+  expect(pressable(r.root, '保存').props.disabled).toBe(true);
+  await act(async () => pressable(r.root, '保存').props.onPress());
+  expect((await getAthlete(mockDb, 1))!.body_mass_kg).toBe(saved!.body_mass_kg);
+
+  await type(r.root, '体重（kg）', '78');
+  await type(r.root, '篮筐高度（cm）', '-305');
+  expect(texts(r.root)).toContain('篮筐高度一般在 200–320 cm，检查一下输入');
+  await type(r.root, '篮筐高度（cm）', '');
+  expect(pressable(r.root, '保存').props.disabled).toBe(false);
+});

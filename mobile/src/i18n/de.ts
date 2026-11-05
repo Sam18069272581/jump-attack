@@ -1895,4 +1895,10 @@ export const de: Record<string, string> = {
 
   // web/dialogs.ts
   '{p}（确定 = {text}）': '{p}(OK = {text})',
+
+  // domain/profile.ts
+  '腿长': 'Beinlänge',
+  '下蹲高度': 'Hockhöhe',
+  '过筐余量': 'Abstand über dem Korb',
+  '{name}要填一个数': '{name} muss eine Zahl sein',
 };

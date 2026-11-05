@@ -16,17 +16,13 @@ import { CLEARANCE_CM, dunkLine, RIM_CM } from '@/domain/dunk';
 import { toISODate } from '@/domain/dates';
 import { pushOff } from '@/domain/fvp';
 import { parseGoalDate } from '@/domain/goal';
+import { readProfile } from '@/domain/profile';
 import { LANGS, tr } from '@/i18n';
 import { deleteSavedVideos, savedVideos } from '@/media/videos';
 import { pickBackupText, shareAthleteFile } from '@/sync/files';
 import { useAthlete } from '@/state/athlete';
 import { useLang, type LangChoice } from '@/state/lang';
 import { colors, radius, text } from '@/theme';
-
-function toNumber(s: string): number | null {
-  const n = Number(s.replace(',', '.'));
-  return s.trim() === '' || Number.isNaN(n) ? null : n;
-}
 
 export default function Me() {
   const { current, reload } = useAthlete();
@@ -207,15 +203,17 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
   const [goal, setGoal] = useState(athlete.goal_date ?? '');
   const [saving, setSaving] = useState(false);
   const goalDate = parseGoalDate(goal);
-  const legCm = toNumber(leg);
-  const squatCm = toNumber(squat);
+  const profile = readProfile({ mass, reach, leg, squat, rim, clearance });
+  const numbers = profile.ok ? profile.values : null;
+  const legCm = numbers?.leg_length_cm ?? null;
+  const squatCm = numbers?.squat_height_cm ?? null;
   const hpo = legCm != null && squatCm != null ? pushOff(legCm, squatCm) : null;
 
   async function save() {
-    if (!name.trim() || !goalDate.ok) return;
+    if (!name.trim() || !goalDate.ok || !numbers) return;
     setSaving(true);
     // A new weight goes into the history too, so tests are read against the mass of their own week.
-    const kg = toNumber(mass);
+    const kg = numbers.body_mass_kg;
     if (kg != null && (kg !== athlete.body_mass_kg || (await listBodyMass(db, athlete.id)).length === 0)) {
       await recordBodyMass(db, athlete.id, kg, toISODate(new Date()));
     }
@@ -223,12 +221,7 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
       ...athlete,
       // The default athlete keeps its stored name unless it was renamed, so it still reads right after a language switch.
       name: name.trim() === athleteName(athlete.name) ? athlete.name : name.trim(),
-      body_mass_kg: toNumber(mass),
-      standing_reach_cm: toNumber(reach),
-      leg_length_cm: legCm,
-      squat_height_cm: squatCm,
-      rim_height_cm: toNumber(rim),
-      dunk_clearance_cm: toNumber(clearance),
+      ...numbers,
       goal_date: goalDate.date,
     });
     await onSaved();
@@ -253,12 +246,13 @@ function ProfileForm({ athlete, onSaved }: { athlete: Athlete; onSaved: () => Pr
       <Text style={[text.section, { paddingTop: 8 }]}>{tr('扣篮目标')}</Text>
       <Field label={tr('篮筐高度（cm）')} value={rim} onChangeText={setRim} keyboardType="decimal-pad" placeholder={String(RIM_CM)} />
       <Field label={tr('过筐余量（cm）· 手要高出篮筐多少才扣得进')} value={clearance} onChangeText={setClearance} keyboardType="decimal-pad" placeholder={String(CLEARANCE_CM)} />
-      <Text style={styles.footnote}>{tr('扣篮线 {rim} cm。单手能抓住球约需高出篮筐 15 cm；手小要托球或想双手扣，余量再加大。', { rim: dunkLine(toNumber(rim), toNumber(clearance)) })}</Text>
+      <Text style={styles.footnote}>{tr('扣篮线 {rim} cm。单手能抓住球约需高出篮筐 15 cm；手小要托球或想双手扣，余量再加大。', { rim: dunkLine(numbers?.rim_height_cm, numbers?.dunk_clearance_cm) })}</Text>
       <Field label={tr('目标日 · 哪天前要扣进')} value={goal} onChangeText={setGoal} placeholder="2026-12-01" autoCapitalize="none" autoCorrect={false} />
       <Text style={[styles.footnote, !goalDate.ok && { color: colors.warn }]}>
         {goalDate.ok ? tr('计划按它倒推：不到 6 周不再开力量块，最后 10 天量减半，当天测摸高、试扣。') : goalDate.problem}
       </Text>
-      <Button label={tr('保存')} onPress={save} busy={saving} disabled={!name.trim() || !goalDate.ok} />
+      {!profile.ok && <Text style={[styles.footnote, { color: colors.warn }]}>{profile.problem}</Text>}
+      <Button label={tr('保存')} onPress={save} busy={saving} disabled={!name.trim() || !goalDate.ok || !profile.ok} />
     </View>
   );
 }
