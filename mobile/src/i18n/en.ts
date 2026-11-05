@@ -1898,6 +1898,7 @@ export const en: Record<string, string> = {
   '邮箱还没确认：去邮箱点一下确认链接，再回来登录。': 'Email not confirmed yet: open the confirmation link in your email, then come back and sign in.',
   '邮箱格式不对。': 'That doesn’t look like an email address.',
   '尝试太频繁，过几分钟再试。': 'Too many tries. Wait a few minutes and try again.',
+  '这个云端现在不开放注册，请找管理员邀请你。': 'This cloud isn’t taking new sign-ups right now. Ask its admin to invite you.',
   '连不上云端，检查网络后再试。': 'Can’t reach the cloud. Check your connection and try again.',
   '登录失败：{message}': 'Sign-in failed: {message}',
 
@@ -1910,6 +1911,8 @@ export const en: Record<string, string> = {
   '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。': 'The newest backup in the cloud isn’t the one just uploaded. A device’s date or time may be wrong; please check. Your data is still on the phone.',
   '云端有更新版本 App 传的备份，这个版本不能覆盖它。先更新 App 再同步，数据还在手机上。': 'The cloud has a backup from a newer version of the app, which this version can’t overwrite. Update the app, then sync again. Your data is still on the phone.',
   '无法读取': 'Can’t read',
+  '云端没有收下这次备份：可能是这台设备的日期不对，或云端已有更新版本 App 的备份。数据还在手机上。': 'The cloud didn’t accept this backup: this device’s date may be wrong, or the cloud already has a backup from a newer version of the app. Your data is still on the phone.',
+  '这份备份超过云端单份的大小上限，没有上传。数据还在手机上。': 'This backup is larger than the cloud allows for one backup and wasn’t uploaded. Your data is still on the phone.',
 
   // web/dialogs.ts
   '{p}（确定 = {text}）': '{p}(OK = {text})',

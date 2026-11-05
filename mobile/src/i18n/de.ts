@@ -1898,6 +1898,7 @@ export const de: Record<string, string> = {
   '邮箱还没确认：去邮箱点一下确认链接，再回来登录。': 'E-Mail noch nicht bestätigt: Öffne den Bestätigungslink in deiner E-Mail und melde dich dann hier an.',
   '邮箱格式不对。': 'Das sieht nicht nach einer E-Mail-Adresse aus.',
   '尝试太频繁，过几分钟再试。': 'Zu viele Versuche. In ein paar Minuten noch einmal versuchen.',
+  '这个云端现在不开放注册，请找管理员邀请你。': 'Diese Cloud nimmt gerade keine neuen Registrierungen an. Bitte den Admin, dich einzuladen.',
   '连不上云端，检查网络后再试。': 'Cloud nicht erreichbar. Verbindung prüfen und erneut versuchen.',
   '登录失败：{message}': 'Anmeldung fehlgeschlagen: {message}',
 
@@ -1910,6 +1911,8 @@ export const de: Record<string, string> = {
   '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。': 'Die neueste Sicherung in der Cloud ist nicht die gerade hochgeladene. Datum oder Uhrzeit eines Geräts stimmen vielleicht nicht, bitte prüfen. Deine Daten sind noch auf dem Handy.',
   '云端有更新版本 App 传的备份，这个版本不能覆盖它。先更新 App 再同步，数据还在手机上。': 'In der Cloud liegt eine Sicherung aus einer neueren App-Version, die diese Version nicht überschreiben kann. Aktualisiere die App und synchronisiere dann erneut. Deine Daten sind noch auf dem Handy.',
   '无法读取': 'Nicht lesbar',
+  '云端没有收下这次备份：可能是这台设备的日期不对，或云端已有更新版本 App 的备份。数据还在手机上。': 'Die Cloud hat diese Sicherung nicht angenommen: Vielleicht stimmt das Datum dieses Geräts nicht, oder in der Cloud liegt schon eine Sicherung aus einer neueren App-Version. Deine Daten sind noch auf dem Handy.',
+  '这份备份超过云端单份的大小上限，没有上传。数据还在手机上。': 'Diese Sicherung ist größer, als die Cloud für eine Sicherung erlaubt, und wurde nicht hochgeladen. Deine Daten sind noch auf dem Handy.',
 
   // web/dialogs.ts
   '{p}（确定 = {text}）': '{p}(OK = {text})',

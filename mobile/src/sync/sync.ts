@@ -96,7 +96,15 @@ export async function syncWithCloud(
     // which then reads as a local change and is uploaded once, instead of being downloaded on every sync.
     await synced(remote.hash);
     return { kind: 'downloaded' };
-  } catch {
-    return { kind: 'failed', problem: tr(OFFLINE) };
+  } catch (e) {
+    return { kind: 'failed', problem: cloudProblem(e instanceof Error ? e.message : String(e)) };
   }
+}
+
+/** Why a sync failed, for the person: the cloud refusing a backup is not the connection being down. */
+function cloudProblem(message: string): string {
+  // supabase/backups-hardening.sql: only the days around today can be written, never by an app older than the backups.
+  if (/row-level security/i.test(message)) return tr('云端没有收下这次备份：可能是这台设备的日期不对，或云端已有更新版本 App 的备份。数据还在手机上。');
+  if (/backups_size/.test(message)) return tr('这份备份超过云端单份的大小上限，没有上传。数据还在手机上。');
+  return tr(OFFLINE);
 }

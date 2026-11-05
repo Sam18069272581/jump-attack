@@ -183,6 +183,23 @@ describe('syncWithCloud', () => {
     expect(a.mem.map.size).toBe(0);
   });
 
+  // supabase/backups-hardening.sql makes the cloud refuse some writes, which is not the connection being down.
+  it('says why the cloud refused a backup instead of blaming the connection', async () => {
+    const { cloud } = fakeCloud();
+    const a = await device();
+    await recordCmj(a.db, 's1', 45.2);
+    const refused = async (message: string) => {
+      jest.spyOn(cloud, 'upload').mockRejectedValueOnce(new Error(message));
+      return syncWithCloud(a.db, cloud, a.mem, 'u1', 'iPhone');
+    };
+    expect(await refused('new row violates row-level security policy for table "backups"')).toEqual({
+      kind: 'failed',
+      problem: '云端没有收下这次备份：可能是这台设备的日期不对，或云端已有更新版本 App 的备份。数据还在手机上。',
+    });
+    expect(await refused('new row for relation "backups" violates check constraint "backups_size"')).toEqual({ kind: 'failed', problem: '这份备份超过云端单份的大小上限，没有上传。数据还在手机上。' });
+    expect(a.mem.map.size).toBe(0);
+  });
+
   it('refuses a cloud backup from a newer app and leaves the phone alone', async () => {
     const { cloud } = fakeCloud();
     const a = await device();
