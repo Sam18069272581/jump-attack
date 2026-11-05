@@ -158,6 +158,26 @@ describe('syncWithCloud', () => {
     expect(await data(b.db)).toEqual(before);
   });
 
+  // The newest backup is the one every device compares with. A laptop whose clock runs months ahead dates its backup
+  // then (with supabase/backups.sql alone it also stamps the time), so it stays the newest whatever is uploaded later.
+  it('keeps what the phone recorded when a device with a wrong clock left a backup dated ahead', async () => {
+    const { cloud, rows } = fakeCloud();
+    const laptop = await device();
+    await recordCmj(laptop.db, 'a', 40.0);
+    const ahead = await exportBackup(laptop.db);
+    rows.push({ hash: backupHash(ahead), device: '网页', date: '2027-06-01', updatedAt: '2027-06-01T10:00:00Z', data: ahead });
+
+    const phone = await device();
+    expect(await syncWithCloud(phone.db, cloud, phone.mem, 'u1', 'iPhone')).toEqual({ kind: 'downloaded' });
+    await recordCmj(phone.db, 'b', 47.0);
+    const recorded = await data(phone.db);
+    const problem = '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。';
+    expect(await syncWithCloud(phone.db, cloud, phone.mem, 'u1', 'iPhone')).toEqual({ kind: 'failed', problem });
+    // Opening the app again used to download the laptop's backup over the 47 cm.
+    expect(await syncWithCloud(phone.db, cloud, phone.mem, 'u1', 'iPhone')).toEqual({ kind: 'failed', problem });
+    expect(await data(phone.db)).toEqual(recorded);
+  });
+
   it('settles after restoring an older-schema backup instead of downloading it again every time', async () => {
     const { cloud } = fakeCloud();
     const a = await device();

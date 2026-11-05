@@ -23,6 +23,7 @@ export type SyncChoice = 'phone' | 'cloud';
 
 const lastKey = (userId: string) => `sync-last-hash:${userId}`;
 const OFFLINE = '连不上云端，数据还在手机上，下次打开 App 会再试。';
+const NOT_NEWEST = '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。';
 
 /** One round of sync for the signed-in account. Never throws: failures come back as an outcome. */
 export async function syncWithCloud(
@@ -50,6 +51,10 @@ export async function syncWithCloud(
     }
     if (action === 'upload') {
       await cloud.upload({ backup: local, hash: localHash, device, date: toISODate(new Date()) });
+      // Every device compares with the newest backup. If that is still another one (dated ahead by a device whose clock
+      // is wrong), this upload doesn't count: remembering it would make the next sync download that one over the phone.
+      const newest = await cloud.latest();
+      if (newest && newest.hash !== localHash) return { kind: 'failed', problem: tr(NOT_NEWEST) };
       await memory.setItem(lastKey(userId), localHash);
       return { kind: 'uploaded' };
     }
