@@ -3,7 +3,7 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 import { massNear } from '@/domain/bodyMass';
 import { daysBetween, toISODate, type ISODate } from '@/domain/dates';
 import { ladder } from '@/domain/dropJump';
-import { diagnose, type DunkDiagnosis, type DunkInput } from '@/domain/dunk';
+import { bestEachDay, diagnose, type DunkDiagnosis, type DunkInput } from '@/domain/dunk';
 import { fvProfile, pushOff } from '@/domain/fvp';
 import { APPROACH_TOUCH } from '@/domain/metrics';
 import { pctOf1rm } from '@/domain/vbt';
@@ -103,8 +103,8 @@ export async function loadDunkInputs(db: SQLiteDatabase, athlete: Athlete): Prom
     standingReachCm: athlete.standing_reach_cm,
     rimCm: athlete.rim_height_cm,
     clearanceCm: athlete.dunk_clearance_cm,
-    cmj: cmjs.map((r) => r.best),
-    sj: sjs.map((r) => r.best),
+    cmj: bestEachDay(cmjs),
+    sj: bestEachDay(sjs),
     approachTouch: touches.map((r) => r.best),
     squat1rm: squat.map((s) => s.kg),
     squatMassKg,
