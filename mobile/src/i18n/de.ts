@@ -556,6 +556,7 @@ export const de: Record<string, string> = {
   '保存或分享视频': 'Video speichern oder teilen',
   '分享失败：{p}': 'Teilen fehlgeschlagen: {p}',
   '这个项目不能回放': 'Dieser Test kann nicht wiedergegeben werden',
+  '回放链接里的数据不完整，回上一页重新分析。': 'Im Wiedergabe-Link fehlen Daten. Geh zurück und analysiere das Video erneut.',
   '正在导出视频…': 'Video wird exportiert…',
   '再放一次': 'Nochmal abspielen',
   '导出视频': 'Video exportieren',

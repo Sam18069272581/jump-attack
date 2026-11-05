@@ -40,6 +40,63 @@ const NO_PHASES: Record<JumpPhasesProblem, string> = {
   'no-quiet': '起跳前没先站稳一下，这次导出不标离心和向心。',
 };
 
+/** A route param's JSON, or undefined when it is missing or isn't JSON: a stale link, one cut off or made by hand. */
+function fromParam(text: string | undefined): unknown {
+  if (!text) return undefined;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+}
+
+const isNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+/** The most jumps a link carries, far over a 10/5 set's 6: the replay looks through each one at every frame. */
+const MOST_JUMPS = 100;
+
+/**
+ * The jumps the analysis screen put in the link, or null if they don't read as jumps within the frames it spans (as the
+ * analysis finds them: at least one, each taking off before it lands, both in that span). Only checked fields go on; a
+ * touchdown out of place, or flags that aren't a list of them, are left out.
+ */
+function jumpsFrom(text: string | undefined, span: { from: number; to: number }): (JumpEvents & { counted: boolean })[] | null {
+  const v = fromParam(text);
+  const inSpan = (f: unknown): f is number => isNumber(f) && f >= span.from && f <= span.to;
+  if (!Array.isArray(v) || v.length === 0 || v.length > MOST_JUMPS) return null;
+  if (!v.every((e) => isRecord(e) && inSpan(e.takeoff) && inSpan(e.landing) && e.takeoff < e.landing)) return null;
+  return v.map((e) => ({
+    takeoff: e.takeoff,
+    landing: e.landing,
+    ...(inSpan(e.touchdown) && e.touchdown <= e.takeoff ? { touchdown: e.touchdown } : {}),
+    ...(Array.isArray(e.flags) && e.flags.every((f: unknown) => typeof f === 'string') ? { flags: e.flags } : {}),
+    counted: e.counted === true,
+  }));
+}
+
+/**
+ * The most frames a replay spans: 400 s at 240 fps, far over any clip analysed. The page draws each one, and finds the
+ * curve's peak with one argument per frame (media/replayHtml), of which browser engines take only about 110,000.
+ */
+const LONGEST = 240 * 400;
+
+/** The clip's frame rates and the frames it spans, or null when the link's can't be replayed. */
+function timingFrom(fileFps?: string, captureFps?: string, from?: string, to?: string) {
+  const c = { fileFps: Number(fileFps), captureFps: Number(captureFps), from: Number(from), to: Number(to) };
+  if (!Object.values(c).every(isNumber) || c.fileFps <= 0 || c.captureFps <= 0) return null;
+  // Whole frames, as the analysis screen puts them. Past 2^53 a frame and the next are the same number, and a loop
+  // from one frame to another never ends.
+  if (!Number.isSafeInteger(c.from) || !Number.isSafeInteger(c.to)) return null;
+  return c.from >= 0 && c.from <= c.to && c.to - c.from <= LONGEST ? c : null;
+}
+
+/** The framing around the athlete, left out when it doesn't read as one: the replay works without it. */
+function framingFrom(text: string | undefined): { focus?: { x: number; y: number; w: number; h: number } } {
+  const v = fromParam(text);
+  return isRecord(v) && ['x', 'y', 'w', 'h'].every((k) => isNumber(v[k])) ? { focus: v as { x: number; y: number; w: number; h: number } } : {};
+}
+
 type PhasesState = { name: 'reading'; done: number; total: number } | { name: 'settled'; phases: JumpPhases | null; why?: string };
 
 /**
@@ -60,11 +117,12 @@ export default function Replay() {
     name: 'loading',
   });
 
+  const timing = useMemo(() => timingFrom(params.fileFps, params.captureFps, params.from, params.to), [params.fileFps, params.captureFps, params.from, params.to]);
   const analysis = useMemo(() => {
-    if (!kind) return null;
-    const events = JSON.parse(params.events) as (JumpEvents & { counted: boolean })[];
-    return analyseJumps(events, { kind, captureFps: Number(params.captureFps), boxCm: Number(params.box) || undefined, keep: events.flatMap((e, i) => (e.counted ? [i] : [])) });
-  }, [kind, params.events, params.captureFps, params.box]);
+    const events = timing && jumpsFrom(params.events, timing);
+    if (!kind || !events || !timing) return null;
+    return analyseJumps(events, { kind, captureFps: timing.captureFps, boxCm: Number(params.box) || undefined, keep: events.flatMap((e, i) => (e.counted ? [i] : [])) });
+  }, [kind, params.events, timing, params.box]);
   // The phases are for a standing jump: the highest one counted.
   const best = useMemo(() => {
     if (kind !== 'jump' || !analysis) return null;
@@ -76,22 +134,19 @@ export default function Replay() {
   const reading = useRef<'idle' | 'running' | 'over'>('idle');
 
   const config = useMemo(() => {
-    if (!def || !kind || !analysis || phases.name !== 'settled') return null;
+    if (!def || !kind || !analysis || !timing || phases.name !== 'settled') return null;
     return replayConfig({
       def,
       kind,
       analysis,
       video: '',
-      fileFps: Number(params.fileFps),
-      captureFps: Number(params.captureFps),
-      from: Number(params.from),
-      to: Number(params.to),
+      ...timing,
       date: toISODate(new Date()),
       colors: { ink: colors.text, paper: colors.bg, card: colors.surface, accent: colors.accent, rim: colors.rim, muted: colors.textMuted, touch: colors.purple },
-      ...(params.focus ? { focus: JSON.parse(params.focus) } : {}),
+      ...framingFrom(params.focus),
       phases: phases.phases,
     });
-  }, [def, kind, analysis, phases, params.captureFps, params.fileFps, params.from, params.to, params.focus]);
+  }, [def, kind, analysis, timing, phases, params.focus]);
 
   useEffect(
     () => () => {
@@ -109,10 +164,10 @@ export default function Replay() {
   /** Every frame of the best jump through the pose model, then its centre of mass into the phases. */
   async function readPhases(clip: ClipInfo) {
     const r = pose.current;
-    if (!best || !r || reading.current !== 'idle') return;
+    if (!best || !r || !timing || reading.current !== 'idle') return;
     reading.current = 'running';
-    const fps = Number(params.captureFps);
-    const frames = phaseFrames(best, fps, Number(params.from));
+    const fps = timing.captureFps;
+    const frames = phaseFrames(best, fps, timing.from);
     setPhases({ name: 'reading', done: 0, total: frames.length });
     try {
       const start = startFrom(framesFromWire(await r.everyone([frames[0]]), clip.width, clip.height, fps));
@@ -209,6 +264,7 @@ export default function Replay() {
   }
 
   if (!def || !kind) return <Empty title={tr('这个项目不能回放')} />;
+  if (!analysis || !timing) return <Empty title={tr('回放链接里的数据不完整，回上一页重新分析。')} />;
   const exporting = state.name === 'exporting';
   const canExport = state.name === 'ready' || (state.name === 'problem' && state.retry === true);
 
@@ -216,7 +272,7 @@ export default function Replay() {
     <SafeAreaView style={styles.screen} edges={['bottom']}>
       <View style={styles.stage}>
         {phases.name === 'reading' && (
-          <PoseReader ref={pose} uri={params.uri} fileFps={Number(params.fileFps)} onReady={readPhases} onError={() => settle(null, tr('骨架识别没能启动，这次导出不标离心和向心。'))} style={StyleSheet.absoluteFill} />
+          <PoseReader ref={pose} uri={params.uri} fileFps={timing.fileFps} onReady={readPhases} onError={() => settle(null, tr('骨架识别没能启动，这次导出不标离心和向心。'))} style={StyleSheet.absoluteFill} />
         )}
         {stage && phases.name === 'settled' && (
           <WebView<Record<never, never>>

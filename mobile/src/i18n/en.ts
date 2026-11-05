@@ -556,6 +556,7 @@ export const en: Record<string, string> = {
   '保存或分享视频': 'Save or share the video',
   '分享失败：{p}': 'Sharing failed: {p}',
   '这个项目不能回放': 'This test can’t be replayed',
+  '回放链接里的数据不完整，回上一页重新分析。': 'The replay link is missing data. Go back and analyse the clip again.',
   '正在导出视频…': 'Exporting the video…',
   '再放一次': 'Play again',
   '导出视频': 'Export video',
