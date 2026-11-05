@@ -1,11 +1,16 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { BACKUP_FORMAT, type Backup, type BackupRow } from '@/domain/backup';
+import { BACKUP_FORMAT, fitsColumn, type Backup, type BackupRow } from '@/domain/backup';
 import { tr } from '@/i18n';
 
 async function tableNames(db: SQLiteDatabase): Promise<string[]> {
   const rows = await db.getAllAsync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
   return rows.map((r) => r.name);
+}
+
+/** Each column of a table this database has, with its declared type (checked with fitsColumn before a file's values go in). */
+export async function columnTypes(db: SQLiteDatabase, table: string): Promise<Map<string, string>> {
+  return new Map((await db.getAllAsync<{ name: string; type: string }>(`PRAGMA table_info("${table}")`)).map((c) => [c.name, c.type]));
 }
 
 /** Every table, as stored. */
@@ -30,9 +35,10 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise
       for (const name of names) {
         const rows = backup.tables[name];
         if (!rows?.length) continue;
-        const known = new Set((await db.getAllAsync<{ name: string }>(`PRAGMA table_info("${name}")`)).map((c) => c.name));
+        const types = await columnTypes(db, name);
         for (const row of rows) {
-          const cols = Object.keys(row).filter((c) => known.has(c));
+          const cols = Object.keys(row).filter((c) => types.has(c));
+          if (cols.some((c) => !fitsColumn(types.get(c)!, row[c]))) throw new Error(`${name}: a value of the wrong type`);
           await db.runAsync(`INSERT INTO "${name}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map((c) => row[c]));
         }
       }

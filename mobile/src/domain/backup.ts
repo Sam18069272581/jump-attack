@@ -85,6 +85,18 @@ export function parseAthleteFile(text: string, latestVersion: number): { ok: tru
   return { ok: true, file: { format: ATHLETE_FORMAT, schema_version: read.schema_version, exported_at: read.exported_at, tables: read.tables } };
 }
 
+/**
+ * Whether a value from a file may go into a column of this declared type. SQLite stores whatever it is given, so "abc"
+ * in a REAL column would stay text that no number formatting can show. Columns with INTEGER or REAL affinity take only
+ * numbers or null; the affinity follows the declared type by SQLite's rules (sqlite.org/datatype3.html §3.1, in order:
+ * INT → INTEGER; CHAR, CLOB or TEXT → TEXT; BLOB or none → BLOB; REAL, FLOA or DOUB → REAL; else NUMERIC).
+ */
+export function fitsColumn(type: string, v: BackupValue): boolean {
+  const t = type.toUpperCase();
+  const numeric = t.includes('INT') || (!/CHAR|CLOB|TEXT|BLOB/.test(t) && /REAL|FLOA|DOUB/.test(t));
+  return !numeric || v === null || typeof v === 'number';
+}
+
 export function athleteFileName(name: string, now: Date): string {
   return `jump-attack-${name.replace(/[\\/:*?"<>|]/g, '_')}-${toISODate(now)}.json`;
 }

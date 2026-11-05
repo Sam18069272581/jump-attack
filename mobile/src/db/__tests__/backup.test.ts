@@ -111,4 +111,17 @@ describe('restoreBackup', () => {
     expect(await restoreBackup(db, b)).toEqual({ ok: false, problem: '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。' });
     expect(await dump(db)).toEqual(before);
   });
+
+  // A sync downloads without asking when only the cloud changed, so a broken backup would go straight onto the phone,
+  // and "abc" as a result breaks every screen that shows it as a number.
+  it('refuses text where the phone keeps numbers, and changes nothing', async () => {
+    const db = await used();
+    const before = await dump(db);
+    for (const [table, column, v] of [['trial', 'value', 'abc'], ['athlete', 'body_mass_kg', 'heavy'], ['set_log', 'reps', '']] as const) {
+      const b = await exportBackup(db);
+      b.tables[table][0] = { ...b.tables[table][0], [column]: v };
+      expect(await restoreBackup(db, b)).toEqual({ ok: false, problem: '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。' });
+    }
+    expect(await dump(db)).toEqual(before);
+  });
 });

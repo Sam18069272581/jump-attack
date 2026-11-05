@@ -195,4 +195,14 @@ describe('importAthlete', () => {
     expect(await planted((f) => (f.tables.dunk_attempt[0] = { ...f.tables.dunk_attempt[0], trial_id: 1 }))).toEqual(refused);
     expect((await exportBackup(db)).tables).toEqual(before);
   });
+
+  it('refuses text where the phone keeps numbers', async () => {
+    const { db, mate } = await coachPhone();
+    const file = await exportAthlete(db, mate);
+    file.tables.athlete[0] = { ...file.tables.athlete[0], standing_reach_cm: 'tall' };
+    const phone = await setup();
+    const before = (await exportBackup(phone)).tables;
+    expect(await importAthlete(phone, file)).toEqual({ ok: false, problem: '文件里的数据有问题，没有导入，手机上原来的数据保持不变。' });
+    expect((await exportBackup(phone)).tables).toEqual(before);
+  });
 });
