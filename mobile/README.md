@@ -10,7 +10,7 @@
 - **速度、VBT、灵活度、体能耐力**：冲刺计时（录像、光电门、秒表分开比较）、杠铃速度和 1RM 估算、7 项灵活度左右对比、Yo-Yo / Cooper / RSA。
 - **恢复**：每天记 HRV、静息心率、睡眠、呼吸频率，可以用「快捷指令」从苹果健康导入。
 - **历史**：摸高曲线在最上面，其余每个指标有趋势和逐次记录，点开一次记录可以改错或删除。
-- **数据备份与同步**（「我的」→ 数据备份与同步）：登录自己的云端账号后自动备份，换手机、换电脑或用网页版，登录同一个邮箱就能恢复；也能导出、导入备份文件。云端用自己的 Supabase 免费项目，建表 SQL 在 [supabase/backups.sql](supabase/backups.sql)，地址和 key 在 `src/sync/config.ts`。
+- **数据备份与同步**（「我的」→ 数据备份与同步）：登录自己的云端账号后自动备份，换手机、换电脑或用网页版，登录同一个邮箱就能恢复；也能导出、导入备份文件。云端用自己的 Supabase 免费项目，建表 SQL 在 [supabase/backups.sql](supabase/backups.sql)，之后再跑一次 [supabase/backups-hardening.sql](supabase/backups-hardening.sql) 加固，并在 Supabase 里关掉开放注册（队友的账号由你建），地址和 key 在 `src/sync/config.ts`。
 
 ## 怎么运行
 

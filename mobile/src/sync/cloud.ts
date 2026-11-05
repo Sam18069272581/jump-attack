@@ -39,6 +39,7 @@ export function supabaseBackups(client: SupabaseClient, userId: string): CloudBa
         await client
           .from('backups')
           .upsert(
+            // supabase/backups-hardening.sql replaces updated_at with the server's time, so a wrong clock can't put a backup ahead.
             { user_id: userId, backup_date: date, updated_at: new Date().toISOString(), device, schema_version: backup.schema_version, hash, data: backup },
             { onConflict: 'user_id,backup_date' },
           ),
