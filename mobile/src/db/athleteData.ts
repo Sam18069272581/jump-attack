@@ -108,6 +108,9 @@ export async function importAthlete(db: SQLiteDatabase, file: AthleteFile, opts:
             if (!known.has(c)) continue;
             const link = c === t.key ? t.name : t.links.find((l) => l.from === c)?.table;
             const moved = link != null && v != null ? ids.get(link)?.get(v) : undefined;
+            // Every link must lead to a row the file brings: one that named a row already here (by its id, or the id
+            // as text) would hang this row on someone else on the phone, the owner included.
+            if (link != null && v != null && moved === undefined) throw new Error(`${t.name}.${c} points outside the file`);
             out[c] = moved ?? v;
           }
           const cols = Object.keys(out);
