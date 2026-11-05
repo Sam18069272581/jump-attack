@@ -1,12 +1,13 @@
 import { useSQLiteContext } from 'expo-sqlite';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Button, Card } from '@/components/ui';
-import { exportBackup, restoreBackup } from '@/db/backup';
+import { discardKept, exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '@/db/backup';
 import { LATEST_VERSION } from '@/db/migrations';
-import { describeBackup, parseBackup } from '@/domain/backup';
+import { describeBackup, isPristine, parseBackup, type Backup } from '@/domain/backup';
+import { dateTime } from '@/domain/dates';
 import { tr } from '@/i18n';
 import { pickBackupText, shareBackupFile } from '@/sync/files';
 import { useSync } from '@/state/sync';
@@ -18,6 +19,14 @@ export default function BackupScreen() {
   const sync = useSync();
   const [exporting, setExporting] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  // What the last restore replaced, kept on the phone (db/backup.ts), and whether it is being put back.
+  const [kept, setKept] = useState<{ at: string; backup: Backup } | null>(null);
+  const [undoing, setUndoing] = useState(false);
+
+  const loadKept = useCallback(async () => setKept(await keptBeforeRestore(db)), [db]);
+  useEffect(() => {
+    keptBeforeRestore(db).then(setKept);
+  }, [db]);
 
   async function exportFile() {
     setExporting(true);
@@ -38,9 +47,11 @@ export default function BackupScreen() {
     }
     const current = await exportBackup(db);
     const made = parsed.backup.exported_at.slice(0, 10);
+    const what = { backup: describeBackup(parsed.backup), p: made ? tr('（{made}）', { made }) : '', current: describeBackup(current) };
     Alert.alert(
       tr('用这份备份替换手机上的数据？'),
-      tr('备份里：{backup}{p}\n手机上现在：{current}\n\n替换后不能撤销，需要的话先导出一份现在的数据。', { backup: describeBackup(parsed.backup), p: made ? tr('（{made}）', { made }) : '', current: describeBackup(current) }),
+      // A phone that holds nothing yet keeps nothing (see restoreBackup).
+      isPristine(current) ? tr('备份里：{backup}{p}\n手机上现在：{current}', what) : tr('备份里：{backup}{p}\n手机上现在：{current}\n\n现在的数据会在手机上留一份，替换后可以在这页换回来。', what),
       [
         { text: tr('取消'), style: 'cancel' },
         {
@@ -48,8 +59,9 @@ export default function BackupScreen() {
           style: 'destructive',
           onPress: async () => {
             setRestoring(true);
-            const r = await restoreBackup(db, parsed.backup);
+            const r = await sync.replaceData(() => restoreBackup(db, parsed.backup));
             setRestoring(false);
+            await loadKept();
             if (!r.ok) {
               Alert.alert(tr('没有恢复'), r.problem);
               return;
@@ -60,6 +72,45 @@ export default function BackupScreen() {
         },
       ],
     );
+  }
+
+  function undo() {
+    if (!kept) return;
+    Alert.alert(tr('换回替换前的数据？'), tr('换回 {at} 替换前的数据：{kept}\n手机上现在的数据会留一份，可以再换回来。', { at: dateTime(kept.at), kept: describeBackup(kept.backup) }), [
+      { text: tr('取消'), style: 'cancel' },
+      {
+        text: tr('换回'),
+        style: 'destructive',
+        onPress: async () => {
+          setUndoing(true);
+          // What it puts back may be another account's (on a shared phone): the next sync asks before backing it up.
+          const r = await sync.replaceData(() => undoRestore(db, kept.at), true);
+          setUndoing(false);
+          await loadKept();
+          if (!r.ok) {
+            Alert.alert(tr('没有换回'), r.problem);
+            return;
+          }
+          await sync.dataReplaced();
+          Alert.alert(tr('已换回'), sync.email ? (r.asks ? tr('下次同步时会先问你，确认后才备份到云端。') : tr('下次同步时会把它备份到云端。')) : undefined);
+        },
+      },
+    ]);
+  }
+
+  function discard() {
+    if (!kept) return;
+    Alert.alert(tr('删掉留着的数据？'), tr('{at} 替换前的数据：{kept}\n删掉后就不能换回了，只有它用到的录像也会删掉。', { at: dateTime(kept.at), kept: describeBackup(kept.backup) }), [
+      { text: tr('取消'), style: 'cancel' },
+      {
+        text: tr('删除'),
+        style: 'destructive',
+        onPress: async () => {
+          await discardKept(db, kept.at);
+          await loadKept();
+        },
+      },
+    ]);
   }
 
   return (
@@ -76,6 +127,18 @@ export default function BackupScreen() {
             <Button label={tr('导出备份文件')} variant="secondary" onPress={exportFile} busy={exporting} />
             <Button label={tr('从备份文件恢复')} variant="ghost" onPress={restoreFile} busy={restoring} />
           </Card>
+
+          {kept && (
+            <>
+              <Text style={[text.section, { paddingTop: 8 }]}>{tr('撤回恢复')}</Text>
+              <Card style={{ gap: 10 }}>
+                <Text style={text.body}>{tr('{at} 替换前的数据还留在手机上：{kept}', { at: dateTime(kept.at), kept: describeBackup(kept.backup) })}</Text>
+                <Text style={text.caption}>{tr('在 App 里拍的录像也一起留着，换回时还在。不用换回的话，可以删掉这份。')}</Text>
+                <Button label={tr('换回替换前的数据')} variant="secondary" onPress={undo} busy={undoing} />
+                <Button label={tr('删掉这份')} variant="ghost" onPress={discard} disabled={undoing} />
+              </Card>
+            </>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -110,6 +173,13 @@ function CloudCard() {
               <Button label={tr('用云端的')} onPress={() => sync.syncNow('cloud')} busy={sync.busy} style={{ flex: 1 }} />
               <Button label={tr('用手机上的')} variant="secondary" onPress={() => sync.syncNow('phone')} busy={sync.busy} style={{ flex: 1 }} />
             </View>
+          </View>
+        )}
+        {sync.confirm && (
+          <View style={styles.conflict}>
+            <Text style={text.section}>{tr('这台手机上的数据之前同步到另一个账号')}</Text>
+            <Text style={text.caption}>{tr('手机上：{phone}\n这个账号在云端还没有备份，确认后才会把这些数据备份过去。', { phone: sync.confirm.phone })}</Text>
+            <Button label={tr('备份到这个账号')} onPress={() => sync.syncNow('phone')} busy={sync.busy} />
           </View>
         )}
         <Button label={tr('立即同步')} variant="secondary" onPress={() => sync.syncNow()} busy={sync.busy} />

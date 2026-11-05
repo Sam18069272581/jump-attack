@@ -184,17 +184,31 @@ export const en: Record<string, string> = {
   // app/backup.tsx
   '没有恢复': 'Not restored',
   '用这份备份替换手机上的数据？': 'Replace the data on this phone with this backup?',
-  '备份里：{backup}{p}\n手机上现在：{current}\n\n替换后不能撤销，需要的话先导出一份现在的数据。': 'In the backup: {backup}{p}\nOn this phone now: {current}\n\nThis can’t be undone; export the current data first if you need it.',
+  '备份里：{backup}{p}\n手机上现在：{current}': 'In the backup: {backup}{p}\nOn this phone now: {current}',
+  '备份里：{backup}{p}\n手机上现在：{current}\n\n现在的数据会在手机上留一份，替换后可以在这页换回来。': 'In the backup: {backup}{p}\nOn this phone now: {current}\n\nA copy of the current data stays on the phone, so you can switch back on this page afterwards.',
   '（{made}）': ' ({made})',
   '替换': 'Replace',
   '已恢复': 'Restored',
   '下次同步时会把它备份到云端。': 'It will be backed up to the cloud at the next sync.',
+  '下次同步时会先问你，确认后才备份到云端。': 'The next sync will ask you before backing it up to the cloud.',
+  '换回替换前的数据？': 'Switch back to the replaced data?',
+  '换回 {at} 替换前的数据：{kept}\n手机上现在的数据会留一份，可以再换回来。': 'Brings back the data that was replaced at {at}: {kept}\nA copy of the current data stays on the phone, so you can switch again.',
+  '换回': 'Switch back',
+  '没有换回': 'Not switched back',
+  '已换回': 'Switched back',
   '云端同步': 'Cloud sync',
   '备份文件': 'Backup file',
   '把全部数据存成一个文件，可以存到「文件」App、iCloud 云盘，或隔空投送到另一台手机。换手机、云端连不上时用它恢复。': 'Saves all data as one file, which you can keep in the Files app or iCloud Drive, or AirDrop to another phone. Restore from it when you change phones or the cloud can’t be reached.',
   '录像文件不在备份里，只备份测试结果、训练记录、恢复数据和档案。': 'Videos aren’t in the backup: only test results, training logs, recovery data and profiles are.',
   '导出备份文件': 'Export backup file',
   '从备份文件恢复': 'Restore from a backup file',
+  '撤回恢复': 'Undo a restore',
+  '{at} 替换前的数据还留在手机上：{kept}': 'The data that was replaced at {at} is still on the phone: {kept}',
+  '换回替换前的数据': 'Switch back to the replaced data',
+  '在 App 里拍的录像也一起留着，换回时还在。不用换回的话，可以删掉这份。': 'Videos filmed in the app for it are kept too, and come back when you switch back. If you don’t need it, you can delete this copy.',
+  '删掉这份': 'Delete this copy',
+  '删掉留着的数据？': 'Delete the kept data?',
+  '{at} 替换前的数据：{kept}\n删掉后就不能换回了，只有它用到的录像也会删掉。': 'The data replaced at {at}: {kept}\nOnce it’s deleted you can’t switch back, and videos that only it uses are deleted too.',
   '云端还没接好：Supabase 项目的地址和 key 填进 src/sync/config.ts 后，这里就能登录。现在可以先用下面的备份文件。': 'The cloud isn’t set up yet: once the Supabase project’s URL and key are in src/sync/config.ts you can sign in here. Until then, use the backup file below.',
   '已登录 {email}': 'Signed in as {email}',
   '打开 App 和切到后台时会自动同步。': 'Syncs automatically when the app opens and when it goes to the background.',
@@ -202,6 +216,7 @@ export const en: Record<string, string> = {
   '手机上：{phone}\n云端：{cloud}\n另一份会被替换。云端以前每天的备份都还在。': 'On the phone: {phone}\nIn the cloud: {cloud}\nThe other will be replaced. The cloud’s earlier daily backups are all kept.',
   '用云端的': 'Use the cloud’s',
   '用手机上的': 'Use the phone’s',
+  '手机上：{phone}\n这个账号在云端还没有备份，确认后才会把这些数据备份过去。': 'On the phone: {phone}\nThis account has no backup in the cloud yet. This data is backed up to it only once you confirm.',
   '立即同步': 'Sync now',
   '退出登录': 'Sign out',
   '退出登录不会删除手机上的数据，也不会删除云端的备份。': 'Signing out deletes neither the data on this phone nor the backups in the cloud.',
@@ -546,6 +561,7 @@ export const en: Record<string, string> = {
   '保存或分享视频': 'Save or share the video',
   '分享失败：{p}': 'Sharing failed: {p}',
   '这个项目不能回放': 'This test can’t be replayed',
+  '回放链接里的数据不完整，回上一页重新分析。': 'The replay link is missing data. Go back and analyse the clip again.',
   '正在导出视频…': 'Exporting the video…',
   '再放一次': 'Play again',
   '导出视频': 'Export video',
@@ -1155,6 +1171,8 @@ export const en: Record<string, string> = {
 
   // db/backup.ts
   '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。': 'The backup has a problem and was not restored. The data on the phone is unchanged.',
+  '没有可以换回的数据。': 'There is no replaced data to switch back to.',
+  '留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。': 'The data kept on the phone just changed, so nothing was switched back. Check which data is kept now before switching back.',
 
   // domain/athletes.ts
   '我自己': 'Me',
@@ -1808,6 +1826,7 @@ export const en: Record<string, string> = {
 
   // media/poseLib.ts
   '{name} 下载不完整（{got} / {bytes} 字节）': '{name} didn’t download completely ({got} / {bytes} bytes)',
+  '{name} 校验不对，已删除，请重新下载。': '{name} isn’t the released file (its checksum doesn’t match), so it was deleted. Download it again.',
 
   // media/poseShared.ts
   '读不到 ': 'Can’t load ',
@@ -1872,6 +1891,10 @@ export const en: Record<string, string> = {
   '手机上：{phone}\n云端（{p}）：{cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。': 'On the phone: {phone}\nIn the cloud ({p}): {cloud}\n\nPick one to keep; the other will be replaced by it. Earlier daily backups in the cloud are all kept.',
   '较早': 'earlier',
   '以后再说': 'Later',
+  '手机上的数据之前同步到另一个账号，确认后才会备份到这个账号': 'The data on this phone was last synced with another account; it’s backed up to this one only once you confirm',
+  '这台手机上的数据之前同步到另一个账号': 'The data on this phone was last synced with another account',
+  '手机上：{phone}\n\n现在登录的账号在云端还没有备份。要把这些数据备份到这个账号吗？这不是你的手机的话，选「以后再说」，再退出登录。': 'On the phone: {phone}\n\nThe account you’re signed in with has no backup in the cloud yet. Back this data up to it? If this isn’t your phone, choose “Later” and sign out.',
+  '备份到这个账号': 'Back up to this account',
 
   // state/training.ts
   '今天状态差（恢复、CMJ 或热身速度偏低），这次成绩不计入进步趋势，也不拉低基线。': 'Rough day (recovery, CMJ or warm-up velocity low): this result doesn’t count toward your progress trend or lower your baseline.',
@@ -1883,6 +1906,7 @@ export const en: Record<string, string> = {
   '邮箱还没确认：去邮箱点一下确认链接，再回来登录。': 'Email not confirmed yet: open the confirmation link in your email, then come back and sign in.',
   '邮箱格式不对。': 'That doesn’t look like an email address.',
   '尝试太频繁，过几分钟再试。': 'Too many tries. Wait a few minutes and try again.',
+  '这个云端现在不开放注册，请找管理员邀请你。': 'This cloud isn’t taking new sign-ups right now. Ask its admin to invite you.',
   '连不上云端，检查网络后再试。': 'Can’t reach the cloud. Check your connection and try again.',
   '登录失败：{message}': 'Sign-in failed: {message}',
 
@@ -1892,7 +1916,11 @@ export const en: Record<string, string> = {
 
   // sync/sync.ts
   '连不上云端，数据还在手机上，下次打开 App 会再试。': 'Can’t reach the cloud. Your data is still on the phone, and the app will try again next time it opens.',
+  '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。': 'The newest backup in the cloud isn’t the one just uploaded. A device’s date or time may be wrong; please check. Your data is still on the phone.',
+  '云端有更新版本 App 传的备份，这个版本不能覆盖它。先更新 App 再同步，数据还在手机上。': 'The cloud has a backup from a newer version of the app, which this version can’t overwrite. Update the app, then sync again. Your data is still on the phone.',
   '无法读取': 'Can’t read',
+  '云端没有收下这次备份：可能是这台设备的日期不对，或云端已有更新版本 App 的备份。数据还在手机上。': 'The cloud didn’t accept this backup: this device’s date may be wrong, or the cloud already has a backup from a newer version of the app. Your data is still on the phone.',
+  '这份备份超过云端单份的大小上限，没有上传。数据还在手机上。': 'This backup is larger than the cloud allows for one backup and wasn’t uploaded. Your data is still on the phone.',
 
   // web/dialogs.ts
   '{p}（确定 = {text}）': '{p}(OK = {text})',

@@ -2,6 +2,8 @@ import { Directory, File, Paths } from 'expo-file-system';
 
 import { tr } from '@/i18n';
 
+import { sha256Hex } from './fileHash';
+
 /**
  * The pose model and the MediaPipe library that the pose pages (media/posePage.ts) run in a WebView, downloaded once
  * and kept on the phone, so the analysis works without a connection and nothing is fetched each time. Videos never
@@ -15,18 +17,31 @@ const CDN = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${MEDIAPIPE_VE
 /** BlazePose GHUM "full", float16: the middle of the three sizes (lite 5.8 MB, full 9.4 MB, heavy 30.7 MB). */
 const MODEL = 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task';
 
-/** What the pages need, with each file's size in the release, which also tells a whole download from a cut one. */
+/**
+ * What the pages need, with each file's size and SHA-256 in the release. The size tells a whole download from a cut
+ * one; the hash tells the release's file from any other, since what runs in the pages can read the clips beside them.
+ * Hashes of the npm package's files (the package matches the registry's checksum) and of the model as Google serves it.
+ */
 export const POSE_FILES = [
-  { name: 'vision_bundle.mjs', url: `${CDN}/vision_bundle.mjs`, bytes: 136_993 },
-  { name: 'vision_wasm_internal.js', url: `${CDN}/wasm/vision_wasm_internal.js`, bytes: 322_044 },
-  { name: 'vision_wasm_internal.wasm', url: `${CDN}/wasm/vision_wasm_internal.wasm`, bytes: 11_153_617 },
-  { name: 'pose_landmarker_full.task', url: MODEL, bytes: 9_398_198 },
+  { name: 'vision_bundle.mjs', url: `${CDN}/vision_bundle.mjs`, bytes: 136_993, sha256: '55d7ab624fbb70dcc5adc4ae6d7ea9cfcb569139d3dbfbf2b1deafcb966bc0fe' },
+  { name: 'vision_wasm_internal.js', url: `${CDN}/wasm/vision_wasm_internal.js`, bytes: 322_044, sha256: 'e7fd9858e8e8f221d9b96eddc11f8e077f263e0b7bbd79d3cbe882b134274f8c' },
+  { name: 'vision_wasm_internal.wasm', url: `${CDN}/wasm/vision_wasm_internal.wasm`, bytes: 11_153_617, sha256: '6a5c64584c2ab61c763b6e204afbdbc7ce1caf7f5216187322bca8df94f646bc' },
+  { name: 'pose_landmarker_full.task', url: MODEL, bytes: 9_398_198, sha256: '5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1' },
 ] as const;
 
 export const POSE_DOWNLOAD_BYTES = POSE_FILES.reduce((s, f) => s + f.bytes, 0);
 
 /** Where a page fetches the same files from when it can't read the phone's copy. */
 export const POSE_CDN = { bundle: POSE_FILES[0].url, loader: POSE_FILES[1].url, wasm: POSE_FILES[2].url, model: MODEL };
+
+/** A SHA-256 in hex as Subresource Integrity metadata (`sha256-` and the hash in base64), which a browser checks. */
+export function integrity(sha256: string): string {
+  const bytes = sha256.match(/../g)!.map((h) => parseInt(h, 16));
+  return `sha256-${btoa(String.fromCharCode(...bytes))}`;
+}
+
+/** The same files' integrity: a page refuses any file from the CDN that differs from the release. */
+export const POSE_SRI = { bundle: integrity(POSE_FILES[0].sha256), loader: integrity(POSE_FILES[1].sha256), wasm: integrity(POSE_FILES[2].sha256), model: integrity(POSE_FILES[3].sha256) };
 
 /** The library as a classic script, made by the app from the ES module the release ships. */
 export const CLASSIC_BUNDLE = 'vision.js';
@@ -74,7 +89,8 @@ export async function downloadPoseLib(onProgress?: (share: number) => void, sign
   let done = 0;
   for (const f of POSE_FILES) {
     const dest = new File(dir, f.name);
-    if (dest.exists && dest.size === f.bytes) {
+    // One already here may be from an app that checked only the size: it stays if it is the release's file too.
+    if (dest.exists && dest.size === f.bytes && (await sha256Hex(dest)) === f.sha256) {
       done += f.bytes;
       onProgress?.(done / POSE_DOWNLOAD_BYTES);
       continue;
@@ -90,6 +106,11 @@ export async function downloadPoseLib(onProgress?: (share: number) => void, sign
       const got = dest.size;
       dest.delete();
       throw new Error(tr('{name} 下载不完整（{got} / {bytes} 字节）', { name: f.name, got, bytes: f.bytes }));
+    }
+    // A changed file of the same size passes the check above: from a CDN or a network in between serving other code.
+    if ((await sha256Hex(dest)) !== f.sha256) {
+      dest.delete();
+      throw new Error(tr('{name} 校验不对，已删除，请重新下载。', { name: f.name }));
     }
     done += f.bytes;
   }

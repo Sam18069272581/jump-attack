@@ -1,7 +1,8 @@
-import { LIB_FROM_PAGE, POSE_CDN } from './poseLib';
+import { LIB_FROM_PAGE, POSE_CDN, POSE_SRI } from './poseLib';
 import { POSE_SHARED_JS } from './poseShared';
 
 import { localizeHtml } from '@/i18n';
+import { scriptJson } from './scriptJson';
 
 /**
  * The page that watches the phone's camera while a run-up jump is set up and filmed, run in a WebView
@@ -63,10 +64,11 @@ const READ_EVERY_MS = 120;
 const SEARCH_EVERY = 16;
 
 export function poseCameraHtml(o: PoseCameraOptions): string {
-  const config = JSON.stringify({
+  const config = scriptJson({
     accent: o.accent,
     lib: o.lib ?? LIB_FROM_PAGE,
     cdn: POSE_CDN,
+    sri: POSE_SRI,
     pose: o.pose ?? true,
     numPoses: 2,
     bitrate: o.bitrate ?? CAMERA_BITRATE,

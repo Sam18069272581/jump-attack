@@ -4,13 +4,16 @@ import Storage from 'expo-sqlite/kv-store';
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 
-import { toISODate } from '@/domain/dates';
+import { dateTime } from '@/domain/dates';
 import { tr } from '@/i18n';
 import { authProblem, getSupabase } from '@/sync/client';
 import { supabaseBackups } from '@/sync/cloud';
-import { syncWithCloud, type SyncChoice, type SyncOutcome } from '@/sync/sync';
+import { forgetAccount, syncWithCloud, type SyncChoice, type SyncOutcome } from '@/sync/sync';
 
 type Conflict = Extract<SyncOutcome, { kind: 'conflict' }>;
+type Confirm = Extract<SyncOutcome, { kind: 'confirm' }>;
+/** How a restore went (db/backup.ts). */
+type Replaced = { ok: true } | { ok: false; problem: string };
 
 type SyncContextValue = {
   /** Whether a Supabase project is set up in sync/config.ts. */
@@ -20,11 +23,19 @@ type SyncContextValue = {
   /** What the last sync did, in words. */
   status: string | null;
   conflict: Conflict | null;
+  /** The phone was last synced with another account and this one has nothing in the cloud: back it up here? */
+  confirm: Confirm | null;
   /** Each resolves to a problem to show, or null. */
   signIn: (email: string, password: string) => Promise<string | null>;
   signUp: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   syncNow: (choice?: SyncChoice) => Promise<void>;
+  /**
+   * Runs a restore once the sync that is running is done, and no sync while it runs: one would read the data half
+   * replaced, or download over it. Call dataReplaced after it. `ownerUnknown`: what it puts back may be another
+   * account's (undoing a restore on a shared phone). `asks`: the next sync then asks before backing it up.
+   */
+  replaceData: (restore: () => Promise<Replaced>, ownerUnknown?: boolean) => Promise<Replaced & { asks: boolean }>;
   /** Call after the database was replaced (a restore), so every screen reads it again. */
   dataReplaced: () => Promise<void>;
   /** Counts restores; everything inside the provider is remounted when it changes. */
@@ -34,11 +45,6 @@ type SyncContextValue = {
 const SyncContext = createContext<SyncContextValue | null>(null);
 
 const device = () => (Platform.OS === 'web' ? tr('网页') : Platform.OS === 'ios' ? 'iPhone' : 'Android');
-
-function clock(iso: string): string {
-  const d = new Date(iso);
-  return `${toISODate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
 
 const STATUS: Record<'nothing' | 'uploaded' | 'downloaded', string> = { nothing: '已是最新', uploaded: '已备份到云端', downloaded: '已从云端恢复' };
 
@@ -53,9 +59,11 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
-  const [conflict, setConflict] = useState<Conflict | null>(null);
+  // What the person has to answer before the next sync can go on: which side to keep, or whether to back up here.
+  const [question, setQuestion] = useState<Conflict | Confirm | null>(null);
   const [epoch, setEpoch] = useState(0);
-  const running = useRef(false);
+  // A sync, or a restore from the backup page: one at a time.
+  const running = useRef<Promise<unknown> | null>(null);
   const asked = useRef(false);
   const userId = session?.user.id ?? null;
 
@@ -67,23 +75,52 @@ export function SyncProvider({ children }: { children: ReactNode }) {
   const run = useCallback(
     async (userId: string, choice?: SyncChoice) => {
       if (!supabase || running.current) return;
-      running.current = true;
+      const sync = syncWithCloud(db, supabaseBackups(supabase, userId), Storage, userId, device(), choice);
+      running.current = sync;
       setBusy(true);
-      const outcome = await syncWithCloud(db, supabaseBackups(supabase, userId), Storage, userId, device(), choice);
-      running.current = false;
-      setBusy(false);
-      const now = clock(new Date().toISOString());
-      if (outcome.kind === 'conflict') {
-        setStatus(tr('手机和云端的数据不一样，选一份保留'));
-        setConflict(outcome);
+      const outcome = await sync.finally(() => {
+        running.current = null;
+        setBusy(false);
+      });
+      const now = dateTime(new Date().toISOString());
+      if (outcome.kind === 'conflict' || outcome.kind === 'confirm') {
+        setStatus(outcome.kind === 'conflict' ? tr('手机和云端的数据不一样，选一份保留') : tr('手机上的数据之前同步到另一个账号，确认后才会备份到这个账号'));
+        // Answered, and asked again: the phone's data changed since the question (sync/sync.ts). It is a new one.
+        if (choice) asked.current = false;
+        setQuestion(outcome);
         return;
       }
-      setConflict(null);
+      setQuestion(null);
       setStatus(outcome.kind === 'failed' ? outcome.problem : `${tr(STATUS[outcome.kind])} · ${now}`);
       if (outcome.kind === 'downloaded') await dataReplaced();
     },
     [db, supabase, dataReplaced],
   );
+
+  const replaceData = useCallback(async (restore: () => Promise<Replaced>, ownerUnknown = false) => {
+    while (running.current) await running.current.catch(() => {});
+    const replacing = (async (): Promise<Replaced & { asks: boolean }> => {
+      try {
+        // Before anything changes: if the app is closed halfway, the next sync still asks.
+        const asks = ownerUnknown && (await forgetAccount(Storage));
+        return { ...(await restore()), asks };
+      } catch (e) {
+        return { ok: false, problem: e instanceof Error ? e.message : String(e), asks: false };
+      }
+    })();
+    running.current = replacing;
+    setBusy(true);
+    const replaced = await replacing.finally(() => {
+      running.current = null;
+      setBusy(false);
+    });
+    if (replaced.ok) {
+      // A question still open, and the last sync's word, were about the data replaced.
+      setQuestion(null);
+      setStatus(null);
+    }
+    return replaced;
+  }, []);
 
   const syncNow = useCallback(
     async (choice?: SyncChoice) => {
@@ -92,14 +129,16 @@ export function SyncProvider({ children }: { children: ReactNode }) {
     [userId, run],
   );
 
-  // Ask once per conflict, not again on every app switch while it stays open.
+  // Ask once per question, not again on every app switch while it stays open.
   useEffect(() => {
-    if (!conflict) asked.current = false;
+    if (!question) asked.current = false;
     else if (!asked.current) {
       asked.current = true;
-      askWhichToKeep(conflict, (c) => void syncNow(c));
+      const choose = (c: SyncChoice) => void syncNow(c);
+      if (question.kind === 'conflict') askWhichToKeep(question, choose);
+      else askToBackUpHere(question, choose);
     }
-  }, [conflict, syncNow]);
+  }, [question, syncNow]);
 
   // Fires with the stored session when the app opens, and on every sign-in: both start a sync.
   useEffect(() => {
@@ -143,19 +182,21 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       email: session?.user.email ?? null,
       busy,
       status,
-      conflict,
+      conflict: question?.kind === 'conflict' ? question : null,
+      confirm: question?.kind === 'confirm' ? question : null,
       signIn: (email, password) => auth('signInWithPassword', email, password),
       signUp: (email, password) => auth('signUp', email, password),
       signOut: async () => {
         await supabase?.auth.signOut();
         setStatus(null);
-        setConflict(null);
+        setQuestion(null);
       },
       syncNow,
+      replaceData,
       dataReplaced,
       epoch,
     };
-  }, [supabase, session, busy, status, conflict, syncNow, dataReplaced, epoch]);
+  }, [supabase, session, busy, status, question, syncNow, replaceData, dataReplaced, epoch]);
 
   return (
     <SyncContext.Provider value={value}>
@@ -167,11 +208,23 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 export function askWhichToKeep(c: Conflict, choose: (choice: SyncChoice) => void) {
   Alert.alert(
     tr('手机和云端的数据不一样'),
-    tr('手机上：{phone}\n云端（{p}）：{cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。', { phone: c.phone, p: c.cloudAt ? clock(c.cloudAt) : tr('较早'), cloud: c.cloud }),
+    tr('手机上：{phone}\n云端（{p}）：{cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。', { phone: c.phone, p: c.cloudAt ? dateTime(c.cloudAt) : tr('较早'), cloud: c.cloud }),
     [
       { text: tr('以后再说'), style: 'cancel' },
       { text: tr('用手机上的'), onPress: () => choose('phone') },
       { text: tr('用云端的'), onPress: () => choose('cloud') },
+    ],
+  );
+}
+
+/** On a shared phone: whoever signs in gets the data on it backed up into their account only if they say so. */
+export function askToBackUpHere(c: Confirm, choose: (choice: SyncChoice) => void) {
+  Alert.alert(
+    tr('这台手机上的数据之前同步到另一个账号'),
+    tr('手机上：{phone}\n\n现在登录的账号在云端还没有备份。要把这些数据备份到这个账号吗？这不是你的手机的话，选「以后再说」，再退出登录。', { phone: c.phone }),
+    [
+      { text: tr('以后再说'), style: 'cancel' },
+      { text: tr('备份到这个账号'), onPress: () => choose('phone') },
     ],
   );
 }

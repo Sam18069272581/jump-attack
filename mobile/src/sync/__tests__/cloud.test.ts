@@ -29,6 +29,16 @@ it('asks only for the newest backup’s hash when checking, not its data', async
   expect(url.searchParams.get('limit')).toBe('1');
 });
 
+it('asks for the highest schema version among the account’s backups, which an older app must not write over', async () => {
+  const { cloud, calls } = client({ schema_version: 14 });
+  expect(await cloud.newestSchemaVersion()).toBe(14);
+  const { url } = calls[0];
+  expect(url.searchParams.get('select')).toBe('schema_version');
+  expect(url.searchParams.get('order')).toBe('schema_version.desc');
+  expect(url.searchParams.get('limit')).toBe('1');
+  expect(await client(null).cloud.newestSchemaVersion()).toBeNull();
+});
+
 it('reads no backup as null', async () => {
   const { cloud } = client(null);
   expect(await cloud.latest()).toBeNull();
@@ -42,6 +52,14 @@ it('replaces the day’s row for this account on upload', async () => {
   expect(url.searchParams.get('on_conflict')).toBe('user_id,backup_date');
   expect(headers.get('Prefer')).toContain('resolution=merge-duplicates');
   expect(body).toMatchObject({ user_id: 'user-1', backup_date: '2026-10-28', device: 'iPhone', schema_version: 7, hash: 'h2', data: backup });
+});
+
+// The time orders the backups. supabase/backups-hardening.sql has the server stamp its own on every write; in a project
+// that hasn't run it, an update of the day's row keeps the time it was first written unless the app sends one.
+it('sends the time of an upload, which the hardened table replaces with the server’s', async () => {
+  const { cloud, calls } = client(null);
+  await cloud.upload({ backup, hash: 'h2', device: 'iPhone', date: '2026-10-28' });
+  expect(calls[0].body).toMatchObject({ updated_at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) });
 });
 
 it('turns a server error into a thrown error for sync to report', async () => {

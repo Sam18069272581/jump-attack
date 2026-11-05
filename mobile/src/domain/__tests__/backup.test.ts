@@ -1,4 +1,4 @@
-import { athleteFileName, ATHLETE_FORMAT, backupFileName, BACKUP_FORMAT, backupHash, describeBackup, isPristine, parseAthleteFile, parseBackup, retargetId, type Backup } from '../backup';
+import { athleteFileName, ATHLETE_FORMAT, backupFileName, BACKUP_FORMAT, backupHash, describeBackup, fitsColumn, isPristine, parseAthleteFile, parseBackup, retargetId, type Backup } from '../backup';
 
 function backup(overrides: Partial<Backup> = {}): Backup {
   return {
@@ -166,5 +166,28 @@ describe('retargetId', () => {
   it('leaves random ids and ids of rows that were not moved as they are', () => {
     expect(retargetId('mh1x2c-4k9a7b', athletes, workouts)).toBe('mh1x2c-4k9a7b');
     expect(retargetId('day-2-hrv-2026-10-27', athletes, workouts)).toBe('day-2-hrv-2026-10-27');
+  });
+});
+
+// SQLite keeps whatever it is given: "abc" in a REAL column stays text, which the app's number formatting can't show.
+// The column's affinity comes from its declared type by the rules of sqlite.org/datatype3.html §3.1, in this order:
+// INT → INTEGER; CHAR, CLOB or TEXT → TEXT; BLOB or no type → BLOB; REAL, FLOA or DOUB → REAL; anything else NUMERIC.
+describe('fitsColumn', () => {
+  it('takes only numbers or null in INTEGER and REAL columns', () => {
+    for (const type of ['INTEGER', 'REAL']) {
+      expect([45.2, 0, -3, null].every((v) => fitsColumn(type, v))).toBe(true);
+      expect(['abc', '', '45.2'].some((v) => fitsColumn(type, v))).toBe(false);
+    }
+  });
+
+  it('reads the affinity the way SQLite does, including its examples', () => {
+    // The examples in §3.1.1: "FLOATING POINT" has INT in it, "STRING" none of the keywords.
+    expect(['BIGINT', 'UNSIGNED BIG INT', 'INT2', 'FLOATING POINT', 'DOUBLE PRECISION', 'FLOAT'].map((t) => fitsColumn(t, 'x'))).toEqual([false, false, false, false, false, false]);
+    expect(['TEXT', 'VARCHAR(255)', 'CLOB', 'BLOB', '', 'NUMERIC', 'DATE', 'STRING'].map((t) => fitsColumn(t, 'x'))).toEqual([true, true, true, true, true, true, true, true]);
+  });
+
+  it('takes anything in other columns, numbers included', () => {
+    expect(fitsColumn('TEXT', 12)).toBe(true);
+    expect(fitsColumn('text', null)).toBe(true);
   });
 });

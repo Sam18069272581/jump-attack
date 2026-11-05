@@ -4,6 +4,7 @@ import { decodePose, LM, type Pose } from '@/domain/pose';
 import { standing } from '@/domain/testing/standing';
 
 import { CAMERA_BITRATE, CHUNK_BYTES, poseCameraHtml } from '../poseCameraHtml';
+import { POSE_CDN, POSE_SRI } from '../poseLib';
 import { FakeCanvas, lit, runPage, type Page, type Picture } from '../testing/posePage';
 
 /**
@@ -128,7 +129,7 @@ const flush = async () => {
 };
 
 async function openCamera(
-  o: { devices?: Device[]; denied?: boolean; noCamera?: boolean; noRecorder?: boolean; maxSeconds?: number; people?: () => Pose[]; pose?: boolean } = {},
+  o: { devices?: Device[]; denied?: boolean; noCamera?: boolean; noRecorder?: boolean; maxSeconds?: number; people?: () => Pose[]; pose?: boolean; libOnPhone?: boolean; tampered?: string[] } = {},
 ): Promise<Camera> {
   const devices = o.devices ?? [FRONT, WIDE];
   const people = o.people ?? (() => [athlete, bystander]);
@@ -162,6 +163,8 @@ async function openCamera(
   const page = runPage(poseCameraHtml({ bg: '#000', accent: '#f80', maxSeconds: o.maxSeconds, pose: o.pose }), {
     elements: { video, overlay: new FakeCanvas() },
     timer,
+    libOnPhone: o.libOnPhone,
+    tampered: o.tampered,
     globals: {
       navigator: o.noCamera ? {} : { mediaDevices },
       MediaRecorder: o.noRecorder ? undefined : FakeRecorder,
@@ -203,6 +206,35 @@ describe('the camera page', () => {
     });
     expect(cam.all('camera')).toEqual([{ type: 'camera', label: '后置相机', physical: true, fps: 60, maxFps: 60, width: W, height: H }]);
     expect(await cam.next('model')).toMatchObject({ delegate: 'GPU', source: 'local' });
+  });
+
+  it('without the library on the phone, takes it from the CDN only as the release’s files', async () => {
+    const cam = await openCamera({ libOnPhone: false });
+    await cam.advance(200);
+    expect(await cam.next('model')).toMatchObject({ source: 'cdn' });
+    expect(cam.fetched).toEqual(
+      expect.arrayContaining((Object.keys(POSE_CDN) as (keyof typeof POSE_CDN)[]).map((k) => ({ url: POSE_CDN[k], integrity: POSE_SRI[k] }))),
+    );
+    expect(cam.fetched).toHaveLength(4);
+  });
+
+  // A script tag with a src would run its file unchecked, and the tests run only the page's own script.
+  it('loads everything through its one script', () => {
+    for (const pose of [true, false]) {
+      const html = poseCameraHtml({ bg: '#000', accent: '#f80', maxSeconds: 20, pose });
+      expect(html.match(/<script/g)).toEqual(['<script']);
+      expect(html).not.toMatch(/\ssrc=/);
+    }
+  });
+
+  it('runs nothing from a CDN that serves other files than the release, and says the model won’t start', async () => {
+    for (const file of Object.values(POSE_CDN)) {
+      const cam = await openCamera({ libOnPhone: false, tampered: [file] });
+      await cam.advance(200);
+      expect(cam.all('error')).toEqual([expect.objectContaining({ stage: 'model', message: `读不到 ${file}` })]);
+      expect(cam.ran).not.toContain('tampered');
+      expect(cam.created).toEqual([]);
+    }
   });
 
   it('swaps a back camera of several lenses for the single wide lens, which keeps one scale through a take', async () => {

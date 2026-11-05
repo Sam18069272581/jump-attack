@@ -20,6 +20,12 @@ export function toISODate(d: Date): ISODate {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** An instant in the phone's time zone, to the minute: 2026-11-05 09:07. */
+export function dateTime(iso: string): string {
+  const d = new Date(iso);
+  return `${toISODate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
 export function addDays(date: ISODate, n: number): ISODate {
   return format(utc(date) + n * DAY_MS);
 }

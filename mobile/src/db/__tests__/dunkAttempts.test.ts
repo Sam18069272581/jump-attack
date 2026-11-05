@@ -1,6 +1,6 @@
-import { exportBackup } from '../backup';
+import { discardKept, exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '../backup';
 import { addDunkAttempt, deleteDunkAttempt, listDunkAttempts } from '../dunkAttempts';
-import { migrate } from '../migrations';
+import { LATEST_VERSION, migrate } from '../migrations';
 import { addTrial, createAthlete, ensureSession, listTrials } from '../repo';
 import { deleteTechniqueTake, TECHNIQUE_CODE, techniqueVideoUris } from '../technique';
 import { openMemoryDb } from '../testing/memoryDb';
@@ -85,5 +85,71 @@ it('deletes the analysis with the attempt logged by mistake', async () => {
   await deleteDunkAttempt(db, id);
   expect(await listDunkAttempts(db, 1)).toEqual([]);
   expect(await listTrials(db, 'tt-3')).toEqual([]);
+  expect(await techniqueVideoUris(db)).toEqual([]);
+});
+
+// A restore keeps what it replaced on the phone to put back (db/backup.ts), so it keeps the videos of that too: a take
+// filmed in the app has no other copy.
+it('keeps the videos of the data a restore replaced, so they come back with it', async () => {
+  const db = await setup();
+  const trialId = await analysis(db, 'tt-5');
+  await addDunkAttempt(db, 1, { rimCm: 305, ball: 'basketball', outcome: 'made', trialId, videoUri: 'file:///app/Documents/technique/take-5.mov' });
+  await ensureSession(db, 'tt-6', 1, TECHNIQUE_CODE);
+  await addTrial(db, { session_id: 'tt-6', value: 3.1, fps: 60, video_uri: 'file:///app/Documents/technique/take-6.mov' });
+  // Another test's clip is no take's, kept or not.
+  await ensureSession(db, 'cmj-1', 1, 'cmj');
+  await addTrial(db, { session_id: 'cmj-1', value: 40, video_uri: 'file:///app/Documents/videos/c.mov' });
+  const videos = ['file:///app/Documents/technique/take-5.mov', 'file:///app/Documents/technique/take-6.mov'];
+  expect((await techniqueVideoUris(db)).sort()).toEqual(videos);
+
+  const other = await setup();
+  await createAthlete(other, '别人');
+  expect(await restoreBackup(db, await exportBackup(other))).toEqual({ ok: true });
+  expect(await listDunkAttempts(db, 1)).toEqual([]);
+  expect((await techniqueVideoUris(db)).sort()).toEqual(videos);
+  expect(await undoRestore(db)).toEqual({ ok: true });
+  expect((await techniqueVideoUris(db)).sort()).toEqual(videos);
+});
+
+// A copy kept by a newer app (a bundle rolled back on the phone) waits for that app to put it back, videos and all.
+it('keeps the videos of a copy a newer app kept, which only that app can put back', async () => {
+  const db = await setup();
+  await addDunkAttempt(db, 1, { rimCm: 305, ball: 'basketball', outcome: 'made', videoUri: 'file:///app/Documents/technique/take-7.mov' });
+  await db.execAsync(`PRAGMA user_version = ${LATEST_VERSION + 1}`);
+  expect(await restoreBackup(db, await exportBackup(await setup()))).toEqual({ ok: true });
+  expect(await keptBeforeRestore(db)).toBeNull();
+  expect(await techniqueVideoUris(db)).toEqual(['file:///app/Documents/technique/take-7.mov']);
+});
+
+/** A phone with a filmed attempt, which a restore of another phone's data then replaced (and kept). */
+async function filmedThenReplaced() {
+  const db = await setup();
+  await addDunkAttempt(db, 1, { rimCm: 305, ball: 'basketball', outcome: 'made', videoUri: 'file:///app/Documents/technique/take-8.mov' });
+  const other = await setup();
+  await createAthlete(other, '别人');
+  await restoreBackup(db, await exportBackup(other));
+  return db;
+}
+
+// The attempts and technique screens ask for the videos each time they open and after every attempt logged, and the
+// kept copy is the whole database before the restore.
+it('reads the kept copy once, and again only once a later restore keeps another', async () => {
+  const db = await filmedThenReplaced();
+  const reads = jest.spyOn(db, 'getFirstAsync');
+  const copyReads = () => reads.mock.calls.filter(([sql]) => /SELECT data FROM restore_undo/.test(String(sql))).length;
+  expect(await techniqueVideoUris(db)).toEqual(['file:///app/Documents/technique/take-8.mov']);
+  expect(await techniqueVideoUris(db)).toEqual(['file:///app/Documents/technique/take-8.mov']);
+  expect(copyReads()).toBe(1);
+
+  await new Promise((r) => setTimeout(r, 2));
+  await restoreBackup(db, await exportBackup(await setup()));
+  expect(await techniqueVideoUris(db)).toEqual([]);
+  expect(copyReads()).toBe(2);
+});
+
+it('lets the videos of the kept copy go once it is deleted', async () => {
+  const db = await filmedThenReplaced();
+  expect(await techniqueVideoUris(db)).toEqual(['file:///app/Documents/technique/take-8.mov']);
+  await discardKept(db, (await keptBeforeRestore(db))!.at);
   expect(await techniqueVideoUris(db)).toEqual([]);
 });

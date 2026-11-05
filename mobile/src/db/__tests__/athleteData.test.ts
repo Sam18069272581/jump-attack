@@ -1,5 +1,5 @@
 import { exportAthlete, findSameAthlete, importAthlete } from '../athleteData';
-import { exportBackup } from '../backup';
+import { exportBackup, keptBeforeRestore } from '../backup';
 import { listBodyMass, recordBodyMass } from '../bodyMass';
 import { addDunkAttempt, listDunkAttempts } from '../dunkAttempts';
 import { migrate } from '../migrations';
@@ -168,5 +168,50 @@ describe('importAthlete', () => {
     const before = await exportBackup(phone);
     expect(await importAthlete(phone, file)).toEqual({ ok: false, problem: '文件里的数据有问题，没有导入，手机上原来的数据保持不变。' });
     expect((await exportBackup(phone)).tables).toEqual(before.tables);
+  });
+
+  // Files get passed around a team. One changed by hand could name someone already on the phone by their id, and its
+  // records would then show up in that person's history: a 340 cm touch in the coach's own.
+  it('refuses a file with records that point at someone or something on the phone instead of in the file', async () => {
+    const { db } = await coachPhone();
+    const before = (await exportBackup(db)).tables;
+    const sender = await coachPhone();
+    const planted = async (change: (file: Awaited<ReturnType<typeof exportAthlete>>) => void) => {
+      const file = await exportAthlete(sender.db, sender.mate);
+      change(file);
+      return importAthlete(db, file);
+    };
+    const refused = { ok: false, problem: '文件里的数据有问题，没有导入，手机上原来的数据保持不变。' };
+
+    expect(
+      await planted((f) => {
+        f.tables.test_session.push({ id: 'planted', athlete_id: 1, metric_code: 'approach_touch', started_at: '2026-11-01T10:00:00.000Z' });
+        f.tables.trial.push({ id: 9001, session_id: 'planted', value: 340 });
+      }),
+    ).toEqual(refused);
+    // The same id written as text, which SQLite would turn back into the number.
+    expect(await planted((f) => f.tables.knee_pain.push({ id: 9002, athlete_id: '1', date: '2026-11-01', kind: 'session', score: 9 }))).toEqual(refused);
+    // A dunk attempt claiming a take-off analysis that is on the phone, not in the file.
+    expect(await planted((f) => (f.tables.dunk_attempt[0] = { ...f.tables.dunk_attempt[0], trial_id: 1 }))).toEqual(refused);
+    expect((await exportBackup(db)).tables).toEqual(before);
+  });
+
+  it('never takes the copy a phone keeps for undoing a restore from a file', async () => {
+    const { db, mate } = await coachPhone();
+    const file = await exportAthlete(db, mate);
+    file.tables.restore_undo = [{ id: 1, at: '2026-11-01T10:00:00.000Z', data: JSON.stringify(await exportBackup(db)) }];
+    const phone = await setup();
+    expect((await importAthlete(phone, file)).ok).toBe(true);
+    expect(await keptBeforeRestore(phone)).toBeNull();
+  });
+
+  it('refuses text where the phone keeps numbers', async () => {
+    const { db, mate } = await coachPhone();
+    const file = await exportAthlete(db, mate);
+    file.tables.athlete[0] = { ...file.tables.athlete[0], standing_reach_cm: 'tall' };
+    const phone = await setup();
+    const before = (await exportBackup(phone)).tables;
+    expect(await importAthlete(phone, file)).toEqual({ ok: false, problem: '文件里的数据有问题，没有导入，手机上原来的数据保持不变。' });
+    expect((await exportBackup(phone)).tables).toEqual(before);
   });
 });

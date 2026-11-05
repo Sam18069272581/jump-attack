@@ -1,4 +1,5 @@
 import { localizeHtml } from '@/i18n';
+import { scriptJson } from './scriptJson';
 
 /**
  * The page that tracks a barbell plate through a video, run in a WebView: Expo Go has no native module that hands
@@ -35,7 +36,7 @@ export type TrackerOptions = {
 };
 
 export function barTrackerHtml(o: TrackerOptions): string {
-  const config = JSON.stringify(o);
+  const config = scriptJson(o);
   return localizeHtml(`<!doctype html>
 <html><head>
 <meta charset="utf-8">

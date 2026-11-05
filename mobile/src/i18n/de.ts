@@ -184,17 +184,31 @@ export const de: Record<string, string> = {
   // app/backup.tsx
   '没有恢复': 'Nicht wiederhergestellt',
   '用这份备份替换手机上的数据？': 'Daten auf diesem Handy durch diese Sicherung ersetzen?',
-  '备份里：{backup}{p}\n手机上现在：{current}\n\n替换后不能撤销，需要的话先导出一份现在的数据。': 'In der Sicherung: {backup}{p}\nAuf diesem Handy: {current}\n\nDas lässt sich nicht rückgängig machen; exportiere die aktuellen Daten vorher, falls nötig.',
+  '备份里：{backup}{p}\n手机上现在：{current}': 'In der Sicherung: {backup}{p}\nAuf diesem Handy: {current}',
+  '备份里：{backup}{p}\n手机上现在：{current}\n\n现在的数据会在手机上留一份，替换后可以在这页换回来。': 'In der Sicherung: {backup}{p}\nAuf diesem Handy: {current}\n\nEine Kopie der aktuellen Daten bleibt auf dem Handy, du kannst danach auf dieser Seite zurückwechseln.',
   '（{made}）': ' ({made})',
   '替换': 'Ersetzen',
   '已恢复': 'Wiederhergestellt',
   '下次同步时会把它备份到云端。': 'Beim nächsten Synchronisieren wird sie in der Cloud gesichert.',
+  '下次同步时会先问你，确认后才备份到云端。': 'Beim nächsten Synchronisieren wirst du gefragt, bevor die Daten in der Cloud gesichert werden.',
+  '换回替换前的数据？': 'Ersetzte Daten zurückholen?',
+  '换回 {at} 替换前的数据：{kept}\n手机上现在的数据会留一份，可以再换回来。': 'Holt die Daten zurück, die um {at} ersetzt wurden: {kept}\nEine Kopie der aktuellen Daten bleibt auf dem Handy, du kannst wieder zurückwechseln.',
+  '换回': 'Zurückholen',
+  '没有换回': 'Nicht zurückgeholt',
+  '已换回': 'Zurückgeholt',
   '云端同步': 'Cloud-Synchronisierung',
   '备份文件': 'Sicherungsdatei',
   '把全部数据存成一个文件，可以存到「文件」App、iCloud 云盘，或隔空投送到另一台手机。换手机、云端连不上时用它恢复。': 'Speichert alle Daten in einer Datei, die du in der Dateien-App oder in iCloud Drive ablegen oder per AirDrop an ein anderes Handy schicken kannst. Damit stellst du die Daten wieder her, wenn du das Handy wechselst oder die Cloud nicht erreichbar ist.',
   '录像文件不在备份里，只备份测试结果、训练记录、恢复数据和档案。': 'Videos sind nicht in der Sicherung, nur Testergebnisse, Trainingsprotokolle, Erholungsdaten und Profile.',
   '导出备份文件': 'Sicherungsdatei exportieren',
   '从备份文件恢复': 'Aus Sicherungsdatei wiederherstellen',
+  '撤回恢复': 'Wiederherstellung rückgängig machen',
+  '{at} 替换前的数据还留在手机上：{kept}': 'Die Daten, die um {at} ersetzt wurden, sind noch auf dem Handy: {kept}',
+  '换回替换前的数据': 'Ersetzte Daten zurückholen',
+  '在 App 里拍的录像也一起留着，换回时还在。不用换回的话，可以删掉这份。': 'Die in der App dazu gefilmten Videos bleiben auch erhalten und kommen beim Zurückholen mit. Brauchst du die Daten nicht mehr, kannst du diese Kopie löschen.',
+  '删掉这份': 'Diese Kopie löschen',
+  '删掉留着的数据？': 'Aufbewahrte Daten löschen?',
+  '{at} 替换前的数据：{kept}\n删掉后就不能换回了，只有它用到的录像也会删掉。': 'Die um {at} ersetzten Daten: {kept}\nDanach kannst du sie nicht mehr zurückholen, und Videos, die nur sie verwenden, werden auch gelöscht.',
   '云端还没接好：Supabase 项目的地址和 key 填进 src/sync/config.ts 后，这里就能登录。现在可以先用下面的备份文件。': 'Die Cloud ist noch nicht eingerichtet: Sobald URL und Key des Supabase-Projekts in src/sync/config.ts stehen, kannst du dich hier anmelden. Bis dahin die Sicherungsdatei unten verwenden.',
   '已登录 {email}': 'Angemeldet als {email}',
   '打开 App 和切到后台时会自动同步。': 'Synchronisiert automatisch beim Öffnen der App und wenn sie in den Hintergrund geht.',
@@ -202,6 +216,7 @@ export const de: Record<string, string> = {
   '手机上：{phone}\n云端：{cloud}\n另一份会被替换。云端以前每天的备份都还在。': 'Auf dem Handy: {phone}\nIn der Cloud: {cloud}\nDie andere Version wird ersetzt. Die früheren täglichen Sicherungen in der Cloud bleiben alle erhalten.',
   '用云端的': 'Cloud-Daten verwenden',
   '用手机上的': 'Handy-Daten verwenden',
+  '手机上：{phone}\n这个账号在云端还没有备份，确认后才会把这些数据备份过去。': 'Auf dem Handy: {phone}\nDieses Konto hat noch keine Sicherung in der Cloud. Die Daten werden erst nach deiner Bestätigung dort gesichert.',
   '立即同步': 'Jetzt synchronisieren',
   '退出登录': 'Abmelden',
   '退出登录不会删除手机上的数据，也不会删除云端的备份。': 'Beim Abmelden werden weder die Daten auf diesem Handy noch die Sicherungen in der Cloud gelöscht.',
@@ -546,6 +561,7 @@ export const de: Record<string, string> = {
   '保存或分享视频': 'Video speichern oder teilen',
   '分享失败：{p}': 'Teilen fehlgeschlagen: {p}',
   '这个项目不能回放': 'Dieser Test kann nicht wiedergegeben werden',
+  '回放链接里的数据不完整，回上一页重新分析。': 'Im Wiedergabe-Link fehlen Daten. Geh zurück und analysiere das Video erneut.',
   '正在导出视频…': 'Video wird exportiert…',
   '再放一次': 'Nochmal abspielen',
   '导出视频': 'Video exportieren',
@@ -1155,6 +1171,8 @@ export const de: Record<string, string> = {
 
   // db/backup.ts
   '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。': 'Die Sicherung ist fehlerhaft und wurde nicht wiederhergestellt. Die Daten auf dem Handy bleiben unverändert.',
+  '没有可以换回的数据。': 'Es gibt keine ersetzten Daten zum Zurückholen.',
+  '留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。': 'Die auf dem Handy aufbewahrten Daten haben sich gerade geändert, daher wurde nichts zurückgeholt. Sieh nach, welche Daten jetzt aufbewahrt sind, bevor du sie zurückholst.',
 
   // domain/athletes.ts
   '我自己': 'Ich',
@@ -1808,6 +1826,7 @@ export const de: Record<string, string> = {
 
   // media/poseLib.ts
   '{name} 下载不完整（{got} / {bytes} 字节）': '{name} wurde nicht vollständig geladen ({got} / {bytes} Bytes)',
+  '{name} 校验不对，已删除，请重新下载。': '{name} ist nicht die veröffentlichte Datei (Prüfsumme stimmt nicht) und wurde gelöscht. Lade sie erneut herunter.',
 
   // media/poseShared.ts
   '读不到 ': 'Nicht ladbar: ',
@@ -1872,6 +1891,10 @@ export const de: Record<string, string> = {
   '手机上：{phone}\n云端（{p}）：{cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。': 'Auf dem Handy: {phone}\nIn der Cloud ({p}): {cloud}\n\nWähle eine Version, die andere wird durch sie ersetzt. Frühere tägliche Sicherungen in der Cloud bleiben erhalten.',
   '较早': 'früher',
   '以后再说': 'Später',
+  '手机上的数据之前同步到另一个账号，确认后才会备份到这个账号': 'Die Daten auf diesem Handy wurden zuletzt mit einem anderen Konto synchronisiert; sie werden erst nach deiner Bestätigung in diesem Konto gesichert',
+  '这台手机上的数据之前同步到另一个账号': 'Die Daten auf diesem Handy wurden zuletzt mit einem anderen Konto synchronisiert',
+  '手机上：{phone}\n\n现在登录的账号在云端还没有备份。要把这些数据备份到这个账号吗？这不是你的手机的话，选「以后再说」，再退出登录。': 'Auf dem Handy: {phone}\n\nDas angemeldete Konto hat noch keine Sicherung in der Cloud. Diese Daten in diesem Konto sichern? Wenn das nicht dein Handy ist, wähle „Später“ und melde dich ab.',
+  '备份到这个账号': 'In diesem Konto sichern',
 
   // state/training.ts
   '今天状态差（恢复、CMJ 或热身速度偏低），这次成绩不计入进步趋势，也不拉低基线。': 'Schlechter Tag (Erholung, CMJ oder Aufwärmtempo niedrig): Dieses Ergebnis zählt nicht zum Fortschrittstrend und senkt deinen Normalwert nicht.',
@@ -1883,6 +1906,7 @@ export const de: Record<string, string> = {
   '邮箱还没确认：去邮箱点一下确认链接，再回来登录。': 'E-Mail noch nicht bestätigt: Öffne den Bestätigungslink in deiner E-Mail und melde dich dann hier an.',
   '邮箱格式不对。': 'Das sieht nicht nach einer E-Mail-Adresse aus.',
   '尝试太频繁，过几分钟再试。': 'Zu viele Versuche. In ein paar Minuten noch einmal versuchen.',
+  '这个云端现在不开放注册，请找管理员邀请你。': 'Diese Cloud nimmt gerade keine neuen Registrierungen an. Bitte den Admin, dich einzuladen.',
   '连不上云端，检查网络后再试。': 'Cloud nicht erreichbar. Verbindung prüfen und erneut versuchen.',
   '登录失败：{message}': 'Anmeldung fehlgeschlagen: {message}',
 
@@ -1892,7 +1916,11 @@ export const de: Record<string, string> = {
 
   // sync/sync.ts
   '连不上云端，数据还在手机上，下次打开 App 会再试。': 'Cloud nicht erreichbar. Deine Daten sind noch auf dem Handy, die App versucht es beim nächsten Öffnen erneut.',
+  '云端最新的一份不是刚传的这份，可能有设备的日期或时间不对，请检查。数据还在手机上。': 'Die neueste Sicherung in der Cloud ist nicht die gerade hochgeladene. Datum oder Uhrzeit eines Geräts stimmen vielleicht nicht, bitte prüfen. Deine Daten sind noch auf dem Handy.',
+  '云端有更新版本 App 传的备份，这个版本不能覆盖它。先更新 App 再同步，数据还在手机上。': 'In der Cloud liegt eine Sicherung aus einer neueren App-Version, die diese Version nicht überschreiben kann. Aktualisiere die App und synchronisiere dann erneut. Deine Daten sind noch auf dem Handy.',
   '无法读取': 'Nicht lesbar',
+  '云端没有收下这次备份：可能是这台设备的日期不对，或云端已有更新版本 App 的备份。数据还在手机上。': 'Die Cloud hat diese Sicherung nicht angenommen: Vielleicht stimmt das Datum dieses Geräts nicht, oder in der Cloud liegt schon eine Sicherung aus einer neueren App-Version. Deine Daten sind noch auf dem Handy.',
+  '这份备份超过云端单份的大小上限，没有上传。数据还在手机上。': 'Diese Sicherung ist größer, als die Cloud für eine Sicherung erlaubt, und wurde nicht hochgeladen. Deine Daten sind noch auf dem Handy.',
 
   // web/dialogs.ts
   '{p}（确定 = {text}）': '{p}(OK = {text})',

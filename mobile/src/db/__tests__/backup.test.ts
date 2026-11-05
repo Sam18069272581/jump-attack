@@ -1,4 +1,4 @@
-import { exportBackup, restoreBackup } from '../backup';
+import { discardKept, exportBackup, keptBeforeRestore, restoreBackup, undoRestore } from '../backup';
 import { LATEST_VERSION, migrate } from '../migrations';
 import { addTrial, createAthlete, ensureSession, listAthletes, listSessionResults, updateAthlete } from '../repo';
 import { saveRecoveryDay } from '../recovery';
@@ -110,5 +110,100 @@ describe('restoreBackup', () => {
     b.tables.trial = [{ id: 9, session_id: 'missing', value: 1 }];
     expect(await restoreBackup(db, b)).toEqual({ ok: false, problem: '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。' });
     expect(await dump(db)).toEqual(before);
+  });
+
+  // A sync downloads without asking when only the cloud changed, so a broken backup would go straight onto the phone,
+  // and "abc" as a result breaks every screen that shows it as a number.
+  it('refuses text where the phone keeps numbers, and changes nothing', async () => {
+    const db = await used();
+    const before = await dump(db);
+    for (const [table, column, v] of [['trial', 'value', 'abc'], ['athlete', 'body_mass_kg', 'heavy'], ['set_log', 'reps', '']] as const) {
+      const b = await exportBackup(db);
+      b.tables[table][0] = { ...b.tables[table][0], [column]: v };
+      expect(await restoreBackup(db, b)).toEqual({ ok: false, problem: '备份里的数据有问题，没有恢复，手机上原来的数据保持不变。' });
+    }
+    expect(await dump(db)).toEqual(before);
+  });
+});
+
+describe('undoRestore', () => {
+  /** Another phone's data, different from used(). */
+  async function theirs() {
+    const other = await setup();
+    await createAthlete(other, '别人');
+    await ensureSession(other, 'x', 1, 'sj');
+    await addTrial(other, { session_id: 'x', value: 30 });
+    return exportBackup(other);
+  }
+
+  // A sync that downloads the wrong backup by itself (a device with a wrong clock, an older app), or a file picked by
+  // mistake, would otherwise take the phone's own records with it.
+  it('keeps what the phone held before a restore, and swaps it back', async () => {
+    const db = await used();
+    const mine = await dump(db);
+    const other = await theirs();
+    expect(await restoreBackup(db, other)).toEqual({ ok: true });
+    expect(await keptBeforeRestore(db)).toEqual({ at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/), backup: expect.objectContaining({ tables: mine }) });
+
+    expect(await undoRestore(db)).toEqual({ ok: true });
+    expect(await dump(db)).toEqual(mine);
+    // What the undo replaced is kept the same way, so pressing it again goes back.
+    expect(await undoRestore(db)).toEqual({ ok: true });
+    expect(await dump(db)).toEqual(other.tables);
+  });
+
+  it('keeps nothing from a new phone, which has nothing to lose', async () => {
+    const fresh = await setup();
+    await restoreBackup(fresh, await exportBackup(await used()));
+    expect(await keptBeforeRestore(fresh)).toBeNull();
+    expect(await undoRestore(fresh)).toEqual({ ok: false, problem: '没有可以换回的数据。' });
+  });
+
+  it('keeps the copy out of backups, and never takes one from a file', async () => {
+    const db = await used();
+    await restoreBackup(db, await theirs());
+    const b = await exportBackup(db);
+    expect(Object.keys(b.tables)).not.toContain('restore_undo');
+
+    b.tables.restore_undo = [{ id: 1, at: '2026-11-01T10:00:00.000Z', data: JSON.stringify(await theirs()) }];
+    const fresh = await setup();
+    expect(await restoreBackup(fresh, b)).toEqual({ ok: true });
+    expect(await keptBeforeRestore(fresh)).toBeNull();
+  });
+
+  /** A restore whose kept copy the person was shown, then another one (a sync downloading by itself meanwhile). */
+  async function keptTwice() {
+    const db = await used();
+    await restoreBackup(db, await theirs());
+    const shown = (await keptBeforeRestore(db))!.at;
+    await new Promise((r) => setTimeout(r, 2));
+    await restoreBackup(db, await exportBackup(await used()));
+    return { db, shown };
+  }
+
+  it('puts back only the copy the person was shown', async () => {
+    const { db, shown } = await keptTwice();
+    const now = await dump(db);
+    expect(await undoRestore(db, shown)).toEqual({ ok: false, problem: '留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。' });
+    expect(await dump(db)).toEqual(now);
+  });
+
+  it('deletes the kept copy when asked to, only the one the person was shown', async () => {
+    const { db, shown } = await keptTwice();
+    await discardKept(db, shown);
+    expect(await keptBeforeRestore(db)).not.toBeNull();
+    await discardKept(db, (await keptBeforeRestore(db))!.at);
+    expect(await keptBeforeRestore(db)).toBeNull();
+    expect(await undoRestore(db)).toEqual({ ok: false, problem: '没有可以换回的数据。' });
+  });
+
+  it('keeps the earlier copy when a restore fails', async () => {
+    const db = await used();
+    await restoreBackup(db, await theirs());
+    const kept = await keptBeforeRestore(db);
+    const broken = await exportBackup(db);
+    broken.tables.trial = [{ id: 9, session_id: 'missing', value: 1 }];
+    expect((await restoreBackup(db, broken)).ok).toBe(false);
+    expect(await keptBeforeRestore(db)).toEqual(kept);
   });
 });

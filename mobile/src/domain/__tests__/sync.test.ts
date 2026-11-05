@@ -35,4 +35,22 @@ describe('decideSync', () => {
   it('asks when both changed since the last sync', () => {
     expect(decideSync(state({}))).toBe('conflict');
   });
+
+  // On a shared phone (a coach's, the team's), data last synced with one account belongs to that account: whoever signs
+  // in next with their own would otherwise get everyone's data uploaded into theirs, or over it.
+  describe('on a phone last synced with another account', () => {
+    it('asks before backing up into an account that has nothing in the cloud yet', () => {
+      expect(decideSync(state({ lastHash: null, cloud: null, otherAccount: true }))).toBe('confirm');
+    });
+
+    it('asks which to keep instead of uploading', () => {
+      expect(decideSync(state({ lastHash: 'C', otherAccount: true }))).toBe('conflict');
+    });
+
+    it('still restores onto an empty phone, and does nothing when both hold the same', () => {
+      expect(decideSync(state({ lastHash: null, localPristine: true, otherAccount: true }))).toBe('download');
+      expect(decideSync(state({ localHash: 'C', otherAccount: true }))).toBe('nothing');
+      expect(decideSync(state({ cloud: null, localPristine: true, otherAccount: true }))).toBe('nothing');
+    });
+  });
 });

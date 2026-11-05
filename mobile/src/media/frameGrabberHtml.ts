@@ -1,4 +1,5 @@
 import { localizeHtml } from '@/i18n';
+import { scriptJson } from './scriptJson';
 
 /**
  * The page that reads frames out of a video, run in a WebView: Expo Go has no native module that hands JavaScript the
@@ -22,7 +23,7 @@ export type GrabberOptions = {
 };
 
 export function frameGrabberHtml(o: GrabberOptions): string {
-  const config = JSON.stringify(o);
+  const config = scriptJson(o);
   return localizeHtml(`<!doctype html>
 <html><head>
 <meta charset="utf-8">

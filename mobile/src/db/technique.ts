@@ -4,6 +4,7 @@ import { toISODate } from '@/domain/dates';
 import { APPROACH_TOUCH } from '@/domain/metrics';
 import type { Markers, Measured, MetricKey, QualityFlag, TechniqueResult } from '@/domain/technique';
 
+import { keptCopy } from './backup';
 import { addTrial, deleteTrial, ensureSession, listMetricResults } from './repo';
 
 /**
@@ -85,7 +86,7 @@ export async function deleteTechniqueTake(db: SQLiteDatabase, id: number): Promi
 
 /**
  * The app's own copy of every take filmed in it and of every dunk attempt's video, of every athlete: the files to keep
- * (media/takes.ts `pruneTakes`).
+ * (media/takes.ts `pruneTakes`). Those of what the last restore replaced too, which the phone keeps to put back.
  */
 export async function techniqueVideoUris(db: SQLiteDatabase): Promise<string[]> {
   const rows = await db.getAllAsync<{ video_uri: string }>(
@@ -94,7 +95,27 @@ export async function techniqueVideoUris(db: SQLiteDatabase): Promise<string[]> 
      UNION SELECT video_uri FROM dunk_attempt WHERE video_uri IS NOT NULL`,
     TECHNIQUE_CODE,
   );
-  return rows.map((r) => r.video_uri);
+  return [...new Set([...rows.map((r) => r.video_uri), ...(await keptVideoUris(db))])];
+}
+
+/** The videos of each copy a restore kept, worked out once per copy: reading one means parsing a whole database. */
+const keptVideos = new WeakMap<SQLiteDatabase, { at: string; uris: string[] }>();
+
+/** Those of what the last restore replaced, whichever app version kept it: only rows that read as takes or attempts. */
+async function keptVideoUris(db: SQLiteDatabase): Promise<string[]> {
+  const kept = await keptCopy(db);
+  if (!kept) return [];
+  const known = keptVideos.get(db);
+  if (known?.at === kept.at) return known.uris;
+  const tables = await kept.tables();
+  const rows = (name: string) => {
+    const v = tables[name];
+    return Array.isArray(v) ? v.filter((r): r is Record<string, unknown> => typeof r === 'object' && r !== null) : [];
+  };
+  const takes = new Set(rows('test_session').filter((s) => s.metric_code === TECHNIQUE_CODE).map((s) => s.id));
+  const uris = [...rows('trial').filter((t) => takes.has(t.session_id)), ...rows('dunk_attempt')].flatMap((r) => (typeof r.video_uri === 'string' ? [r.video_uri] : []));
+  keptVideos.set(db, { at: kept.at, uris });
+  return uris;
 }
 
 /** The run-up touch result of each day it was tested (cm, the better session's on a day of two), keyed by local date. */

@@ -24,6 +24,7 @@ export function authProblem(message: string): string {
   if (/email.*not confirmed/i.test(message)) return tr('邮箱还没确认：去邮箱点一下确认链接，再回来登录。');
   if (/valid email|invalid.*email/i.test(message)) return tr('邮箱格式不对。');
   if (/rate limit|too many/i.test(message)) return tr('尝试太频繁，过几分钟再试。');
+  if (/signups? (are )?(not allowed|disabled)/i.test(message)) return tr('这个云端现在不开放注册，请找管理员邀请你。');
   if (/network|fetch/i.test(message)) return tr('连不上云端，检查网络后再试。');
   return tr('登录失败：{message}', { message });
 }

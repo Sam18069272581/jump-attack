@@ -1,38 +1,55 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { BACKUP_FORMAT, type Backup, type BackupRow } from '@/domain/backup';
+import { BACKUP_FORMAT, fitsColumn, isPristine, parseBackup, type Backup, type BackupRow } from '@/domain/backup';
 import { tr } from '@/i18n';
 
-async function tableNames(db: SQLiteDatabase): Promise<string[]> {
-  const rows = await db.getAllAsync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
+import { LATEST_VERSION } from './migrations';
+
+/** Where restoreBackup keeps what it replaced (migration 13). Not the person's data: it never leaves this phone. */
+const KEPT = 'restore_undo';
+
+/** The tables that hold the person's data: all but SQLite's own and the copy kept for taking a restore back. */
+export async function dataTables(db: SQLiteDatabase): Promise<string[]> {
+  const rows = await db.getAllAsync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> ? ORDER BY name", KEPT);
   return rows.map((r) => r.name);
+}
+
+/** Each column of a table this database has, with its declared type (checked with fitsColumn before a file's values go in). */
+export async function columnTypes(db: SQLiteDatabase, table: string): Promise<Map<string, string>> {
+  return new Map((await db.getAllAsync<{ name: string; type: string }>(`PRAGMA table_info("${table}")`)).map((c) => [c.name, c.type]));
 }
 
 /** Every table, as stored. */
 export async function exportBackup(db: SQLiteDatabase): Promise<Backup> {
   const version = await db.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
   const tables: Backup['tables'] = {};
-  for (const name of await tableNames(db)) tables[name] = await db.getAllAsync<BackupRow>(`SELECT * FROM "${name}" ORDER BY rowid`);
+  for (const name of await dataTables(db)) tables[name] = await db.getAllAsync<BackupRow>(`SELECT * FROM "${name}" ORDER BY rowid`);
   return { format: BACKUP_FORMAT, schema_version: version?.user_version ?? 0, exported_at: new Date().toISOString(), tables };
 }
 
 /**
  * Replaces everything on this device with the backup, all or nothing. Expects a backup checked by
  * parseBackup. Table and column names come from this database's schema, never from the backup.
- * Foreign keys are checked at commit, so tables can be filled in any order.
+ * Foreign keys are checked at commit, so tables can be filled in any order. What the phone held is kept
+ * (see undoRestore), unless it held nothing yet.
  */
 export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise<{ ok: true } | { ok: false; problem: string }> {
   try {
     await db.withTransactionAsync(async () => {
       await db.execAsync('PRAGMA defer_foreign_keys = ON');
-      const names = await tableNames(db);
+      // A sync downloads by itself when only the cloud changed, so a wrong backup there (from a device with a wrong
+      // clock, or an older app) would replace what was just recorded here. Kept, it can be put back.
+      const current = await exportBackup(db);
+      if (!isPristine(current)) await db.runAsync(`INSERT OR REPLACE INTO ${KEPT} (id, at, data) VALUES (1, ?, ?)`, new Date().toISOString(), JSON.stringify(current));
+      const names = await dataTables(db);
       for (const name of names) await db.runAsync(`DELETE FROM "${name}"`);
       for (const name of names) {
         const rows = backup.tables[name];
         if (!rows?.length) continue;
-        const known = new Set((await db.getAllAsync<{ name: string }>(`PRAGMA table_info("${name}")`)).map((c) => c.name));
+        const types = await columnTypes(db, name);
         for (const row of rows) {
-          const cols = Object.keys(row).filter((c) => known.has(c));
+          const cols = Object.keys(row).filter((c) => types.has(c));
+          if (cols.some((c) => !fitsColumn(types.get(c)!, row[c]))) throw new Error(`${name}: a value of the wrong type`);
           await db.runAsync(`INSERT INTO "${name}" (${cols.map((c) => `"${c}"`).join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map((c) => row[c]));
         }
       }
@@ -41,4 +58,49 @@ export async function restoreBackup(db: SQLiteDatabase, backup: Backup): Promise
     return { ok: false, problem: tr('备份里的数据有问题，没有恢复，手机上原来的数据保持不变。') };
   }
   return { ok: true };
+}
+
+/** What the last restore replaced, if the phone kept it (it keeps nothing from a phone that held nothing yet). */
+export async function keptBeforeRestore(db: SQLiteDatabase): Promise<{ at: string; backup: Backup } | null> {
+  const row = await db.getFirstAsync<{ at: string; data: string }>(`SELECT at, data FROM ${KEPT} WHERE id = 1`);
+  if (!row) return null;
+  const parsed = parseBackup(row.data, LATEST_VERSION);
+  return parsed.ok ? { at: row.at, backup: parsed.backup } : null;
+}
+
+/**
+ * The copy the last restore kept, as written, maybe by a newer app (keptBeforeRestore leaves that one for that app to
+ * put back). `at` tells copies apart; `tables` reads the copy itself, the whole database before the restore.
+ */
+export async function keptCopy(db: SQLiteDatabase): Promise<{ at: string; tables: () => Promise<Record<string, unknown>> } | null> {
+  const row = await db.getFirstAsync<{ at: string }>(`SELECT at FROM ${KEPT} WHERE id = 1`);
+  if (!row) return null;
+  const tables = async () => {
+    const kept = await db.getFirstAsync<{ data: string }>(`SELECT data FROM ${KEPT} WHERE id = 1`);
+    try {
+      const v: unknown = JSON.parse(kept?.data ?? '');
+      return isRecord(v) && isRecord(v.tables) ? v.tables : {};
+    } catch {
+      return {};
+    }
+  };
+  return { at: row.at, tables };
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null;
+
+/**
+ * Puts back what the last restore replaced; with `at`, only the copy kept then, the one the person was shown. What this
+ * replaces is kept in turn, so it can be swapped back again.
+ */
+export async function undoRestore(db: SQLiteDatabase, at?: string): Promise<{ ok: true } | { ok: false; problem: string }> {
+  const kept = await keptBeforeRestore(db);
+  if (!kept) return { ok: false, problem: tr('没有可以换回的数据。') };
+  if (at != null && kept.at !== at) return { ok: false, problem: tr('留在手机上的数据刚刚变了，没有换回。看一下现在留着的是哪份，再决定要不要换回。') };
+  return restoreBackup(db, kept.backup);
+}
+
+/** Deletes the copy kept at `at`, when it isn't needed: then the videos only it used go too (media/takes.ts). */
+export async function discardKept(db: SQLiteDatabase, at: string): Promise<void> {
+  await db.runAsync(`DELETE FROM ${KEPT} WHERE id = 1 AND at = ?`, at);
 }

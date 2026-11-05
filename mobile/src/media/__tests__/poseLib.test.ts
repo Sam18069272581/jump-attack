@@ -1,9 +1,16 @@
-import { classicBundle, clearPoseRuns, downloadPoseLib, MEDIAPIPE_VERSION, POSE_CDN, POSE_DOWNLOAD_BYTES, POSE_FILES, poseLibReady, stagePosePage, unstagePosePage } from '../poseLib';
+import { classicBundle, clearPoseRuns, downloadPoseLib, integrity, MEDIAPIPE_VERSION, POSE_CDN, POSE_DOWNLOAD_BYTES, POSE_FILES, POSE_SRI, poseLibReady, stagePosePage, unstagePosePage } from '../poseLib';
 
 // An in-memory file system with the slice of expo-file-system's File / Directory API the library store uses, and a
 // server that answers each download with the bytes `mockServed` says (the release's own size unless a test cuts it).
 const mockServed = new Map<string, number>();
 const mockDownloads: string[] = [];
+/** Files the server answers with other bytes of the release's size, as a CDN or a network in between could. */
+const mockTampered = new Set<string>();
+/** Each file's SHA-256 as the release has it: other bytes hash to something else. */
+const mockHashes = new Map<string, string>();
+jest.mock('../fileHash', () => ({
+  sha256Hex: async (file: { name: string; text(): Promise<string> }) => ((await file.text()) === 'tampered' ? 'not the release' : mockHashes.get(file.name)),
+}));
 /**
  * A write to a file ending so fails part-way, as iOS's in-place write does when the phone is full; or, `killed`, the
  * app is closed part-way through it.
@@ -65,7 +72,7 @@ jest.mock('expo-file-system', () => {
           mockDownloads.push(url);
           const bytes = mockServed.get(url)!;
           opts.onProgress?.({ bytesWritten: bytes / 2, totalBytes: bytes });
-          files.set(dest.uri, url.endsWith('.mjs') ? 'var a=1;export{a as A};' : 'x');
+          files.set(dest.uri, mockTampered.has(url) ? 'tampered' : url.endsWith('.mjs') ? 'var a=1;export{a as A};' : 'x');
           sizes.set(dest.uri, bytes);
           opts.onProgress?.({ bytesWritten: bytes, totalBytes: bytes });
           return dest;
@@ -108,7 +115,11 @@ beforeEach(() => {
   mockDownloads.length = 0;
   mockCut.name = null;
   mockCut.killed = false;
-  for (const f of POSE_FILES) mockServed.set(f.url, f.bytes);
+  mockTampered.clear();
+  for (const f of POSE_FILES) {
+    mockServed.set(f.url, f.bytes);
+    mockHashes.set(f.name, f.sha256);
+  }
 });
 
 describe('classicBundle', () => {
@@ -142,6 +153,18 @@ describe('the files', () => {
   it('come to about 21 MB, most of it the wasm runtime and the model', () => {
     expect(POSE_DOWNLOAD_BYTES).toBe(136_993 + 322_044 + 11_153_617 + 9_398_198);
   });
+
+  it('carry their SHA-256, also as the Subresource Integrity a page checks the CDN’s copies against', () => {
+    for (const f of POSE_FILES) expect(f.sha256).toMatch(/^[0-9a-f]{64}$/);
+    // SHA-256 of "abc" (FIPS 180-2, appendix B.1), in hex and in base64.
+    expect(integrity('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')).toBe('sha256-ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=');
+    expect(POSE_SRI).toEqual({
+      bundle: integrity(POSE_FILES[0].sha256),
+      loader: integrity(POSE_FILES[1].sha256),
+      wasm: integrity(POSE_FILES[2].sha256),
+      model: integrity(POSE_FILES[3].sha256),
+    });
+  });
 });
 
 describe('downloadPoseLib', () => {
@@ -168,6 +191,27 @@ describe('downloadPoseLib', () => {
     mockDownloads.length = 0;
     await downloadPoseLib();
     expect(mockDownloads).toEqual([POSE_FILES[3].url]);
+  });
+
+  it('refuses a file of the right size that isn’t the release’s, and deletes it so it never runs', async () => {
+    mockTampered.add(POSE_FILES[2].url);
+    await expect(downloadPoseLib()).rejects.toThrow('vision_wasm_internal.wasm 校验不对');
+    expect(files.has(`file:///app/Documents/pose/lib/${MEDIAPIPE_VERSION}/vision_wasm_internal.wasm`)).toBe(false);
+    expect(poseLibReady()).toBe(false);
+    mockTampered.clear();
+    await downloadPoseLib();
+    expect(poseLibReady()).toBe(true);
+  });
+
+  it('downloads again a file kept from before that isn’t the release’s', async () => {
+    await downloadPoseLib();
+    // Kept by an app that checked only the size; the download runs again when the classic script is gone.
+    files.set(`file:///app/Documents/pose/lib/${MEDIAPIPE_VERSION}/vision_wasm_internal.wasm`, 'tampered');
+    files.delete(`file:///app/Documents/pose/lib/${MEDIAPIPE_VERSION}/vision.js.done`);
+    mockDownloads.length = 0;
+    await downloadPoseLib();
+    expect(mockDownloads).toEqual([POSE_FILES[2].url]);
+    expect(files.get(`file:///app/Documents/pose/lib/${MEDIAPIPE_VERSION}/vision_wasm_internal.wasm`)).toBe('x');
   });
 
   it('leaves no cut classic script behind when writing it fails, so the download is offered again', async () => {

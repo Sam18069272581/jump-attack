@@ -10,6 +10,8 @@ export interface CloudBackups {
   latest(): Promise<CloudMeta | null>;
   /** The newest backup's data, as stored (checked by parseBackup before use). */
   download(): Promise<{ data: unknown; hash: string } | null>;
+  /** The highest schema version among the account's backups, null if it has none: what an older app must not write over. */
+  newestSchemaVersion(): Promise<number | null>;
   upload(b: { backup: Backup; hash: string; device: string; date: ISODate }): Promise<void>;
 }
 
@@ -28,11 +30,16 @@ export function supabaseBackups(client: SupabaseClient, userId: string): CloudBa
     async download() {
       return check(await newest('data, hash')) as { data: unknown; hash: string } | null;
     },
+    async newestSchemaVersion() {
+      const row = check(await client.from('backups').select('schema_version').order('schema_version', { ascending: false }).limit(1).maybeSingle()) as { schema_version: number } | null;
+      return row?.schema_version ?? null;
+    },
     async upload({ backup, hash, device, date }) {
       check(
         await client
           .from('backups')
           .upsert(
+            // supabase/backups-hardening.sql replaces updated_at with the server's time, so a wrong clock can't put a backup ahead.
             { user_id: userId, backup_date: date, updated_at: new Date().toISOString(), device, schema_version: backup.schema_version, hash, data: backup },
             { onConflict: 'user_id,backup_date' },
           ),

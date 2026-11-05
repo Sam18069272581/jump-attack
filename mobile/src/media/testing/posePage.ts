@@ -113,23 +113,58 @@ export type Page = {
   /** Scripts the page loaded, and files it read with XHR. */
   scripts: string[];
   reads: string[];
+  /** What the page fetched, with the integrity it asked the browser to check. */
+  fetched: { url: string; integrity?: string }[];
+  /** The code that ran, from script tags and module imports: the file it came from, or 'tampered'. */
+  ran: string[];
+  /** The URLs the page imported modules from. */
+  imports: string[];
+  /** The blob: URLs the page made, and the file each holds (or 'tampered'). */
+  blobs: Map<string, string>;
 };
+
+/** The page's Blob: here only ever made of one fetched file. */
+class PageBlob {
+  constructor(
+    public parts: ArrayBuffer[],
+    public opts: { type?: string } = {},
+  ) {}
+}
+
+// The CDN's stand-in serves each file as the text of its own URL, so a blob made from it says which file it holds.
+const encode = (s: string) => Uint8Array.from(s, (c) => c.charCodeAt(0)).buffer;
+const decode = (b: ArrayBuffer) => String.fromCharCode(...new Uint8Array(b));
 
 /**
  * Runs a page's main script against a minimal DOM: `elements` by id, a stand-in for the MediaPipe library behind the
  * page's script tags and file reads, and `globals` for anything else the script uses (the camera, the recorder, timers).
+ * With `libOnPhone: false` the phone has no copy of the library and the page turns to the CDN, which serves other bytes
+ * for the files in `tampered`; like a browser, fetch refuses those when asked to check their integrity.
  */
 export function runPage(
   html: string,
-  o: { elements: Record<string, unknown>; globals?: Record<string, unknown>; gpuFails?: boolean; timer?: (fn: () => void, ms: number) => unknown },
+  o: {
+    elements: Record<string, unknown>;
+    globals?: Record<string, unknown>;
+    gpuFails?: boolean;
+    timer?: (fn: () => void, ms: number) => unknown;
+    libOnPhone?: boolean;
+    tampered?: string[];
+  },
 ): Page {
   const start = html.indexOf('<script id="main">') + '<script id="main">'.length;
-  const script = html.slice(start, html.indexOf('</script>', start));
+  // A dynamic import can't be caught in a Function's body: the page's go through `pageImport` here.
+  const script = html.slice(start, html.indexOf('</script>', start)).replace(/\bimport\(/g, 'pageImport(');
   const messages: PageMsg[] = [];
   const waiting: { type: string; id?: number; resolve: (m: PageMsg) => void; reject: (e: Error) => void }[] = [];
   const created: Page['created'] = [];
   const scripts: string[] = [];
   const reads: string[] = [];
+  const fetched: Page['fetched'] = [];
+  const ran: string[] = [];
+  const imports: string[] = [];
+  const blobs = new Map<string, string>();
+  const served = (url: string) => blobs.get(url) ?? (o.tampered?.includes(url) ? 'tampered' : url);
   const failure = (m: PageMsg) => new Error(`${m.stage ?? ''} ${m.message}`);
   const win: Record<string, any> = {
     devicePixelRatio: 1,
@@ -160,15 +195,30 @@ export function runPage(
     getElementById: (id: string) => o.elements[id],
     createElement: (tag: string) => (tag === 'canvas' ? new FakeCanvas() : { src: '', onload: null as null | (() => void), onerror: null }),
     body: {
-      appendChild(s: { src: string; onload: () => void }) {
+      appendChild(s: { src: string; onload: () => void; onerror: () => void }) {
         scripts.push(s.src);
         Promise.resolve().then(() => {
-          if (s.src.endsWith('/vision.js')) win.MPVision = vision;
-          if (s.src.endsWith('/vision_wasm_internal.js')) win.ModuleFactory = () => {};
+          if (o.libOnPhone === false && s.src.endsWith('/vision.js')) return s.onerror();
+          const code = served(s.src);
+          ran.push(code);
+          if (code.endsWith('/vision.js')) win.MPVision = vision;
+          if (code.endsWith('/vision_wasm_internal.js')) win.ModuleFactory = () => {};
           s.onload();
         });
       },
     },
+  };
+  const pageImport = async (url: string) => {
+    imports.push(url);
+    const code = served(url);
+    ran.push(code);
+    return code.endsWith('/vision_bundle.mjs') ? vision : {};
+  };
+  const cdn = async (url: string, init?: { integrity?: string }) => {
+    fetched.push({ url, integrity: init?.integrity });
+    const body = served(url);
+    if (body === 'tampered' && init?.integrity) throw new TypeError(`Cannot load ${url}: failed integrity metadata check`);
+    return { ok: true, status: 200, arrayBuffer: async () => encode(body) };
   };
   class XHR {
     status = 0;
@@ -189,14 +239,18 @@ export function runPage(
     }
   }
   class PageURL extends URL {
-    static createObjectURL() {
-      return 'blob:file:///clip';
+    // The clip the reader page reads with XHR keeps the one URL its tests know.
+    static createObjectURL(b: unknown) {
+      if (!(b instanceof PageBlob)) return 'blob:file:///clip';
+      const url = `blob:file:///${blobs.size + 1}`;
+      blobs.set(url, decode(b.parts[0]));
+      return url;
     }
   }
   // By default only the short waits run: guards of several seconds never fire here.
   const timer = o.timer ?? ((fn: () => void, ms: number) => (ms <= 100 ? setImmediate(fn) : 0));
   const location = { href: 'file:///app/Documents/pose/run-1/page.html' };
-  const globals = { window: win, self: win, document, setTimeout: timer, XMLHttpRequest: XHR, location, fetch: undefined, URL: PageURL, ...o.globals };
+  const globals = { window: win, self: win, document, setTimeout: timer, XMLHttpRequest: XHR, location, fetch: cdn, Blob: PageBlob, pageImport, URL: PageURL, ...o.globals };
   new Function(...Object.keys(globals), script)(...Object.values(globals));
   const next = (type: string, id?: number) =>
     new Promise<PageMsg>((resolve, reject) => {
@@ -209,5 +263,5 @@ export function runPage(
       }
       waiting.push({ type, id, resolve, reject });
     });
-  return { messages, win, next, created, scripts, reads };
+  return { messages, win, next, created, scripts, reads, fetched, ran, imports, blobs };
 }

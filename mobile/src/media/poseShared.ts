@@ -59,11 +59,26 @@ var POSE = (function () {
     return { source: 'local', loader: cfg.lib + '/vision_wasm_internal.js', wasm: new URL(cfg.lib + '/vision_wasm_internal.wasm', location.href).href, model: model };
   }
 
+  // A file from the CDN only if it is the release's: the browser checks it against its SHA-256 (POSE_SRI in
+  // media/poseLib.ts) and refuses any other, as it does a failed connection.
+  function fetchChecked(url, integrity) {
+    return fetch(url, { integrity: integrity }).catch(function () { throw new Error('读不到 ' + url); });
+  }
+
+  // The checked copy at a blob: URL of the page's own, so what runs is that copy and not the CDN's file fetched again.
+  async function checkedCopy(url, integrity, type) {
+    var res = await fetchChecked(url, integrity);
+    if (!res.ok) throw new Error('读不到 ' + url);
+    return URL.createObjectURL(new Blob([await res.arrayBuffer()], { type: type }));
+  }
+
   async function cdn(cfg) {
-    if (!self.MPVision) self.MPVision = await import(cfg.cdn.bundle);
-    var res = await fetch(cfg.cdn.model);
+    if (!self.MPVision) self.MPVision = await import(await checkedCopy(cfg.cdn.bundle, cfg.sri.bundle, 'text/javascript'));
+    var res = await fetchChecked(cfg.cdn.model, cfg.sri.model);
     if (!res.ok) throw new Error('模型下载失败（' + res.status + '）');
-    return { source: 'cdn', loader: cfg.cdn.loader, wasm: cfg.cdn.wasm, model: new Uint8Array(await res.arrayBuffer()) };
+    var model = new Uint8Array(await res.arrayBuffer());
+    var loader = await checkedCopy(cfg.cdn.loader, cfg.sri.loader, 'text/javascript');
+    return { source: 'cdn', loader: loader, wasm: await checkedCopy(cfg.cdn.wasm, cfg.sri.wasm, 'application/wasm'), model: model };
   }
 
   async function start(cfg) {

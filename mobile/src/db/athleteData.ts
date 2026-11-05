@@ -1,7 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { exportBackup } from '@/db/backup';
-import { ATHLETE_FORMAT, isPristine, retargetId, type AthleteFile, type BackupRow } from '@/domain/backup';
+import { columnTypes, dataTables, exportBackup } from '@/db/backup';
+import { ATHLETE_FORMAT, fitsColumn, isPristine, retargetId, type AthleteFile, type BackupRow } from '@/domain/backup';
 import { tr } from '@/i18n';
 
 import type { Athlete } from './repo';
@@ -11,9 +11,8 @@ type Table = { name: string; links: Link[]; key: string | null; integerKey: bool
 
 /** Every table with the tables it points at and its primary key, read from this database's own schema. */
 async function schema(db: SQLiteDatabase): Promise<Table[]> {
-  const names = await db.getAllAsync<{ name: string }>("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name");
   return Promise.all(
-    names.map(async ({ name }) => {
+    (await dataTables(db)).map(async (name) => {
       const links = await db.getAllAsync<Link>(`SELECT "table", "from", "to" FROM pragma_foreign_key_list('${name}')`);
       const keys = (await db.getAllAsync<{ name: string; type: string; pk: number }>(`PRAGMA table_info("${name}")`)).filter((c) => c.pk > 0);
       const key = keys.length === 1 ? keys[0] : null;
@@ -101,13 +100,17 @@ export async function importAthlete(db: SQLiteDatabase, file: AthleteFile, opts:
       }
 
       for (const t of tables) {
-        const known = new Set((await db.getAllAsync<{ name: string }>(`PRAGMA table_info("${t.name}")`)).map((c) => c.name));
+        const types = await columnTypes(db, t.name);
         for (const row of file.tables[t.name]) {
           const out: BackupRow = {};
           for (const [c, v] of Object.entries(row)) {
-            if (!known.has(c)) continue;
+            if (!types.has(c)) continue;
+            if (!fitsColumn(types.get(c)!, v)) throw new Error(`${t.name}.${c}: a value of the wrong type`);
             const link = c === t.key ? t.name : t.links.find((l) => l.from === c)?.table;
             const moved = link != null && v != null ? ids.get(link)?.get(v) : undefined;
+            // Every link must lead to a row the file brings: one that named a row already here (by its id, or the id
+            // as text) would hang this row on someone else on the phone, the owner included.
+            if (link != null && v != null && moved === undefined) throw new Error(`${t.name}.${c} points outside the file`);
             out[c] = moved ?? v;
           }
           const cols = Object.keys(out);
