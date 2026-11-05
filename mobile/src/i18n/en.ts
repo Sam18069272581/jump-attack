@@ -1820,6 +1820,7 @@ export const en: Record<string, string> = {
 
   // media/poseLib.ts
   '{name} 下载不完整（{got} / {bytes} 字节）': '{name} didn’t download completely ({got} / {bytes} bytes)',
+  '{name} 校验不对，已删除，请重新下载。': '{name} isn’t the released file (its checksum doesn’t match), so it was deleted. Download it again.',
 
   // media/poseShared.ts
   '读不到 ': 'Can’t load ',
