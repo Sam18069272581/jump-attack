@@ -1,8 +1,12 @@
-import { addDays, daysBetween, mondayOf, shortDate, toISODate, weekday } from '../dates';
+import { addDays, dateTime, daysBetween, mondayOf, shortDate, toISODate, weekday } from '../dates';
 
 describe('dates', () => {
   it('formats the local calendar day', () => {
     expect(toISODate(new Date(2026, 9, 19, 23, 30))).toBe('2026-10-19');
+  });
+
+  it('writes a moment in local time to the minute', () => {
+    expect(dateTime(new Date(2026, 10, 5, 9, 7, 59).toISOString())).toBe('2026-11-05 09:07');
   });
 
   it('adds days across month and year ends', () => {

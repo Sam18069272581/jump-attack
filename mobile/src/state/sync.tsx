@@ -4,7 +4,7 @@ import Storage from 'expo-sqlite/kv-store';
 import { createContext, Fragment, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Alert, AppState, Platform } from 'react-native';
 
-import { toISODate } from '@/domain/dates';
+import { dateTime } from '@/domain/dates';
 import { tr } from '@/i18n';
 import { authProblem, getSupabase } from '@/sync/client';
 import { supabaseBackups } from '@/sync/cloud';
@@ -34,11 +34,6 @@ type SyncContextValue = {
 const SyncContext = createContext<SyncContextValue | null>(null);
 
 const device = () => (Platform.OS === 'web' ? tr('网页') : Platform.OS === 'ios' ? 'iPhone' : 'Android');
-
-function clock(iso: string): string {
-  const d = new Date(iso);
-  return `${toISODate(d)} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
 
 const STATUS: Record<'nothing' | 'uploaded' | 'downloaded', string> = { nothing: '已是最新', uploaded: '已备份到云端', downloaded: '已从云端恢复' };
 
@@ -72,7 +67,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
       const outcome = await syncWithCloud(db, supabaseBackups(supabase, userId), Storage, userId, device(), choice);
       running.current = false;
       setBusy(false);
-      const now = clock(new Date().toISOString());
+      const now = dateTime(new Date().toISOString());
       if (outcome.kind === 'conflict') {
         setStatus(tr('手机和云端的数据不一样，选一份保留'));
         setConflict(outcome);
@@ -167,7 +162,7 @@ export function SyncProvider({ children }: { children: ReactNode }) {
 export function askWhichToKeep(c: Conflict, choose: (choice: SyncChoice) => void) {
   Alert.alert(
     tr('手机和云端的数据不一样'),
-    tr('手机上：{phone}\n云端（{p}）：{cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。', { phone: c.phone, p: c.cloudAt ? clock(c.cloudAt) : tr('较早'), cloud: c.cloud }),
+    tr('手机上：{phone}\n云端（{p}）：{cloud}\n\n选一份保留，另一份会被它替换。云端以前每天的备份都还在。', { phone: c.phone, p: c.cloudAt ? dateTime(c.cloudAt) : tr('较早'), cloud: c.cloud }),
     [
       { text: tr('以后再说'), style: 'cancel' },
       { text: tr('用手机上的'), onPress: () => choose('phone') },

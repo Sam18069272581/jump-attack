@@ -132,6 +132,37 @@ it('exports a backup file and restores it onto another phone after confirming', 
   expect(alerts[1].title).toBe('已恢复');
 });
 
+it('keeps what the phone held when a file replaces it, and puts it back after confirming', async () => {
+  await usedPhone();
+  const mine = (await exportBackup(mockDb)).tables;
+  const other = openMemoryDb();
+  await migrate(other);
+  await createAthlete(other, '别人');
+  mockFiles.set('file:///other.json', JSON.stringify(await exportBackup(other)));
+  mockPicked = 'file:///other.json';
+  const r = await render();
+  expect(texts(r.root)).not.toContain('替换前的数据');
+  await press(r.root, '从备份文件恢复');
+  expect(alerts[0].message).toContain('现在的数据会在手机上留一份，替换后可以在这页换回来。');
+  await act(async () => {
+    await alerts[0].buttons?.find((b) => b.text === '替换')?.onPress?.();
+  });
+  expect((await listAthletes(mockDb)).map((a) => a.name)).toEqual(['我自己', '别人']);
+  expect(texts(r.root)).toMatch(/\d{4}-\d{2}-\d{2} \d{2}:\d{2} 替换前的数据还留在手机上：2 个测试对象、1 次测试、0 次训练/);
+
+  await press(r.root, '换回替换前的数据');
+  expect(alerts[2].title).toBe('换回替换前的数据？');
+  expect((await listAthletes(mockDb)).map((a) => a.name)).toEqual(['我自己', '别人']); // nothing changes before confirming
+  await act(async () => {
+    await alerts[2].buttons?.find((b) => b.text === '换回')?.onPress?.();
+  });
+  expect((await exportBackup(mockDb)).tables).toEqual(mine);
+  expect(mockSync.dataReplaced).toHaveBeenCalledTimes(2);
+  expect(alerts[3].title).toBe('已换回');
+  // The data it replaced is kept in turn.
+  expect(texts(r.root)).toContain('替换前的数据还留在手机上：2 个测试对象、0 次测试、0 次训练');
+});
+
 it('says what is wrong with a file that is not a backup, and leaves the data alone', async () => {
   mockFiles.set('file:///picked.json', '{"hello": 1}');
   mockPicked = 'file:///picked.json';
